@@ -17,7 +17,7 @@ const WHATSAPP_API_URL = `https://graph.facebook.com/v21.0/${process.env.WHATSAP
 
 // ── In-memory stores (reset on server restart) ───────────────────────────────
 // NOTE: For production, replace with a persistent store (Redis, DB, etc.)
-// session shape: { lang, step: 'language_select'|'category_select'|'followup'|'free_text', category }
+// session shape: { lang, step: 'language_select'|'category_select'|'followup'|'free_text'|'post_triage', category }
 const userSessions  = new Map(); // phone -> session object
 const conversations = [];        // append-only log of every triage interaction
 
@@ -74,6 +74,16 @@ const FOLLOWUP_TRIAGE = {
   '10': ['RED', 'YELLOW', 'YELLOW', 'GREEN'],
   '11': ['RED', 'ORANGE', 'GREEN', 'GREEN'],
 };
+
+// ── Post-triage prompt & closing message (English) ────────────────────────────
+const POST_TRIAGE_PROMPT_EN =
+  'Is there anything else I can help with?\n\n' +
+  '1. Yes, I have another concern\n' +
+  '2. No, thank you\n\n' +
+  'Type *0* to change language.';
+
+const CLOSING_MESSAGE_EN =
+  'Stay safe. If your condition worsens, message us again anytime. 🏥';
 
 // ── Welcome menu ──────────────────────────────────────────────────────────────
 const WELCOME_MENU =
@@ -576,10 +586,9 @@ app.post('/webhook', async (req, res) => {
       });
       console.log(`Logged: ${from} | ${lang} | ${classification} | ${englishSummary}`);
 
-      // Reset to category select for next query
-      userSessions.set(from, { lang, step: 'category_select' });
-      const categoryMenu = await translateMenu(CATEGORY_MENU_EN, lang);
-      await sendWhatsAppMessage(from, categoryMenu);
+      userSessions.set(from, { lang, step: 'post_triage' });
+      const postPrompt = await translateMenu(POST_TRIAGE_PROMPT_EN, lang);
+      await sendWhatsAppMessage(from, postPrompt);
       return;
     }
 
@@ -600,10 +609,27 @@ app.post('/webhook', async (req, res) => {
       });
       console.log(`Logged: ${from} | ${lang} | ${classification} | ${englishSummary}`);
 
-      // Reset to category select for next query
-      userSessions.set(from, { lang, step: 'category_select' });
-      const categoryMenu = await translateMenu(CATEGORY_MENU_EN, lang);
-      await sendWhatsAppMessage(from, categoryMenu);
+      userSessions.set(from, { lang, step: 'post_triage' });
+      const postPrompt = await translateMenu(POST_TRIAGE_PROMPT_EN, lang);
+      await sendWhatsAppMessage(from, postPrompt);
+      return;
+    }
+
+    // ── Step 4: post-triage prompt ────────────────────────────────────────────
+    if (session.step === 'post_triage') {
+      if (text === '1') {
+        userSessions.set(from, { lang, step: 'category_select' });
+        const categoryMenu = await translateMenu(CATEGORY_MENU_EN, lang);
+        await sendWhatsAppMessage(from, categoryMenu);
+      } else if (text === '2') {
+        userSessions.set(from, { lang, step: 'category_select' });
+        const closing = await translateMenu(CLOSING_MESSAGE_EN, lang);
+        await sendWhatsAppMessage(from, closing);
+      } else {
+        // Invalid input — re-send the post-triage prompt
+        const postPrompt = await translateMenu(POST_TRIAGE_PROMPT_EN, lang);
+        await sendWhatsAppMessage(from, postPrompt);
+      }
       return;
     }
 
