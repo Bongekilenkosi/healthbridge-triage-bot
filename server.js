@@ -93,17 +93,17 @@ const WELCOME_MENU =
 
 // ── Language confirmation messages ───────────────────────────────────────────
 const LANG_CONFIRMED = {
-  en:  '✅ Language set to *English*.\nDescribe your symptoms to receive triage advice.\nType *0* or *menu* anytime to change language.',
-  zu:  '✅ Ulimi lusetelwe ku *isiZulu*.\nChaza izimpawu zakho ukuze uthole iseluleko.\nBhala *0* noma *menu* nganoma yisiphi isikhathi ukushintsha ulimi.',
-  xh:  '✅ Ulwimi lusethwe kwi *isiXhosa*.\nChaza iimpawu zakho ukuze ufumane icebiso.\nTayipha *0* okanye *menu* nangaliphi ixesha ukuguqula ulwimi.',
-  af:  '✅ Taal ingestel op *Afrikaans*.\nBeskryf jou simptome om triasieadvies te ontvang.\nTik *0* of *menu* enige tyd om taal te verander.',
-  nso: '✅ Polelo e beelwe go *Sepedi*.\nHlalošetša matshwao a gago go hwetša keletšo ya triage.\nŽwala *0* goba *menu* neng le neng go fetola polelo.',
-  tn:  '✅ Puo e beelwe go *Setswana*.\nBolela ka dika tsa gago go bona kgakololo ya triage.\nKwala *0* kgotsa *menu* neng le neng go fetola puo.',
-  st:  '✅ Puo e behilwe ho *Sesotho*.\nHlalosa matshwao a hao ho fumana keletso ya triage.\nKwala *0* kapa *menu* nako efe kapa efe ho fetola puo.',
-  ts:  '✅ Ririmi ri sethiwa eka *Xitsonga*.\nBulela hi tihlawulelo ta wena ku kuma vutivi bya triage.\nNyorisisa *0* kumbe *menu* nkarhi wowuhi ku cinca ririmi.',
-  ss:  '✅ Lulwimi lubekwe ku *siSwati*.\nChaza tintfo letibonakala nawe ukuze utfole iseluleko.\nTayipha *0* nome *menu* nganoma ngesiphi isikhathi kushintshe lulwimi.',
-  ve:  '✅ Luambo lu lavhelelwa kha *Tshivenda*.\nBuletshedza zwivhidzo zwau u wana ndaedzo ya triage.\nNyorisisa *0* kana *menu* ngomu wa tshifhinga tshine na tshine u shandukisa luambo.',
-  nr:  '✅ Ilimi libekwe ku *isiNdebele*.\nChaza iimpawu zakho ukuze uthole iseluleko.\nBhala *0* nome *menu* nanoma ngesiphi isikhathi ukushintsha ilimi.',
+  en:  '✅ Language set to *English*.\nType *0* or *menu* anytime to change language.',
+  zu:  '✅ Ulimi lusetelwe ku *isiZulu*.\nBhala *0* noma *menu* nganoma yisiphi isikhathi ukushintsha ulimi.',
+  xh:  '✅ Ulwimi lusethwe kwi *isiXhosa*.\nTayipha *0* okanye *menu* nangaliphi ixesha ukuguqula ulwimi.',
+  af:  '✅ Taal ingestel op *Afrikaans*.\nTik *0* of *menu* enige tyd om taal te verander.',
+  nso: '✅ Polelo e beelwe go *Sepedi*.\nŽwala *0* goba *menu* neng le neng go fetola polelo.',
+  tn:  '✅ Puo e beelwe go *Setswana*.\nKwala *0* kgotsa *menu* neng le neng go fetola puo.',
+  st:  '✅ Puo e behilwe ho *Sesotho*.\nKwala *0* kapa *menu* nako efe kapa efe ho fetola puo.',
+  ts:  '✅ Ririmi ri sethiwa eka *Xitsonga*.\nNyorisisa *0* kumbe *menu* nkarhi wowuhi ku cinca ririmi.',
+  ss:  '✅ Lulwimi lubekwe ku *siSwati*.\nTayipha *0* nome *menu* nganoma ngesiphi isikhathi kushintshe lulwimi.',
+  ve:  '✅ Luambo lu lavhelelwa kha *Tshivenda*.\nNyorisisa *0* kana *menu* ngomu wa tshifhinga tshine na tshine u shandukisa luambo.',
+  nr:  '✅ Ilimi libekwe ku *isiNdebele*.\nBhala *0* nome *menu* nanoma ngesiphi isikhathi ukushintsha ilimi.',
 };
 
 // ── Triage replies – all 11 official languages ────────────────────────────────
