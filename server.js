@@ -1,4 +1,5 @@
-require('dotenv').config();
+const fs = require('fs');
+if (fs.existsSync('.env')) require('dotenv').config();
 const express = require('express');
 const axios = require('axios');
 const Anthropic = require('@anthropic-ai/sdk').default;
@@ -560,7 +561,7 @@ async function sendWhatsAppMessage(to, text) {
 }
 
 // ── Start server ──────────────────────────────────────────────────────────────
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
+const PORT = process.env.PORT || 8080;
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`HealthBridge Triage Bot running on port ${PORT}`);
 });
