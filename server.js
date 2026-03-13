@@ -1,5 +1,6 @@
 // force redeploy v2
 require('dotenv').config();
+console.log('RAW process.env:', JSON.stringify(Object.keys(process.env)));
 console.log('ENV CHECK - WHATSAPP_TOKEN exists:', !!process.env.WHATSAPP_TOKEN);
 console.log('ENV CHECK - WHATSAPP_PHONE_ID exists:', !!process.env.WHATSAPP_PHONE_ID);
 console.log('ENV CHECK - ANTHROPIC_API_KEY exists:', !!process.env.ANTHROPIC_API_KEY);
