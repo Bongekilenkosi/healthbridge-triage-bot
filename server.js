@@ -410,13 +410,15 @@ app.get('/webhook', (req, res) => {
   const token     = req.query['hub.verify_token'];
   const challenge = req.query['hub.challenge'];
 
+  const expectedToken = process.env.VERIFY_TOKEN || 'healthbridge_verify_2024';
+
   // TEMP DEBUG
   console.log('[webhook] received token :', token);
-  console.log('[webhook] expected token :', process.env.VERIFY_TOKEN);
-  console.log('[webhook] tokens match   :', token === process.env.VERIFY_TOKEN);
+  console.log('[webhook] expected token :', expectedToken);
+  console.log('[webhook] tokens match   :', token === expectedToken);
   console.log('[webhook] relevant env keys:', Object.keys(process.env).filter(k => k.startsWith('VERIFY') || k.startsWith('WHATSAPP') || k.startsWith('ANTHROPIC')));
 
-  if (mode === 'subscribe' && token === process.env.VERIFY_TOKEN) {
+  if (mode === 'subscribe' && token === expectedToken) {
     console.log('Webhook verified');
     return res.status(200).send(challenge);
   }
