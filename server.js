@@ -469,7 +469,7 @@ app.post('/webhook', async (req, res) => {
 
     // ── Triage ───────────────────────────────────────────────────────────────
     const { classification, englishSummary } = await triageMessage(text);
-    const reply = buildReply(classification, lang);
+    const reply = await buildReply(classification, lang);
     await sendWhatsAppMessage(from, reply);
 
     conversations.push({
@@ -497,6 +497,16 @@ async function triageMessage(patientText) {
     system: `You are a medical triage assistant for HealthBridge SA.
 Classify the patient's message using the South African Triage Scale (SATS).
 The message may be in any of South Africa's 11 official languages — understand it regardless of language.
+
+LANGUAGE UNDERSTANDING:
+- Recognise regional dialects and colloquial expressions across all 11 official languages.
+  Examples: "ngiyaphathwa yikhanda" and "nginobuhlungu ekhanda" both mean headache in isiZulu.
+- Understand code-switching (mixing English with indigenous languages), which is very common in SA.
+  Examples: "Ngi-ne chest pain", "Ke na le flu", "I-stomach yami iyabuhlungu".
+- Recognise township slang medical terms: "ipilisi" (pill), "ugogo/umkhulu" (elderly person),
+  "isisu" (stomach/belly), "inyongo" (bile/nausea), "umkhuhlane" (flu/fever), "isifuba" (chest).
+- Understand common SA medical shorthand and cross-language borrowings used in clinics and townships.
+- When in doubt about meaning, interpret charitably toward the more serious classification.
 
 RED    – Life-threatening emergency: cardiac arrest, severe breathing difficulty,
          uncontrolled bleeding, unconsciousness, stroke signs, major trauma, poisoning,
@@ -547,9 +557,53 @@ Example: {"classification":"YELLOW","english_summary":"Patient reports a headach
 }
 
 // ── Reply lookup ──────────────────────────────────────────────────────────────
-function buildReply(classification, lang = 'en') {
+// Returns the hardcoded English reply for a given classification.
+function getEnglishReply(classification) {
   const level = TRIAGE_REPLIES[classification] ?? TRIAGE_REPLIES.GREEN;
-  return level[lang] ?? level.en; // fall back to English if lang missing
+  return level.en;
+}
+
+// Attempts to translate the English triage reply into the patient's language using Claude.
+// Falls back to the hardcoded translation if the API call fails.
+async function buildReply(classification, lang = 'en') {
+  const hardcoded = (TRIAGE_REPLIES[classification] ?? TRIAGE_REPLIES.GREEN)[lang]
+    ?? (TRIAGE_REPLIES[classification] ?? TRIAGE_REPLIES.GREEN).en;
+
+  if (lang === 'en') return hardcoded;
+
+  const LANG_NAMES_FULL = {
+    zu: 'isiZulu', xh: 'isiXhosa', af: 'Afrikaans', nso: 'Sepedi',
+    tn: 'Setswana', st: 'Sesotho', ts: 'Xitsonga', ss: 'siSwati',
+    ve: 'Tshivenda', nr: 'isiNdebele',
+  };
+  const langName = LANG_NAMES_FULL[lang] ?? lang;
+  const englishReply = getEnglishReply(classification);
+
+  try {
+    const response = await anthropic.messages.create({
+      model: 'claude-opus-4-6',
+      max_tokens: 512,
+      system: `You are a medical translator for HealthBridge SA, a WhatsApp triage service serving South African patients.
+Translate the given English triage message into ${langName}.
+
+Translation guidelines:
+- Use simple, clear everyday spoken language that a rural South African would understand — avoid formal or textbook phrasing.
+- Use natural, warm, and respectful forms of address appropriate to ${langName} culture.
+- Keep all emergency phone numbers exactly as they appear (10177, 084 124, 011 807 2586).
+- Keep emoji codes (🔴 🟠 🟡 🟢 🔵) and WhatsApp bold markers (*text*) exactly as they appear.
+- Do not add or remove information — translate faithfully.
+- Output only the translated message with no explanation or extra text.`,
+      messages: [{ role: 'user', content: englishReply }],
+    });
+
+    for (const block of response.content) {
+      if (block.type === 'text') return block.text.trim();
+    }
+    return hardcoded;
+  } catch (err) {
+    console.error(`Translation to ${langName} failed, using hardcoded fallback:`, err.message);
+    return hardcoded;
+  }
 }
 
 // ── Send WhatsApp message ─────────────────────────────────────────────────────
