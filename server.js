@@ -1,5 +1,4 @@
-const fs = require('fs');
-if (fs.existsSync('.env')) require('dotenv').config();
+require('dotenv').config();
 const express = require('express');
 const axios = require('axios');
 const Anthropic = require('@anthropic-ai/sdk').default;
