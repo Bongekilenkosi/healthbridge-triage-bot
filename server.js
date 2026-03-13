@@ -410,6 +410,12 @@ app.get('/webhook', (req, res) => {
   const token     = req.query['hub.verify_token'];
   const challenge = req.query['hub.challenge'];
 
+  // TEMP DEBUG
+  console.log('[webhook] received token :', token);
+  console.log('[webhook] expected token :', process.env.VERIFY_TOKEN);
+  console.log('[webhook] tokens match   :', token === process.env.VERIFY_TOKEN);
+  console.log('[webhook] relevant env keys:', Object.keys(process.env).filter(k => k.startsWith('VERIFY') || k.startsWith('WHATSAPP') || k.startsWith('ANTHROPIC')));
+
   if (mode === 'subscribe' && token === process.env.VERIFY_TOKEN) {
     console.log('Webhook verified');
     return res.status(200).send(challenge);
