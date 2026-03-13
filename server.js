@@ -17,13 +17,62 @@ const WHATSAPP_API_URL = `https://graph.facebook.com/v21.0/${process.env.WHATSAP
 
 // ── In-memory stores (reset on server restart) ───────────────────────────────
 // NOTE: For production, replace with a persistent store (Redis, DB, etc.)
-const userLanguages = new Map(); // phone -> lang code
+// session shape: { lang, step: 'language_select'|'category_select'|'followup'|'free_text', category }
+const userSessions  = new Map(); // phone -> session object
 const conversations = [];        // append-only log of every triage interaction
 
 const LANG_CODES = {
   '1': 'en', '2': 'zu', '3':  'xh', '4':  'af',
   '5': 'nso', '6': 'tn', '7': 'st', '8':  'ts',
   '9': 'ss', '10': 've', '11': 'nr',
+};
+
+// ── Symptom category menu (English) ───────────────────────────────────────────
+const CATEGORY_MENU_EN =
+  'What is your main concern today?\n\n' +
+  '1. 🫁 Breathing problems / Chest pain\n' +
+  '2. 🤕 Head injury / Severe headache\n' +
+  '3. 🤰 Pregnancy related\n' +
+  '4. 🩸 Bleeding / Wound\n' +
+  '5. 🤒 Fever / Flu / Cough\n' +
+  '6. 🤢 Stomach pain / Vomiting / Diarrhoea\n' +
+  '7. 👶 Baby or child is sick\n' +
+  '8. 💊 Medication / Chronic condition refill\n' +
+  '9. 🦴 Bone / Joint / Back pain\n' +
+  '10. 😔 Mental health / Feeling distressed\n' +
+  '11. ⚡ Allergic reaction / Rash / Swelling\n' +
+  '12. 🔢 Other (type your symptoms)\n\n' +
+  'Type *0* or *menu* anytime to change language.';
+
+// ── Follow-up questions per category (English) ────────────────────────────────
+const FOLLOWUP_EN = {
+  '1': 'Please choose:\n\n1. Struggling to breathe right now\n2. Having chest pain\n3. Coughing for more than 2 weeks\n4. Wheezing / Asthma attack',
+  '2': 'Please choose:\n\n1. Head injury from an accident or fall\n2. Severe sudden headache ("worst of my life")\n3. Headache with blurred vision or confusion\n4. Mild or regular headache',
+  '3': 'Please choose:\n\n1. Bleeding during pregnancy\n2. Severe headache or blurred vision\n3. Waters have broken\n4. Regular contractions / labour pains\n5. General pregnancy question',
+  '4': 'Please choose:\n\n1. Uncontrolled / heavy bleeding\n2. Deep cut or wound that may need stitches\n3. Minor cut or scrape\n4. Internal bleeding (stomach pain after injury)',
+  '5': 'Please choose:\n\n1. Very high fever with confusion or fits\n2. High fever (child under 5)\n3. Fever with cough and difficulty breathing\n4. Mild fever / flu / cough',
+  '6': 'Please choose:\n\n1. Severe stomach pain (cannot stand up straight)\n2. Vomiting blood or black material\n3. Diarrhoea with signs of dehydration\n4. Mild stomach pain or nausea',
+  '7': 'Please choose:\n\n1. Baby under 3 months with fever\n2. Child having a fit / seizure\n3. Child struggling to breathe\n4. Child with rash, vomiting or diarrhoea\n5. General concern about a child',
+  '8': 'Please choose:\n\n1. Ran out of chronic medication (hypertension, diabetes, TB, HIV etc.)\n2. Side effects from medication\n3. Need a repeat prescription\n4. Question about medication',
+  '9': 'Please choose:\n\n1. Injury from accident (possible fracture)\n2. Severe joint swelling or cannot move limb\n3. Chronic back or joint pain\n4. Mild muscle or joint pain',
+  '10': 'Please choose:\n\n1. Thinking of harming yourself or others (crisis)\n2. Feeling very low, hopeless or unable to cope\n3. Anxiety or panic attacks\n4. General mental health question',
+  '11': 'Please choose:\n\n1. Severe allergic reaction (face/throat swelling, difficulty breathing)\n2. Widespread rash with fever\n3. Mild rash or skin irritation\n4. Insect bite or sting',
+};
+
+// Maps category + followup answer to a SATS triage level
+// Each entry is an array indexed by answer (1-based)
+const FOLLOWUP_TRIAGE = {
+  '1':  ['RED', 'ORANGE', 'YELLOW', 'YELLOW'],
+  '2':  ['ORANGE', 'ORANGE', 'ORANGE', 'GREEN'],
+  '3':  ['RED', 'ORANGE', 'ORANGE', 'ORANGE', 'GREEN'],
+  '4':  ['RED', 'ORANGE', 'GREEN', 'ORANGE'],
+  '5':  ['ORANGE', 'ORANGE', 'ORANGE', 'GREEN'],
+  '6':  ['ORANGE', 'RED', 'YELLOW', 'GREEN'],
+  '7':  ['ORANGE', 'RED', 'RED', 'YELLOW', 'GREEN'],
+  '8':  ['YELLOW', 'YELLOW', 'GREEN', 'GREEN'],
+  '9':  ['ORANGE', 'ORANGE', 'YELLOW', 'GREEN'],
+  '10': ['RED', 'YELLOW', 'YELLOW', 'GREEN'],
+  '11': ['RED', 'ORANGE', 'GREEN', 'GREEN'],
 };
 
 // ── Welcome menu ──────────────────────────────────────────────────────────────
@@ -441,52 +490,160 @@ app.post('/webhook', async (req, res) => {
 
     if (!message || message.type !== 'text') return;
 
-    const from = message.from;
-    const text = message.text.body.trim();
+    const from       = message.from;
+    const text       = message.text.body.trim();
     const normalized = text.toLowerCase();
 
     console.log(`Message from ${from}: ${text}`);
 
-    // ── Language reset ───────────────────────────────────────────────────────
+    // ── Global reset ─────────────────────────────────────────────────────────
     if (normalized === '0' || normalized === 'menu') {
-      userLanguages.delete(from);
+      userSessions.delete(from);
       await sendWhatsAppMessage(from, WELCOME_MENU);
       return;
     }
 
-    // ── Language not yet selected ────────────────────────────────────────────
-    const lang = userLanguages.get(from);
-    if (!lang) {
-      const chosen = LANG_CODES[text]; // exact match on '1'–'11'
-      if (chosen) {
-        userLanguages.set(from, chosen);
-        await sendWhatsAppMessage(from, LANG_CONFIRMED[chosen]);
-      } else {
+    const session = userSessions.get(from) ?? { step: 'language_select' };
+
+    // ── Step 1: language selection ────────────────────────────────────────────
+    if (session.step === 'language_select') {
+      const chosen = LANG_CODES[text];
+      if (!chosen) {
         await sendWhatsAppMessage(from, WELCOME_MENU);
+        return;
       }
+      userSessions.set(from, { lang: chosen, step: 'category_select' });
+      await sendWhatsAppMessage(from, LANG_CONFIRMED[chosen]);
+      const categoryMenu = await translateMenu(CATEGORY_MENU_EN, chosen);
+      await sendWhatsAppMessage(from, categoryMenu);
       return;
     }
 
-    // ── Triage ───────────────────────────────────────────────────────────────
-    const { classification, englishSummary } = await triageMessage(text);
-    const reply = await buildReply(classification, lang);
-    await sendWhatsAppMessage(from, reply);
+    const { lang } = session;
 
-    conversations.push({
-      timestamp:          new Date().toISOString(),
-      phoneNumber:        from,
-      languageSelected:   lang,
-      originalMessage:    text,
-      englishTranslation: englishSummary,
-      triageLevel:        classification,
-      replyLanguage:      lang,
-    });
-    console.log(`Logged: ${from} | ${lang} | ${classification} | ${englishSummary}`);
+    // ── Step 2: category selection ────────────────────────────────────────────
+    if (session.step === 'category_select') {
+      // Category 12 → free text triage
+      if (text === '12') {
+        userSessions.set(from, { ...session, step: 'free_text' });
+        const prompt = await translateMenu(
+          'Please describe your symptoms and we will assess them for you. Type as much detail as you can.',
+          lang
+        );
+        await sendWhatsAppMessage(from, prompt);
+        return;
+      }
+
+      if (FOLLOWUP_EN[text]) {
+        userSessions.set(from, { ...session, step: 'followup', category: text });
+        const followup = await translateMenu(FOLLOWUP_EN[text], lang);
+        await sendWhatsAppMessage(from, followup);
+        return;
+      }
+
+      // Invalid input — re-send the category menu
+      const categoryMenu = await translateMenu(CATEGORY_MENU_EN, lang);
+      await sendWhatsAppMessage(from, categoryMenu);
+      return;
+    }
+
+    // ── Step 3a: follow-up answer → direct triage ─────────────────────────────
+    if (session.step === 'followup') {
+      const { category } = session;
+      const triageMap    = FOLLOWUP_TRIAGE[category];
+      const answerIndex  = parseInt(text, 10) - 1;
+
+      if (!triageMap || answerIndex < 0 || answerIndex >= triageMap.length) {
+        // Invalid answer — re-send the follow-up question
+        const followup = await translateMenu(FOLLOWUP_EN[category], lang);
+        await sendWhatsAppMessage(from, followup);
+        return;
+      }
+
+      const classification = triageMap[answerIndex];
+      const englishSummary = `Category ${category}, option ${text} selected.`;
+      const reply = await buildReply(classification, lang);
+      await sendWhatsAppMessage(from, reply);
+
+      conversations.push({
+        timestamp:          new Date().toISOString(),
+        phoneNumber:        from,
+        languageSelected:   lang,
+        originalMessage:    `Category ${category}, answer ${text}`,
+        englishTranslation: englishSummary,
+        triageLevel:        classification,
+        replyLanguage:      lang,
+      });
+      console.log(`Logged: ${from} | ${lang} | ${classification} | ${englishSummary}`);
+
+      // Reset to category select for next query
+      userSessions.set(from, { lang, step: 'category_select' });
+      const categoryMenu = await translateMenu(CATEGORY_MENU_EN, lang);
+      await sendWhatsAppMessage(from, categoryMenu);
+      return;
+    }
+
+    // ── Step 3b: free text triage (category 12 / Other) ──────────────────────
+    if (session.step === 'free_text') {
+      const { classification, englishSummary } = await triageMessage(text);
+      const reply = await buildReply(classification, lang);
+      await sendWhatsAppMessage(from, reply);
+
+      conversations.push({
+        timestamp:          new Date().toISOString(),
+        phoneNumber:        from,
+        languageSelected:   lang,
+        originalMessage:    text,
+        englishTranslation: englishSummary,
+        triageLevel:        classification,
+        replyLanguage:      lang,
+      });
+      console.log(`Logged: ${from} | ${lang} | ${classification} | ${englishSummary}`);
+
+      // Reset to category select for next query
+      userSessions.set(from, { lang, step: 'category_select' });
+      const categoryMenu = await translateMenu(CATEGORY_MENU_EN, lang);
+      await sendWhatsAppMessage(from, categoryMenu);
+      return;
+    }
 
   } catch (err) {
     console.error('Error handling webhook:', err.message);
   }
 });
+
+// ── Menu translation via Claude ───────────────────────────────────────────────
+const LANG_NAMES_FULL = {
+  en: 'English', zu: 'isiZulu', xh: 'isiXhosa', af: 'Afrikaans',
+  nso: 'Sepedi', tn: 'Setswana', st: 'Sesotho', ts: 'Xitsonga',
+  ss: 'siSwati', ve: 'Tshivenda', nr: 'isiNdebele',
+};
+
+async function translateMenu(englishText, lang) {
+  if (lang === 'en') return englishText;
+  const langName = LANG_NAMES_FULL[lang] ?? lang;
+  try {
+    const response = await anthropic.messages.create({
+      model: 'claude-opus-4-6',
+      max_tokens: 512,
+      system: `Translate the following WhatsApp menu message into ${langName}.
+Rules:
+- Use simple, everyday spoken language — not formal or textbook language.
+- Keep all numbers (1. 2. 3. etc.), emoji, and WhatsApp bold markers (*text*) exactly as they are.
+- Keep emergency numbers unchanged (10177, 084 124).
+- Do not add or remove any menu items.
+- Output only the translated text with no explanation.`,
+      messages: [{ role: 'user', content: englishText }],
+    });
+    for (const block of response.content) {
+      if (block.type === 'text') return block.text.trim();
+    }
+    return englishText;
+  } catch (err) {
+    console.error(`translateMenu to ${langName} failed:`, err.message);
+    return englishText; // fall back to English
+  }
+}
 
 // ── Claude triage ─────────────────────────────────────────────────────────────
 async function triageMessage(patientText) {
@@ -571,11 +728,6 @@ async function buildReply(classification, lang = 'en') {
 
   if (lang === 'en') return hardcoded;
 
-  const LANG_NAMES_FULL = {
-    zu: 'isiZulu', xh: 'isiXhosa', af: 'Afrikaans', nso: 'Sepedi',
-    tn: 'Setswana', st: 'Sesotho', ts: 'Xitsonga', ss: 'siSwati',
-    ve: 'Tshivenda', nr: 'isiNdebele',
-  };
   const langName = LANG_NAMES_FULL[lang] ?? lang;
   const englishReply = getEnglishReply(classification);
 
