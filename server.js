@@ -41,7 +41,8 @@ const CATEGORY_MENU_EN =
   '9. 🦴 Bone / Joint / Back pain\n' +
   '10. 😔 Mental health / Feeling distressed\n' +
   '11. ⚡ Allergic reaction / Rash / Swelling\n' +
-  '12. 🔢 Other (type your symptoms)\n\n' +
+  '12. 🔢 Other (type your symptoms)\n' +
+  '13. 👤 Speak to a human\n\n' +
   'Type *0* or *menu* anytime to change language.';
 
 // ── Follow-up questions per category (English) ────────────────────────────────
@@ -462,6 +463,21 @@ app.get('/api/stats', (req, res) => {
   });
 });
 
+// ── GET /api/escalations ──────────────────────────────────────────────────────
+app.get('/api/escalations', (req, res) => {
+  const escalations = conversations
+    .filter(c => c.needsHumanReview)
+    .slice()
+    .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+  res.json(escalations);
+});
+
+// ── GET /api/escalations/count ────────────────────────────────────────────────
+app.get('/api/escalations/count', (req, res) => {
+  const count = conversations.filter(c => c.needsHumanReview).length;
+  res.json({ count });
+});
+
 // ── Health check ───────────────────────────────────────────────────────────────
 app.get('/', (req, res) => {
   res.json({ status: 'ok', service: 'HealthBridge Triage Bot' });
@@ -533,6 +549,30 @@ app.post('/webhook', async (req, res) => {
 
     // ── Step 2: category selection ────────────────────────────────────────────
     if (session.step === 'category_select') {
+      // Category 13 → speak to a human
+      if (text === '13') {
+        conversations.push({
+          timestamp:         new Date().toISOString(),
+          phoneNumber:       from,
+          languageSelected:  lang,
+          originalMessage:   'User requested to speak to a human.',
+          englishTranslation:'User requested to speak to a human.',
+          triageLevel:       'HUMAN_REQUEST',
+          replyLanguage:     lang,
+          needsHumanReview:  true,
+          escalationReason:  'USER_REQUESTED_HUMAN',
+        });
+        const humanMsg = await translateMenu(
+          'Your request has been flagged. A healthcare worker will contact you on this number as soon as possible. If this is an emergency, please call 10177 immediately.',
+          lang
+        );
+        await sendWhatsAppMessage(from, humanMsg);
+        userSessions.set(from, { lang, step: 'post_triage' });
+        const postPrompt = await translateMenu(POST_TRIAGE_PROMPT_EN, lang);
+        await sendWhatsAppMessage(from, postPrompt);
+        return;
+      }
+
       // Category 12 → free text triage
       if (text === '12') {
         userSessions.set(from, { ...session, step: 'free_text' });
@@ -572,10 +612,16 @@ app.post('/webhook', async (req, res) => {
 
       const classification = triageMap[answerIndex];
       const englishSummary = `Category ${category}, option ${text} selected.`;
-      const reply = await buildReply(classification, lang);
+      const isCodeRed      = classification === 'RED';
+
+      let reply = await buildReply(classification, lang);
+      if (isCodeRed) {
+        const alert = await translateMenu('A healthcare worker has been alerted and will follow up with you.', lang);
+        reply += `\n\n${alert}`;
+      }
       await sendWhatsAppMessage(from, reply);
 
-      conversations.push({
+      const logEntry = {
         timestamp:          new Date().toISOString(),
         phoneNumber:        from,
         languageSelected:   lang,
@@ -583,7 +629,10 @@ app.post('/webhook', async (req, res) => {
         englishTranslation: englishSummary,
         triageLevel:        classification,
         replyLanguage:      lang,
-      });
+        needsHumanReview:   isCodeRed,
+        ...(isCodeRed && { escalationReason: 'CODE_RED_EMERGENCY' }),
+      };
+      conversations.push(logEntry);
       console.log(`Logged: ${from} | ${lang} | ${classification} | ${englishSummary}`);
 
       userSessions.set(from, { lang, step: 'post_triage' });
@@ -594,20 +643,38 @@ app.post('/webhook', async (req, res) => {
 
     // ── Step 3b: free text triage (category 12 / Other) ──────────────────────
     if (session.step === 'free_text') {
-      const { classification, englishSummary } = await triageMessage(text);
-      const reply = await buildReply(classification, lang);
+      const { classification, englishSummary, confidence } = await triageMessage(text);
+      const isCodeRed     = classification === 'RED';
+      const lowConfidence = confidence !== 'HIGH';
+      const needsReview   = isCodeRed || lowConfidence;
+
+      let reply = await buildReply(classification, lang);
+      if (isCodeRed) {
+        const alert = await translateMenu('A healthcare worker has been alerted and will follow up with you.', lang);
+        reply += `\n\n${alert}`;
+      } else if (lowConfidence) {
+        const reviewNote = await translateMenu('Note: A healthcare worker will review your case for accuracy.', lang);
+        reply += `\n\n${reviewNote}`;
+      }
       await sendWhatsAppMessage(from, reply);
 
-      conversations.push({
+      const escalationReason = isCodeRed ? 'CODE_RED_EMERGENCY'
+        : lowConfidence ? 'LOW_CONFIDENCE_TRIAGE' : undefined;
+
+      const logEntry = {
         timestamp:          new Date().toISOString(),
         phoneNumber:        from,
         languageSelected:   lang,
         originalMessage:    text,
         englishTranslation: englishSummary,
         triageLevel:        classification,
+        confidence,
         replyLanguage:      lang,
-      });
-      console.log(`Logged: ${from} | ${lang} | ${classification} | ${englishSummary}`);
+        needsHumanReview:   needsReview,
+        ...(escalationReason && { escalationReason }),
+      };
+      conversations.push(logEntry);
+      console.log(`Logged: ${from} | ${lang} | ${classification} | confidence:${confidence} | ${englishSummary}`);
 
       userSessions.set(from, { lang, step: 'post_triage' });
       const postPrompt = await translateMenu(POST_TRIAGE_PROMPT_EN, lang);
@@ -709,12 +776,16 @@ GREEN  – Non-urgent, minor complaint: mild cold or flu symptoms, minor wounds,
 BLUE   – Deceased or expected death / palliative care: patient is deceased,
          end-of-life, or in need of comfort care only with no curative intent.
 
-Respond with a JSON object containing exactly two fields:
+Respond with a JSON object containing exactly three fields:
 - "classification": one of "RED", "ORANGE", "YELLOW", "GREEN", or "BLUE"
 - "english_summary": a concise English translation/summary (1-2 sentences) of what the patient described
+- "confidence": your confidence in the classification — "HIGH", "MEDIUM", or "LOW"
+  Use LOW when the message is ambiguous, very brief, or unclear.
+  Use MEDIUM when you can classify but the symptoms could fit multiple levels.
+  Use HIGH when the symptoms clearly match one level.
 
 Output only valid JSON with no additional text, markdown, or code fences.
-Example: {"classification":"YELLOW","english_summary":"Patient reports a headache and mild fever lasting 2 days."}`,
+Example: {"classification":"YELLOW","english_summary":"Patient reports a headache and mild fever lasting 2 days.","confidence":"HIGH"}`,
     messages: [{ role: 'user', content: patientText }],
   });
 
@@ -726,9 +797,12 @@ Example: {"classification":"YELLOW","english_summary":"Patient reports a headach
       const parsed = JSON.parse(block.text.trim());
       const classification = String(parsed.classification ?? '').toUpperCase();
       const englishSummary = String(parsed.english_summary ?? patientText);
+      const confidence     = ['HIGH', 'MEDIUM', 'LOW'].includes(String(parsed.confidence).toUpperCase())
+        ? String(parsed.confidence).toUpperCase() : 'LOW';
       return {
         classification: valid.has(classification) ? classification : 'GREEN',
         englishSummary,
+        confidence,
       };
     } catch {
       // JSON parse failed — fall through to default
@@ -736,7 +810,7 @@ Example: {"classification":"YELLOW","english_summary":"Patient reports a headach
     }
   }
   // Safety fallback: if Claude returned something unexpected, default to GREEN
-  return { classification: 'GREEN', englishSummary: patientText };
+  return { classification: 'GREEN', englishSummary: patientText, confidence: 'LOW' };
 }
 
 // ── Reply lookup ──────────────────────────────────────────────────────────────
