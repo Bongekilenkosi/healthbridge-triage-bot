@@ -1,5 +1,8 @@
 // force redeploy v2
 require('dotenv').config();
+console.log('ENV CHECK - WHATSAPP_TOKEN exists:', !!process.env.WHATSAPP_TOKEN);
+console.log('ENV CHECK - WHATSAPP_PHONE_ID exists:', !!process.env.WHATSAPP_PHONE_ID);
+console.log('ENV CHECK - ANTHROPIC_API_KEY exists:', !!process.env.ANTHROPIC_API_KEY);
 const express = require('express');
 const axios = require('axios');
 const Anthropic = require('@anthropic-ai/sdk').default;
@@ -9,7 +12,7 @@ app.use(express.json());
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-const WHATSAPP_API_URL = `https://graph.facebook.com/v19.0/${process.env.WHATSAPP_PHONE_ID}/messages`;
+const WHATSAPP_API_URL = `https://graph.facebook.com/v21.0/${process.env.WHATSAPP_PHONE_ID}/messages`;
 
 // ── In-memory stores (reset on server restart) ───────────────────────────────
 // NOTE: For production, replace with a persistent store (Redis, DB, etc.)
@@ -564,7 +567,10 @@ async function sendWhatsAppMessage(to, text) {
         'Content-Type': 'application/json',
       },
     }
-  );
+  ).catch(error => {
+    console.log('WhatsApp API error:', error.response?.status, error.response?.data);
+    throw error;
+  });
   console.log(`Reply sent to ${to}`);
 }
 
