@@ -16,10 +16,127 @@ const path = require('path');
 const app = express();
 app.use(express.json());
 
-// Serve dashboard at /dashboard
-app.get('/dashboard', (req, res) => {
+// ================================================================
+// DASHBOARD AUTHENTICATION
+// ================================================================
+
+const DASHBOARD_PASSWORD = process.env.DASHBOARD_PASSWORD || 'healthbridge2026';
+const AUTH_COOKIE_NAME = 'hb_auth';
+const AUTH_TOKEN_EXPIRY = 24 * 60 * 60 * 1000; // 24 hours
+
+// Active auth tokens (in-memory, survives for session lifetime)
+const authTokens = new Map();
+
+function generateAuthToken() {
+  return crypto.randomBytes(32).toString('hex');
+}
+
+function isAuthenticated(req) {
+  const cookie = req.headers.cookie || '';
+  const match = cookie.match(new RegExp(`${AUTH_COOKIE_NAME}=([^;]+)`));
+  if (!match) return false;
+  const token = match[1];
+  const session = authTokens.get(token);
+  if (!session) return false;
+  if (Date.now() > session.expires) {
+    authTokens.delete(token);
+    return false;
+  }
+  return true;
+}
+
+function requireAuth(req, res, next) {
+  if (isAuthenticated(req)) return next();
+  // For API calls, return 401
+  if (req.path.startsWith('/api/')) return res.status(401).json({ error: 'Unauthorized' });
+  // For dashboard, redirect to login
+  res.redirect('/login');
+}
+
+// Login page
+app.get('/login', (req, res) => {
+  const error = req.query.error ? '<p style="color:var(--red);margin-bottom:16px">Incorrect password. Try again.</p>' : '';
+  res.send(LOGIN_PAGE_HTML.replace('{{ERROR}}', error));
+});
+
+// Login handler
+app.post('/login', express.urlencoded({ extended: false }), (req, res) => {
+  const { password } = req.body;
+  if (password === DASHBOARD_PASSWORD) {
+    const token = generateAuthToken();
+    authTokens.set(token, { expires: Date.now() + AUTH_TOKEN_EXPIRY });
+    res.setHeader('Set-Cookie', `${AUTH_COOKIE_NAME}=${token}; HttpOnly; Path=/; Max-Age=${AUTH_TOKEN_EXPIRY / 1000}; SameSite=Strict`);
+    res.redirect('/dashboard');
+  } else {
+    res.redirect('/login?error=1');
+  }
+});
+
+// Logout
+app.get('/logout', (req, res) => {
+  const cookie = req.headers.cookie || '';
+  const match = cookie.match(new RegExp(`${AUTH_COOKIE_NAME}=([^;]+)`));
+  if (match) authTokens.delete(match[1]);
+  res.setHeader('Set-Cookie', `${AUTH_COOKIE_NAME}=; HttpOnly; Path=/; Max-Age=0`);
+  res.redirect('/login');
+});
+
+// Serve dashboard (protected)
+app.get('/dashboard', requireAuth, (req, res) => {
   res.sendFile(path.join(__dirname, 'dashboard.html'));
 });
+
+// Login page HTML
+const LOGIN_PAGE_HTML = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HealthBridgeSA — Login</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+  :root { --bg:#0c0f14; --surface:#161a22; --border:#2a2f3c; --text:#e4e7ec; --text-muted:#8b92a5; --accent:#3b82f6; --red:#ef4444; --radius:10px; }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:'DM Sans',sans-serif; background:var(--bg); color:var(--text); min-height:100vh; display:flex; align-items:center; justify-content:center; }
+  .login-card {
+    background:var(--surface); border:1px solid var(--border); border-radius:var(--radius);
+    padding:40px; width:100%; max-width:380px; text-align:center;
+  }
+  .login-card h1 { font-size:22px; font-weight:700; margin-bottom:6px; }
+  .login-card .subtitle { font-size:13px; color:var(--text-muted); margin-bottom:28px; }
+  .login-card .icon { font-size:40px; margin-bottom:16px; }
+  .field { margin-bottom:16px; text-align:left; }
+  .field label { display:block; font-size:12px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:6px; }
+  .field input {
+    width:100%; padding:10px 14px; background:var(--bg); border:1px solid var(--border);
+    border-radius:8px; color:var(--text); font-size:14px; font-family:'DM Sans',sans-serif;
+    outline:none; transition:border-color 0.15s;
+  }
+  .field input:focus { border-color:var(--accent); }
+  .btn {
+    width:100%; padding:12px; background:var(--accent); border:none; border-radius:8px;
+    color:white; font-size:14px; font-weight:600; cursor:pointer; font-family:'DM Sans',sans-serif;
+    transition:background 0.15s;
+  }
+  .btn:hover { background:#2563eb; }
+</style>
+</head>
+<body>
+<div class="login-card">
+  <div class="icon">🏥</div>
+  <h1>HealthBridgeSA</h1>
+  <p class="subtitle">Clinical Dashboard — Staff Login</p>
+  {{ERROR}}
+  <form method="POST" action="/login">
+    <div class="field">
+      <label>Password</label>
+      <input type="password" name="password" placeholder="Enter dashboard password" autofocus required>
+    </div>
+    <button type="submit" class="btn">Sign In</button>
+  </form>
+</div>
+</body>
+</html>`;
 
 // ================================================================
 // CONFIG & CLIENTS
@@ -996,16 +1113,16 @@ app.post('/webhook', async (req, res) => {
 });
 
 // ================================================================
-// DASHBOARD API (Agent 7)
+// DASHBOARD API (Agent 7) — All endpoints require authentication
 // ================================================================
 
-// Health check
+// Health check (public — needed for Railway healthcheck)
 app.get('/', (req, res) => {
   res.json({ status: 'ok', service: 'HealthBridgeSA v2.0', timestamp: new Date().toISOString() });
 });
 
 // Stats overview
-app.get('/api/stats', async (req, res) => {
+app.get('/api/stats', requireAuth, async (req, res) => {
   try {
     const { data: logs, error } = await supabase
       .from('triage_logs')
@@ -1037,7 +1154,7 @@ app.get('/api/stats', async (req, res) => {
 });
 
 // Escalation queue — cases needing human review
-app.get('/api/escalations', async (req, res) => {
+app.get('/api/escalations', requireAuth, async (req, res) => {
   try {
     const { data, error } = await supabase
       .from('triage_logs')
@@ -1054,7 +1171,7 @@ app.get('/api/escalations', async (req, res) => {
 });
 
 // Mark escalation as reviewed
-app.post('/api/escalations/:id/review', async (req, res) => {
+app.post('/api/escalations/:id/review', requireAuth, async (req, res) => {
   try {
     const { id } = req.params;
     const { reviewed_by, review_notes } = req.body || {};
@@ -1075,7 +1192,7 @@ app.post('/api/escalations/:id/review', async (req, res) => {
 });
 
 // Escalation count (for badge on dashboard)
-app.get('/api/escalations/count', async (req, res) => {
+app.get('/api/escalations/count', requireAuth, async (req, res) => {
   try {
     const { count, error } = await supabase
       .from('triage_logs')
@@ -1090,7 +1207,7 @@ app.get('/api/escalations/count', async (req, res) => {
 });
 
 // Recent triage logs
-app.get('/api/logs', async (req, res) => {
+app.get('/api/logs', requireAuth, async (req, res) => {
   try {
     const limit = Math.min(parseInt(req.query.limit) || 50, 200);
     const { data, error } = await supabase
@@ -1106,7 +1223,7 @@ app.get('/api/logs', async (req, res) => {
 });
 
 // Facility list with live capacity
-app.get('/api/facilities', async (req, res) => {
+app.get('/api/facilities', requireAuth, async (req, res) => {
   try {
     const { data, error } = await supabase
       .from('facilities')
@@ -1121,7 +1238,7 @@ app.get('/api/facilities', async (req, res) => {
 });
 
 // Follow-up status
-app.get('/api/follow-ups', async (req, res) => {
+app.get('/api/follow-ups', requireAuth, async (req, res) => {
   try {
     const { data, error } = await supabase
       .from('follow_ups')
