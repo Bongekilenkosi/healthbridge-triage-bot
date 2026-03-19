@@ -655,7 +655,67 @@ async function logTriage(entry) {
     .select('id')
     .single();
   if (error) { console.error('Triage log error:', error.message); return null; }
-  return data?.id || null;
+  const logId = data?.id || null;
+
+  // ── ALERT AGENT: Notify supervisor for critical cases ──
+  const alertLevels = ['RED', 'ORANGE', 'HUMAN_REQUEST', 'RECHECK'];
+  if (logId && alertLevels.includes(entry.triage_level)) {
+    await sendStaffAlert(entry, logId);
+  }
+
+  return logId;
+}
+
+// ================================================================
+// ALERT AGENT — WhatsApp alerts to supervisor for critical cases
+// ================================================================
+
+const ALERT_PHONE = process.env.ALERT_PHONE_NUMBER;
+
+async function sendStaffAlert(entry, logId) {
+  if (!ALERT_PHONE) {
+    console.log('[alert] No ALERT_PHONE_NUMBER configured, skipping');
+    return;
+  }
+
+  const levelEmoji = {
+    RED: '🔴', ORANGE: '🟠', HUMAN_REQUEST: '👤', RECHECK: '⚠️',
+  };
+
+  const emoji = levelEmoji[entry.triage_level] || '🔔';
+  const timestamp = new Date().toLocaleString('en-ZA', { timeZone: 'Africa/Johannesburg' });
+
+  let alertMsg = `${emoji} *STAFF ALERT — ${entry.triage_level}*\n`;
+  alertMsg += `📋 Log #${logId}\n`;
+  alertMsg += `🕐 ${timestamp}\n`;
+  alertMsg += `🌐 Language: ${LANG_NAMES[entry.language] || entry.language || 'Unknown'}\n\n`;
+
+  if (entry.english_summary) {
+    alertMsg += `📝 *Summary:* ${entry.english_summary}\n\n`;
+  }
+
+  if (entry.escalation_reason) {
+    alertMsg += `⚡ *Reason:* ${entry.escalation_reason.replace(/_/g, ' ')}\n`;
+  }
+
+  if (entry.facility_name) {
+    alertMsg += `🏥 *Routed to:* ${entry.facility_name}\n`;
+  }
+
+  if (entry.triage_level === 'RED') {
+    alertMsg += `\n🚨 *IMMEDIATE ACTION REQUIRED*\nPatient may need ambulance dispatch.`;
+  } else if (entry.triage_level === 'HUMAN_REQUEST') {
+    alertMsg += `\n📞 *Patient requested to speak to a healthcare worker.*`;
+  }
+
+  alertMsg += `\n\n📊 Review on dashboard: /dashboard → Escalations`;
+
+  try {
+    await sendWhatsAppMessage(ALERT_PHONE, alertMsg);
+    console.log(`[alert] Sent ${entry.triage_level} alert to supervisor`);
+  } catch (err) {
+    console.error('[alert] Failed to send staff alert:', err.message);
+  }
 }
 
 // ================================================================
