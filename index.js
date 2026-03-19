@@ -788,6 +788,13 @@ const POST_TRIAGE_PROMPT_EN =
 const CLOSING_MESSAGE_EN =
   'Stay safe. If your condition worsens, message us again anytime. 🏥';
 
+const TRANSPORT_QUESTION_EN =
+  '🚗 *How will you get to the hospital?*\n\n' +
+  '1. 🚑 I need an ambulance\n' +
+  '2. 🚗 I can drive myself or get a taxi\n' +
+  '3. 👨‍👩‍👧 Someone is taking me\n\n' +
+  'If this is life-threatening, call *10177* now.';
+
 // ================================================================
 // ORCHESTRATOR — routes each message through the agent pipeline
 // ================================================================
@@ -809,7 +816,7 @@ async function orchestrate(from, text, session) {
   }
 
   // ── AGENT 6: CHECK FOR PENDING FOLLOW-UP RESPONSE ─────────
-  if (session.step !== 'language_select' && session.step !== 'consent' && session.step !== 'location_request') {
+  if (session.step !== 'language_select' && session.step !== 'consent' && session.step !== 'location_request' && session.step !== 'transport_select') {
     const handled = await handleFollowUpResponse(patientId, session, normalized);
     if (handled) return;
   }
@@ -1009,6 +1016,17 @@ async function orchestrate(from, text, session) {
     // AGENT 6: Schedule follow-up
     await scheduleFollowUp(patientId, from, classification, logId);
 
+    // ORANGE cases → ask about transport
+    if (classification === 'ORANGE') {
+      session.step = 'transport_select';
+      session.lastTriageLogId = logId;
+      session.lastRouting = routing;
+      await saveSession(patientId, session);
+      const transportQ = await translateText(TRANSPORT_QUESTION_EN, lang);
+      await sendWhatsAppMessage(from, transportQ);
+      return;
+    }
+
     session.step = 'post_triage';
     await saveSession(patientId, session);
     const postPrompt = await translateText(POST_TRIAGE_PROMPT_EN, lang);
@@ -1062,6 +1080,118 @@ async function orchestrate(from, text, session) {
 
     await scheduleFollowUp(patientId, from, triage.classification, logId);
 
+    // ORANGE cases → ask about transport
+    if (triage.classification === 'ORANGE') {
+      session.step = 'transport_select';
+      session.lastTriageLogId = logId;
+      session.lastRouting = routing;
+      await saveSession(patientId, session);
+      const transportQ = await translateText(TRANSPORT_QUESTION_EN, lang);
+      await sendWhatsAppMessage(from, transportQ);
+      return;
+    }
+
+    session.step = 'post_triage';
+    await saveSession(patientId, session);
+    const postPrompt = await translateText(POST_TRIAGE_PROMPT_EN, lang);
+    await sendWhatsAppMessage(from, postPrompt);
+    return;
+  }
+
+  // ── TRANSPORT SELECT (ORANGE cases only) ────────────────────
+  if (session.step === 'transport_select') {
+    if (normalized === '1') {
+      // Patient needs ambulance → alert nurse to dispatch
+      const alertMsg = await translateText(
+        '🚑 We are alerting a healthcare worker to arrange an ambulance for you.\n\n' +
+        'Please stay where you are and keep your phone nearby.\n' +
+        'If your condition worsens, call *10177* directly.',
+        lang
+      );
+      await sendWhatsAppMessage(from, alertMsg);
+
+      // Log the ambulance request so nurse sees it on dashboard
+      if (session.lastTriageLogId) {
+        await supabase.from('dispatch_log').insert({
+          triage_log_id: session.lastTriageLogId,
+          patient_id: patientId,
+          patient_phone: from,
+          status: 'pending',
+          service: null,
+          nurse_name: null,
+          notes: 'Patient requested ambulance via WhatsApp',
+          patient_location: session.location || null,
+          maps_link: session.location
+            ? `https://www.google.com/maps/dir/?api=1&destination=${session.location.latitude},${session.location.longitude}`
+            : null,
+        }).then(({ error }) => { if (error) console.error('Dispatch insert error:', error.message); });
+      }
+
+      // Notify supervisor
+      if (ALERT_PHONE) {
+        const timestamp = new Date().toLocaleString('en-ZA', { timeZone: 'Africa/Johannesburg' });
+        let supervisorMsg = `🚑 *AMBULANCE REQUESTED*\n`;
+        supervisorMsg += `📋 Log #${session.lastTriageLogId || '—'}\n`;
+        supervisorMsg += `🕐 ${timestamp}\n`;
+        supervisorMsg += `🟠 ORANGE case — patient requesting ambulance\n`;
+        if (session.location) {
+          supervisorMsg += `📍 Patient location: https://www.google.com/maps/dir/?api=1&destination=${session.location.latitude},${session.location.longitude}\n`;
+        }
+        supervisorMsg += `\n👉 Open the dashboard to dispatch an ambulance.`;
+        await sendWhatsAppMessage(ALERT_PHONE, supervisorMsg);
+      }
+
+    } else if (normalized === '2' || normalized === '3') {
+      // Self-transport or someone taking them → give directions
+      let transportReply;
+      if (normalized === '2') {
+        transportReply = await translateText(
+          '🚗 Please get to the hospital as quickly and safely as possible.\n' +
+          'Do not drive if you feel dizzy, faint, or confused — ask someone else to drive you.',
+          lang
+        );
+      } else {
+        transportReply = await translateText(
+          '👨‍👩‍👧 Thank you. Please make sure your driver knows this is urgent and goes directly to the hospital emergency unit.\n' +
+          'Show them the directions below.',
+          lang
+        );
+      }
+
+      // Add facility directions if available
+      if (session.lastRouting?.directions) {
+        transportReply += `\n\n📍 Directions: ${session.lastRouting.directions}`;
+      }
+      if (session.lastRouting?.facility) {
+        transportReply += `\n🏥 ${session.lastRouting.facility.name} — ~${session.lastRouting.facility.wait_time_minutes} min wait`;
+      }
+
+      await sendWhatsAppMessage(from, transportReply);
+
+      // Log self-transport
+      if (session.lastTriageLogId) {
+        await supabase.from('dispatch_log').insert({
+          triage_log_id: session.lastTriageLogId,
+          patient_id: patientId,
+          patient_phone: from,
+          status: 'self_transport',
+          service: 'Self',
+          notes: normalized === '2' ? 'Patient driving themselves or taking taxi' : 'Someone is taking the patient',
+          patient_location: session.location || null,
+          maps_link: session.lastRouting?.directions || null,
+        }).then(({ error }) => { if (error) console.error('Dispatch insert error:', error.message); });
+      }
+
+    } else {
+      // Invalid input — re-send transport question
+      const transportQ = await translateText(TRANSPORT_QUESTION_EN, lang);
+      await sendWhatsAppMessage(from, transportQ);
+      return;
+    }
+
+    // Clean up session and move to post-triage
+    delete session.lastTriageLogId;
+    delete session.lastRouting;
     session.step = 'post_triage';
     await saveSession(patientId, session);
     const postPrompt = await translateText(POST_TRIAGE_PROMPT_EN, lang);
