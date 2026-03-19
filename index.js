@@ -2325,6 +2325,241 @@ async function sendDispatchNotifications(dispatch, triageLog, patientPhone, maps
 }
 
 // ================================================================
+// USSD EMERGENCY TRIAGE (Channel 2)
+// ================================================================
+// USSD flow: fast, 160-char screens, emergency-focused
+// Compatible with: Africa's Talking, Nalo Solutions, or any
+// USSD gateway that POSTs sessionId, phoneNumber, text, serviceCode
+//
+// Flow:
+// Screen 1: Language (EN/ZU/AF)
+// Screen 2: Emergency type (breathing, bleeding, unconscious, pregnancy, other)
+// Screen 3: Location (province → area)
+// Screen 4: Triage result + facility + ambulance number
+//
+// Session timeout: ~180s. Every screen must be fast.
+
+// USSD sessions (in-memory, short-lived)
+const ussdSessions = new Map();
+
+// Clean expired sessions every 5 minutes
+setInterval(() => {
+  const now = Date.now();
+  for (const [sid, sess] of ussdSessions) {
+    if (now - sess.lastActivity > 5 * 60 * 1000) ussdSessions.delete(sid);
+  }
+}, 5 * 60 * 1000);
+
+// USSD provinces → rough center coordinates for facility routing
+const PROVINCE_COORDS = {
+  '1': { name: 'Gauteng', lat: -26.20, lng: 28.04 },
+  '2': { name: 'KwaZulu-Natal', lat: -29.60, lng: 30.38 },
+  '3': { name: 'Western Cape', lat: -33.93, lng: 18.42 },
+  '4': { name: 'Eastern Cape', lat: -32.98, lng: 27.87 },
+  '5': { name: 'Free State', lat: -29.12, lng: 26.21 },
+  '6': { name: 'Limpopo', lat: -23.40, lng: 29.42 },
+  '7': { name: 'Mpumalanga', lat: -25.47, lng: 30.97 },
+  '8': { name: 'North West', lat: -25.85, lng: 25.64 },
+  '9': { name: 'Northern Cape', lat: -29.05, lng: 21.86 },
+};
+
+// Emergency categories mapped to triage levels
+const USSD_EMERGENCIES = {
+  '1': { desc: 'Cannot breathe', level: 'RED', category: '1' },
+  '2': { desc: 'Heavy bleeding', level: 'RED', category: '4' },
+  '3': { desc: 'Unconscious/not responding', level: 'RED', category: '1' },
+  '4': { desc: 'Pregnancy emergency', level: 'RED', category: '3' },
+  '5': { desc: 'Chest pain', level: 'ORANGE', category: '1' },
+  '6': { desc: 'Severe injury/accident', level: 'ORANGE', category: '9' },
+  '7': { desc: 'Child very sick', level: 'ORANGE', category: '7' },
+  '8': { desc: 'Poisoning/overdose', level: 'RED', category: '1' },
+};
+
+app.post('/ussd', async (req, res) => {
+  // Standard USSD gateway fields (Africa's Talking format)
+  // Other providers use similar fields — adapt as needed
+  const sessionId = req.body.sessionId || req.body.session_id || req.body.SESSION_ID || '';
+  const phone = req.body.phoneNumber || req.body.msisdn || req.body.MSISDN || '';
+  const text = (req.body.text || req.body.TEXT || '').trim();
+  const serviceCode = req.body.serviceCode || req.body.service_code || '';
+
+  // Parse USSD input chain (Africa's Talking sends "1*2*3" for multi-step)
+  const inputs = text ? text.split('*') : [];
+  const step = inputs.length;
+
+  let session = ussdSessions.get(sessionId) || { step: 0, phone, created: Date.now() };
+  session.lastActivity = Date.now();
+
+  let response = '';
+  let endSession = false;
+
+  try {
+    // ── SCREEN 1: Language ──
+    if (step === 0) {
+      response = 'HealthBridgeSA Emergency\n';
+      response += 'Choose language:\n';
+      response += '1. English\n';
+      response += '2. isiZulu\n';
+      response += '3. Afrikaans';
+
+    // ── SCREEN 2: Emergency type ──
+    } else if (step === 1) {
+      const langMap = { '1': 'en', '2': 'zu', '3': 'af' };
+      session.lang = langMap[inputs[0]] || 'en';
+
+      if (session.lang === 'zu') {
+        response = 'Isimo esiphuthumayo:\n';
+        response += '1. Angikwazi ukuphefumula\n';
+        response += '2. Ukopha okukhulu\n';
+        response += '3. Akaphapheme\n';
+        response += '4. Isimo sokukhulelwa\n';
+        response += '5. Ubuhlungu besifuba\n';
+        response += '6. Ingozi/ukulimala\n';
+        response += '7. Ingane igula kakhulu\n';
+        response += '8. Ushefo';
+      } else if (session.lang === 'af') {
+        response = 'Noodgeval tipe:\n';
+        response += '1. Kan nie asemhaal\n';
+        response += '2. Erge bloeding\n';
+        response += '3. Bewusteloos\n';
+        response += '4. Swangerskap nood\n';
+        response += '5. Borspyn\n';
+        response += '6. Ernstige besering\n';
+        response += '7. Kind baie siek\n';
+        response += '8. Vergiftiging';
+      } else {
+        response = 'Emergency type:\n';
+        response += '1. Cannot breathe\n';
+        response += '2. Heavy bleeding\n';
+        response += '3. Unconscious\n';
+        response += '4. Pregnancy emergency\n';
+        response += '5. Chest pain\n';
+        response += '6. Severe injury\n';
+        response += '7. Child very sick\n';
+        response += '8. Poisoning';
+      }
+
+    // ── SCREEN 3: Province (for facility routing) ──
+    } else if (step === 2) {
+      const emergency = USSD_EMERGENCIES[inputs[1]];
+      if (!emergency) {
+        response = 'Invalid choice. Dial again.\nFor emergencies call 10177';
+        endSession = true;
+      } else {
+        session.emergency = emergency;
+        response = 'Your province:\n';
+        response += '1. Gauteng\n2. KZN\n3. W.Cape\n';
+        response += '4. E.Cape\n5. Free State\n';
+        response += '6. Limpopo\n7. Mpumalanga\n';
+        response += '8. North West\n9. N.Cape';
+      }
+
+    // ── SCREEN 4: Triage result ──
+    } else if (step === 3) {
+      const emergency = session.emergency || USSD_EMERGENCIES['1'];
+      const province = PROVINCE_COORDS[inputs[2]];
+      const location = province ? { latitude: province.lat, longitude: province.lng } : null;
+
+      // Route to nearest facility
+      const routing = await routePatient(emergency.level, location);
+      const facility = routing.facility;
+
+      // Build result screen
+      if (emergency.level === 'RED') {
+        if (session.lang === 'zu') {
+          response = 'ISIMO ESIPHUTHUMAYO!\n';
+          response += 'Shaya 10177 MANJE\n';
+          response += 'ER24: 084 124\n';
+        } else if (session.lang === 'af') {
+          response = 'NOODGEVAL!\n';
+          response += 'Bel 10177 NOU\n';
+          response += 'ER24: 084 124\n';
+        } else {
+          response = 'EMERGENCY!\n';
+          response += 'Call 10177 NOW\n';
+          response += 'ER24: 084 124\n';
+        }
+      } else {
+        if (session.lang === 'zu') {
+          response = 'KUPHUTHUMILE!\nYa esibhedlela manje.\n';
+        } else if (session.lang === 'af') {
+          response = 'DRINGEND!\nGaan hospitaal toe nou.\n';
+        } else {
+          response = 'URGENT!\nGo to hospital now.\n';
+        }
+      }
+
+      if (facility) {
+        response += `\nNearest: ${facility.name}\nWait: ~${facility.wait_time_minutes}min`;
+      } else if (province) {
+        response += `\nGo to nearest ${emergency.level === 'RED' ? 'hospital' : 'clinic'} in ${province.name}`;
+      }
+
+      endSession = true;
+
+      // Log to database (same as WhatsApp triages)
+      const patientId = hashPhone(phone);
+      await logTriage({
+        patient_id: patientId,
+        phone_hash: patientId,
+        language: session.lang || 'en',
+        original_message: `USSD: ${emergency.desc}`,
+        english_summary: `USSD emergency triage: ${emergency.desc}. Province: ${province?.name || 'unknown'}`,
+        triage_level: emergency.level,
+        confidence: 'HIGH',
+        method: 'ussd',
+        category: emergency.category,
+        escalation: emergency.level === 'RED',
+        escalation_reason: emergency.level === 'RED' ? 'USSD_RED_EMERGENCY' : null,
+        pathway: routing.pathway,
+        facility_name: facility?.name || null,
+        facility_id: facility?.id || null,
+        location: location || null,
+        needs_human_review: emergency.level === 'RED',
+      });
+
+      // Alert supervisor for RED cases
+      if (emergency.level === 'RED' && ALERT_PHONE) {
+        const timestamp = new Date().toLocaleString('en-ZA', { timeZone: 'Africa/Johannesburg' });
+        let alertMsg = `🔴 *USSD RED ALERT*\n`;
+        alertMsg += `📞 Patient: ${phone}\n`;
+        alertMsg += `🕐 ${timestamp}\n`;
+        alertMsg += `⚡ ${emergency.desc}\n`;
+        if (province) alertMsg += `📍 Province: ${province.name}\n`;
+        if (facility) alertMsg += `🏥 Nearest: ${facility.name}\n`;
+        alertMsg += `\n⚠️ USSD patient — cannot receive WhatsApp. Call them directly.`;
+        await sendWhatsAppMessage(ALERT_PHONE, alertMsg);
+      }
+
+      // Schedule SMS follow-up for USSD patients (future: integrate SMS gateway)
+      console.log(`[ussd] ${emergency.level} triage: ${phone} - ${emergency.desc} - ${province?.name || 'unknown'}`);
+    } else {
+      response = 'Session error. Dial again.\nEmergency: 10177';
+      endSession = true;
+    }
+  } catch (err) {
+    console.error('USSD error:', err.message);
+    response = 'System error.\nCall 10177 for emergency.';
+    endSession = true;
+  }
+
+  ussdSessions.set(sessionId, session);
+
+  // USSD response format:
+  // CON = continue session (show menu, wait for input)
+  // END = end session (final screen)
+  // This is Africa's Talking format. Other providers may use different prefixes.
+  const prefix = endSession ? 'END ' : 'CON ';
+  res.set('Content-Type', 'text/plain');
+  res.send(prefix + response);
+});
+
+// USSD health check
+app.get('/ussd', (req, res) => {
+  res.json({ status: 'ok', service: 'HealthBridgeSA USSD Emergency Triage' });
+});
+
+// ================================================================
 // START
 // ================================================================
 
