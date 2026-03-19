@@ -77,7 +77,7 @@ const WELCOME_MENU =
 
 const LANG_CONFIRMED = {
   en:  '✅ Language set to *English*.\nType *0* or *menu* anytime to change language.',
-  zu:  '✅ Ulimi lusetelwe ku *isiZulu*.\nBhala *0* noma *menu* ukushintsha ulimi.',
+  zu:  '✅ Ulimi lubekwe ku *isiZulu*.\nBhala *0* noma *menu* ukushintsha ulimi.',
   xh:  '✅ Ulwimi lusethwe kwi *isiXhosa*.\nTayipha *0* okanye *menu* ukuguqula ulwimi.',
   af:  '✅ Taal ingestel op *Afrikaans*.\nTik *0* of *menu* om taal te verander.',
   nso: '✅ Polelo e beelwe go *Sepedi*.\nŽwala *0* goba *menu* go fetola polelo.',
@@ -488,18 +488,20 @@ async function getSession(patientId) {
     .from('sessions')
     .select('data')
     .eq('patient_id', patientId)
-    .single();
-  if (error || !data) return {};
-  return data.data || {};
+    .maybeSingle();  // returns null instead of error when no row
+  if (error) { console.error('Session fetch error:', error.message); return {}; }
+  const session = data?.data || {};
+  console.log(`[session:get] ${patientId} → step=${session.step || 'none'}, lang=${session.lang || 'none'}`);
+  return session;
 }
 
 async function saveSession(patientId, session) {
-  const { error } = await supabase.from('sessions').upsert({
-    patient_id: patientId,
-    data: session,
-    updated_at: new Date().toISOString(),
-  });
+  const { error } = await supabase.from('sessions').upsert(
+    { patient_id: patientId, data: session, updated_at: new Date().toISOString() },
+    { onConflict: 'patient_id' }
+  );
   if (error) console.error('Session save error:', error.message);
+  else console.log(`[session:save] ${patientId} → step=${session.step}, lang=${session.lang || 'none'}`);
 }
 
 async function logTriage(entry) {
@@ -1054,3 +1056,7 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`   WhatsApp: ${process.env.WHATSAPP_TOKEN ? '✅' : '❌'}`);
   console.log(`   Anthropic: ${process.env.ANTHROPIC_API_KEY ? '✅' : '❌'}`);
 });
+
+
+
+     
