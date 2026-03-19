@@ -395,6 +395,13 @@ document.querySelectorAll('.tab').forEach(tab => {
   });
 });
 
+// ── Language display names ──
+const LANG_DISPLAY = {
+  en: 'English', zu: 'isiZulu', xh: 'isiXhosa', af: 'Afrikaans',
+  nso: 'Sepedi', tn: 'Setswana', st: 'Sesotho', ts: 'Xitsonga',
+  ss: 'siSwati', ve: 'Tshivenda', nr: 'isiNdebele',
+};
+
 // ── Time formatting ──
 function timeAgo(ts) {
   const diff = Date.now() - new Date(ts).getTime();
@@ -506,54 +513,150 @@ function renderTab() {
     container.innerHTML = escalationsData.map(e => {
       const levelColors = { RED:'var(--red)', ORANGE:'var(--orange)', YELLOW:'var(--yellow)', GREEN:'var(--green)', BLUE:'var(--blue)', HUMAN_REQUEST:'#a855f7', RECHECK:'var(--orange)' };
       const borderColor = levelColors[e.triage_level] || 'var(--border)';
+
+      // Urgency timer
+      const minsAgo = Math.floor((Date.now() - new Date(e.created_at).getTime()) / 60000);
+      let urgencyLabel, urgencyColor;
+      if (minsAgo < 15) { urgencyLabel = `${minsAgo}m ago — ACT NOW`; urgencyColor = 'var(--red)'; }
+      else if (minsAgo < 60) { urgencyLabel = `${minsAgo}m ago — URGENT`; urgencyColor = 'var(--orange)'; }
+      else if (minsAgo < 240) { urgencyLabel = `${Math.floor(minsAgo/60)}h ${minsAgo%60}m ago`; urgencyColor = 'var(--yellow)'; }
+      else { urgencyLabel = timeAgo(e.created_at); urgencyColor = 'var(--text-muted)'; }
+
+      // Map category to readable symptom description
+      const categorySymptoms = {
+        '1': '🫁 Breathing problems / Chest pain',
+        '2': '🤕 Head injury / Severe headache',
+        '3': '🤰 Pregnancy related',
+        '4': '🩸 Bleeding / Wound',
+        '5': '🤒 Fever / Flu / Cough',
+        '6': '🤢 Stomach pain / Vomiting / Diarrhoea',
+        '7': '👶 Baby or child is sick',
+        '8': '💊 Medication / Chronic condition',
+        '9': '🦴 Bone / Joint / Back pain',
+        '10': '😔 Mental health / Feeling distressed',
+        '11': '⚡ Allergic reaction / Rash / Swelling',
+        '12': '🔢 Free text (typed symptoms)',
+        '13': '👤 Requested to speak to human',
+      };
+      const symptomDesc = categorySymptoms[e.category] || 'Unknown category';
+
+      // Recommended nurse action based on triage level
+      const nurseActions = {
+        RED: '🚨 Verify patient status. Confirm ambulance dispatched (10177). Contact patient immediately.',
+        ORANGE: '⚡ Contact patient within 30 minutes. Confirm they are en route to hospital. Arrange transport if needed.',
+        HUMAN_REQUEST: '📞 Patient requested human contact. Call them as soon as possible.',
+        RECHECK: '⚠️ Patient reported worsening symptoms at 48hr follow-up. Re-assess and escalate if needed.',
+        YELLOW: '🟡 Review case. Contact patient if confidence is low.',
+      };
+      const action = nurseActions[e.triage_level] || 'Review case details and take appropriate action.';
+
+      // Phone buttons
+      const phoneNum = e.patient_phone || '';
+      const phoneButtons = phoneNum
+        ? `<a href="https://wa.me/${phoneNum}" target="_blank" class="btn btn-primary" style="text-decoration:none;font-size:11px;padding:6px 10px;">💬 WhatsApp</a>
+           <a href="tel:+${phoneNum}" class="btn" style="text-decoration:none;font-size:11px;padding:6px 10px;">📞 Call</a>`
+        : '<span style="font-size:11px;color:var(--text-muted)">No phone available</span>';
+
       return `
-      <div class="esc-card" style="border-left:3px solid ${borderColor}; padding:16px 20px; border-bottom:1px solid var(--border);">
-        <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap;">
-          <div style="flex:1; min-width:250px;">
-            <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
-              <span class="level-pill level-${e.triage_level}">${e.triage_level}</span>
-              <span class="time-ago">${timeAgo(e.created_at)}</span>
-              <span style="font-size:11px; color:var(--text-muted)">Log #${e.id}</span>
-            </div>
+      <div style="border-left:4px solid ${borderColor}; padding:20px; border-bottom:1px solid var(--border);">
 
-            <div style="margin-bottom:10px;">
-              <div style="font-size:11px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.04em; margin-bottom:3px;">Reason</div>
-              <div style="font-size:13px; font-weight:500;">${esc((e.escalation_reason || '—').replace(/_/g, ' '))}</div>
-            </div>
-
-            <div style="margin-bottom:10px;">
-              <div style="font-size:11px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.04em; margin-bottom:3px;">Patient Message (Original)</div>
-              <div style="font-size:13px; background:var(--surface-2); padding:8px 12px; border-radius:6px; white-space:pre-wrap;">${esc(e.original_message || '—')}</div>
-            </div>
-
-            <div style="margin-bottom:10px;">
-              <div style="font-size:11px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.04em; margin-bottom:3px;">English Summary</div>
-              <div style="font-size:13px;">${esc(e.english_summary || '—')}</div>
-            </div>
-
-            <div style="display:flex; gap:20px; flex-wrap:wrap; font-size:12px; color:var(--text-muted);">
-              <span>🌐 ${e.language || '—'}</span>
-              <span>📊 Confidence: <span class="conf-${e.confidence || 'LOW'}" style="font-weight:600">${e.confidence || '—'}</span></span>
-              <span>🏥 ${e.facility_name || 'No facility assigned'}</span>
-              <span>🔀 Method: ${e.method || '—'}</span>
-              ${e.category ? `<span>📂 Category: ${e.category}</span>` : ''}
-              ${e.pathway ? `<span>🛤 Pathway: ${e.pathway}</span>` : ''}
-            </div>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; flex-wrap:wrap; gap:8px;">
+          <div style="display:flex; align-items:center; gap:10px;">
+            <span class="level-pill level-${e.triage_level}" style="font-size:12px; padding:3px 12px;">${e.triage_level}</span>
+            <span style="font-size:12px; color:var(--text-muted);">Log #${e.id}</span>
           </div>
-
-          <div style="display:flex; flex-direction:column; gap:8px; min-width:200px;">
-            <textarea id="notes-${e.id}" placeholder="Add review notes..." style="
-              width:100%; height:60px; padding:8px 10px; background:var(--bg); border:1px solid var(--border);
-              border-radius:6px; color:var(--text); font-size:12px; font-family:'DM Sans',sans-serif;
-              resize:vertical; outline:none;
-            "></textarea>
-            <div style="display:flex; gap:6px;">
-              <button class="btn btn-primary" onclick="markReviewed(${e.id})" style="flex:1;">✓ Mark Reviewed</button>
-            </div>
+          <div style="font-size:12px; font-weight:600; color:${urgencyColor}; font-family:'JetBrains Mono',monospace;">
+            ⏱ ${urgencyLabel}
           </div>
         </div>
+
+        <div style="background:var(--surface-2); border-radius:8px; padding:14px; margin-bottom:14px;">
+          <div style="font-size:11px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.04em; margin-bottom:6px;">Recommended Action</div>
+          <div style="font-size:13px; font-weight:500; line-height:1.5;">${action}</div>
+        </div>
+
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:14px;">
+          <div>
+            <div style="font-size:11px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.04em; margin-bottom:4px;">Symptom Category</div>
+            <div style="font-size:13px;">${symptomDesc}</div>
+          </div>
+          <div>
+            <div style="font-size:11px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.04em; margin-bottom:4px;">Escalation Reason</div>
+            <div style="font-size:13px;">${esc((e.escalation_reason || '—').replace(/_/g, ' '))}</div>
+          </div>
+        </div>
+
+        <div style="margin-bottom:14px;">
+          <div style="font-size:11px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.04em; margin-bottom:4px;">Patient Message</div>
+          <div style="font-size:13px; background:var(--bg); padding:10px 12px; border-radius:6px; border:1px solid var(--border); white-space:pre-wrap;">${esc(e.original_message || '—')}</div>
+        </div>
+
+        <div style="margin-bottom:14px;">
+          <div style="font-size:11px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.04em; margin-bottom:4px;">English Summary</div>
+          <div style="font-size:13px;">${esc(e.english_summary || '—')}</div>
+        </div>
+
+        <div style="display:flex; gap:16px; flex-wrap:wrap; font-size:12px; color:var(--text-muted); margin-bottom:14px;">
+          <span>🌐 ${LANG_DISPLAY[e.language] || e.language || '—'}</span>
+          <span>📊 Confidence: <span class="conf-${e.confidence || 'LOW'}" style="font-weight:600">${e.confidence || '—'}</span></span>
+          <span>🏥 ${e.facility_name || 'No facility'}</span>
+          <span>🔀 ${e.method || '—'}</span>
+          <span>🛤 ${e.pathway || '—'}</span>
+        </div>
+
+        ${(e.triage_level === 'RED' || e.triage_level === 'ORANGE') ? `
+        <div id="dispatch-${e.id}" style="background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:14px; margin-bottom:14px;">
+          <div style="font-size:11px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.04em; margin-bottom:10px;">🚑 Ambulance Dispatch Tracking</div>
+          <div style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px;">
+            <button class="btn" onclick="dispatch(${e.id},'called_10177','10177')" style="font-size:11px;">📞 Called 10177</button>
+            <button class="btn" onclick="dispatch(${e.id},'called_er24','ER24')" style="font-size:11px;">📞 Called ER24</button>
+            <button class="btn" onclick="dispatch(${e.id},'called_netcare','Netcare911')" style="font-size:11px;">📞 Called Netcare</button>
+            <button class="btn" onclick="dispatch(${e.id},'self_transport','Self')" style="font-size:11px;">🚗 Self Transport</button>
+          </div>
+          <div style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px;">
+            <button class="btn" onclick="dispatch(${e.id},'dispatched')" style="font-size:11px;">✅ Dispatched</button>
+            <button class="btn" onclick="dispatch(${e.id},'en_route')" style="font-size:11px;">🚑 En Route</button>
+            <button class="btn" onclick="dispatch(${e.id},'arrived')" style="font-size:11px;">🏥 Arrived</button>
+            <button class="btn" onclick="dispatch(${e.id},'patient_handed_over')" style="font-size:11px;background:var(--green);border-color:var(--green);color:white;">✅ Handed Over</button>
+          </div>
+          <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            <input id="dispatch-ref-${e.id}" placeholder="Ambulance ref #" style="
+              flex:1; min-width:120px; padding:6px 10px; background:var(--surface); border:1px solid var(--border);
+              border-radius:6px; color:var(--text); font-size:12px; font-family:'DM Sans',sans-serif; outline:none;
+            ">
+            <input id="dispatch-nurse-${e.id}" placeholder="Your name" style="
+              flex:1; min-width:120px; padding:6px 10px; background:var(--surface); border:1px solid var(--border);
+              border-radius:6px; color:var(--text); font-size:12px; font-family:'DM Sans',sans-serif; outline:none;
+            ">
+          </div>
+          <div id="dispatch-status-${e.id}" style="margin-top:8px; font-size:12px; color:var(--text-muted);"></div>
+        </div>
+        ` : ''}
+
+        <div style="display:flex; justify-content:space-between; align-items:flex-end; gap:12px; flex-wrap:wrap; padding-top:12px; border-top:1px solid var(--border);">
+          <div style="display:flex; gap:8px; align-items:center;">
+            ${phoneButtons}
+          </div>
+          <div style="display:flex; gap:8px; align-items:flex-end;">
+            <textarea id="notes-${e.id}" placeholder="Review notes..." style="
+              width:220px; height:40px; padding:6px 10px; background:var(--bg); border:1px solid var(--border);
+              border-radius:6px; color:var(--text); font-size:12px; font-family:'DM Sans',sans-serif;
+              resize:none; outline:none;
+            "></textarea>
+            <button class="btn btn-primary" onclick="markReviewed(${e.id})" style="white-space:nowrap;">✓ Reviewed</button>
+          </div>
+        </div>
+
       </div>`;
     }).join('');
+
+    // Load dispatch statuses for all RED/ORANGE cases
+    escalationsData.forEach(e => {
+      if (e.triage_level === 'RED' || e.triage_level === 'ORANGE') {
+        loadDispatchStatus(e.id);
+      }
+    });
+
     return;
   }
 
@@ -564,9 +667,19 @@ function renderTab() {
     }
     container.innerHTML = `<table>
       <tr>
-        <th>Time</th><th>Level</th><th>Method</th><th>Category</th><th>Summary</th><th>Lang</th><th>Confidence</th><th>Facility</th>
+        <th>Time</th><th>Level</th><th>Method</th><th>Category</th><th>Summary</th><th>Lang</th><th>Confidence</th><th>Facility</th><th>Review Status</th><th>Reviewed By</th><th>Notes / Action Taken</th>
       </tr>
-      ${logsData.map(l => `
+      ${logsData.map(l => {
+        let reviewStatus = '—';
+        if (l.needs_human_review && l.reviewed) {
+          reviewStatus = '<span style="color:var(--green);font-weight:600;font-size:11px;">✅ REVIEWED</span>';
+        } else if (l.needs_human_review && !l.reviewed) {
+          reviewStatus = '<span style="color:var(--red);font-weight:600;font-size:11px;">⏳ PENDING</span>';
+        }
+        const reviewedBy = l.reviewed_by || '—';
+        const reviewNotes = l.review_notes || '—';
+        const reviewTime = l.reviewed_at ? `<br><span style="font-size:10px;color:var(--text-muted)">${timeAgo(l.reviewed_at)}</span>` : '';
+        return `
         <tr>
           <td class="time-ago">${timeAgo(l.created_at)}</td>
           <td><span class="level-pill level-${l.triage_level}">${l.triage_level}</span></td>
@@ -576,8 +689,11 @@ function renderTab() {
           <td>${l.language || '—'}</td>
           <td class="conf-${l.confidence || ''}">${l.confidence || '—'}</td>
           <td>${l.facility_name || '—'}</td>
-        </tr>
-      `).join('')}
+          <td>${reviewStatus}</td>
+          <td>${esc(reviewedBy)}${reviewTime}</td>
+          <td style="max-width:200px;white-space:pre-wrap;font-size:12px;">${esc(reviewNotes)}</td>
+        </tr>`;
+      }).join('')}
     </table>`;
     return;
   }
@@ -652,6 +768,79 @@ async function markReviewed(id) {
     fetchAll();
   } catch (err) {
     console.error('Review error:', err);
+  }
+}
+
+// ── Dispatch tracking ──
+async function loadDispatchStatus(triageLogId) {
+  try {
+    const data = await authFetch(`${API_BASE}/api/dispatch/${triageLogId}`);
+    const el = document.getElementById(`dispatch-status-${triageLogId}`);
+    if (!el) return;
+    if (data && data.status) {
+      const statusLabels = {
+        pending: '⏳ Pending', called_10177: '📞 Called 10177', called_er24: '📞 Called ER24',
+        called_netcare: '📞 Called Netcare', self_transport: '🚗 Self transport',
+        dispatched: '✅ Dispatched', en_route: '🚑 En route', arrived: '🏥 Arrived',
+        patient_handed_over: '✅ Handed over', cancelled: '❌ Cancelled',
+      };
+      let html = `<span style="font-weight:600; color:var(--accent);">${statusLabels[data.status] || data.status}</span>`;
+      if (data.reference_number) html += ` — Ref: ${data.reference_number}`;
+      if (data.nurse_name) html += ` — Nurse: ${data.nurse_name}`;
+      if (data.service) html += ` — Service: ${data.service}`;
+      html += ` — Updated ${timeAgo(data.updated_at)}`;
+      el.innerHTML = html;
+      // Pre-fill fields
+      const refEl = document.getElementById(`dispatch-ref-${triageLogId}`);
+      const nurseEl = document.getElementById(`dispatch-nurse-${triageLogId}`);
+      if (refEl && data.reference_number) refEl.value = data.reference_number;
+      if (nurseEl && data.nurse_name) nurseEl.value = data.nurse_name;
+    }
+  } catch (err) {
+    // No dispatch record yet — that's fine
+  }
+}
+
+async function dispatch(triageLogId, status, service) {
+  const refEl = document.getElementById(`dispatch-ref-${triageLogId}`);
+  const nurseEl = document.getElementById(`dispatch-nurse-${triageLogId}`);
+  const statusEl = document.getElementById(`dispatch-status-${triageLogId}`);
+
+  const reference_number = refEl ? refEl.value.trim() : '';
+  const nurse_name = nurseEl ? nurseEl.value.trim() : '';
+
+  if (!nurse_name) {
+    alert('Please enter your name before updating dispatch status.');
+    if (nurseEl) nurseEl.focus();
+    return;
+  }
+
+  const statusLabels = {
+    called_10177: 'Called 10177', called_er24: 'Called ER24', called_netcare: 'Called Netcare',
+    self_transport: 'Self transport', dispatched: 'Dispatched', en_route: 'En route',
+    arrived: 'Arrived', patient_handed_over: 'Patient handed over',
+  };
+
+  if (!confirm(`Update dispatch to: ${statusLabels[status] || status}?\n\nThis will notify the patient and supervisor via WhatsApp.`)) return;
+
+  if (statusEl) statusEl.innerHTML = '<span style="color:var(--yellow)">Updating...</span>';
+
+  try {
+    await fetch(`${API_BASE}/api/dispatch`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        triage_log_id: triageLogId,
+        status,
+        service: service || null,
+        reference_number: reference_number || null,
+        nurse_name,
+      }),
+    });
+    await loadDispatchStatus(triageLogId);
+  } catch (err) {
+    console.error('Dispatch error:', err);
+    if (statusEl) statusEl.innerHTML = '<span style="color:var(--red)">Update failed. Try again.</span>';
   }
 }
 
