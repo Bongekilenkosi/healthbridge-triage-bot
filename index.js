@@ -467,11 +467,22 @@ function pathwayForLevel(level) {
   return 'self_care';
 }
 
-function buildRoutingMessage(routing, lang) {
-  if (!routing.facility) return '';
+function buildRoutingMessage(routing, lang, hasLocation) {
+  // If no facility found (no GPS), prompt to share location for critical cases
+  if (!routing.facility) {
+    if (routing.pathway === 'ambulance' || routing.pathway === 'emergency_unit') {
+      return '\n\n📍 *Share your location* so we can find the nearest hospital for you. You can send a location pin anytime.';
+    }
+    if (routing.pathway === 'clinic_visit') {
+      return '\n\n📍 Share your location so we can find the nearest clinic for you.';
+    }
+    return '';
+  }
   const f = routing.facility;
   let msg = '';
-  if (routing.pathway === 'emergency_unit') {
+  if (routing.pathway === 'ambulance') {
+    msg = `\n\n🏥 *Nearest hospital:* ${f.name}\n⏱ Estimated wait: ~${f.wait_time_minutes} mins`;
+  } else if (routing.pathway === 'emergency_unit') {
     msg = `\n\n🏥 *Nearest emergency unit:* ${f.name}\n⏱ Estimated wait: ~${f.wait_time_minutes} mins`;
   } else if (routing.pathway === 'clinic_visit') {
     msg = `\n\n🏥 *Nearest clinic:* ${f.name}\n⏱ Estimated wait: ~${f.wait_time_minutes} mins`;
@@ -688,7 +699,13 @@ async function sendStaffAlert(entry, logId) {
   let alertMsg = `${emoji} *STAFF ALERT — ${entry.triage_level}*\n`;
   alertMsg += `📋 Log #${logId}\n`;
   alertMsg += `🕐 ${timestamp}\n`;
-  alertMsg += `🌐 Language: ${LANG_NAMES[entry.language] || entry.language || 'Unknown'}\n\n`;
+  alertMsg += `🌐 Language: ${LANG_NAMES[entry.language] || entry.language || 'Unknown'}\n`;
+
+  if (entry.on_behalf_of) {
+    const behalfLabels = { child: '👶 Requesting for their CHILD', family_member: '👨‍👩‍👧 Requesting for a FAMILY MEMBER', friend_neighbour: '🤝 Requesting for a FRIEND/NEIGHBOUR', stranger: '🆘 Requesting for a STRANGER' };
+    alertMsg += `${behalfLabels[entry.on_behalf_of] || '👤 Requesting for someone else'}\n`;
+  }
+  alertMsg += '\n';
 
   if (entry.english_summary) {
     alertMsg += `📝 *Summary:* ${entry.english_summary}\n\n`;
@@ -795,6 +812,14 @@ const TRANSPORT_QUESTION_EN =
   '3. 👨‍👩‍👧 Someone is taking me\n\n' +
   'If this is life-threatening, call *10177* now.';
 
+const WHO_IS_PATIENT_EN =
+  '👤 *Who is this request for?*\n\n' +
+  '1. 🙋 Myself\n' +
+  '2. 👶 My child\n' +
+  '3. 👨‍👩‍👧 A family member\n' +
+  '4. 🤝 A friend or neighbour\n' +
+  '5. 🆘 A stranger who needs help';
+
 // ================================================================
 // ORCHESTRATOR — routes each message through the agent pipeline
 // ================================================================
@@ -816,7 +841,7 @@ async function orchestrate(from, text, session) {
   }
 
   // ── AGENT 6: CHECK FOR PENDING FOLLOW-UP RESPONSE ─────────
-  if (session.step !== 'language_select' && session.step !== 'consent' && session.step !== 'location_request' && session.step !== 'transport_select') {
+  if (session.step !== 'language_select' && session.step !== 'consent' && session.step !== 'location_request' && session.step !== 'transport_select' && session.step !== 'who_is_patient') {
     const handled = await handleFollowUpResponse(patientId, session, normalized);
     if (handled) return;
   }
@@ -844,7 +869,7 @@ async function orchestrate(from, text, session) {
   if (session.step === 'consent') {
     if (normalized === '1') {
       session.consent = true;
-      session.step = 'location_request';
+      session.step = 'who_is_patient';
       await saveSession(patientId, session);
       // Log consent
       await supabase.from('consent_log').insert({
@@ -854,12 +879,9 @@ async function orchestrate(from, text, session) {
       });
       const confirmMsg = await translateText(CONSENT_RECEIVED.en, lang);
       await sendWhatsAppMessage(from, confirmMsg);
-      // Ask for location
-      const locText = await translateText(
-        '📍 To find the nearest clinic or hospital, please share your location. Tap the button below.\n\nYou can also type *skip* to continue without sharing your location.',
-        lang
-      );
-      await sendLocationRequest(from, locText);
+      // Ask who the patient is
+      const whoMsg = await translateText(WHO_IS_PATIENT_EN, lang);
+      await sendWhatsAppMessage(from, whoMsg);
     } else if (normalized === '2') {
       session.consent = false;
       session.step = 'language_select';
@@ -878,10 +900,52 @@ async function orchestrate(from, text, session) {
     return;
   }
 
+  // ── WHO IS THE PATIENT ────────────────────────────────────
+  if (session.step === 'who_is_patient') {
+    if (normalized === '1') {
+      session.onBehalfOf = null;
+      session.step = 'location_request';
+      await saveSession(patientId, session);
+      const locText = await translateText(
+        '📍 To find the nearest clinic or hospital, please share your location. Tap the button below.\n\nYou can also type *skip* to continue without sharing your location.',
+        lang
+      );
+      await sendLocationRequest(from, locText);
+    } else if (['2', '3', '4', '5'].includes(normalized)) {
+      const relationships = { '2': 'child', '3': 'family_member', '4': 'friend_neighbour', '5': 'stranger' };
+      session.onBehalfOf = relationships[normalized];
+      session.step = 'location_request';
+      await saveSession(patientId, session);
+
+      // Context-specific follow-up
+      let contextMsg;
+      if (normalized === '2') {
+        contextMsg = 'You are requesting help for your child. Please describe *their* symptoms when asked.';
+      } else if (normalized === '5') {
+        contextMsg = 'Thank you for helping a stranger. Please describe *their* symptoms as best you can. If they are unconscious or not breathing, call *10177* immediately.';
+      } else {
+        contextMsg = 'You are requesting help for someone else. Please describe *their* symptoms when asked.';
+      }
+      const translated = await translateText(contextMsg, lang);
+      await sendWhatsAppMessage(from, translated);
+
+      const locText = await translateText(
+        '📍 Please share the *patient\'s location* (where they are right now). Tap the button below.\n\nYou can also type *skip* to continue without sharing location.',
+        lang
+      );
+      await sendLocationRequest(from, locText);
+    } else {
+      const whoMsg = await translateText(WHO_IS_PATIENT_EN, lang);
+      await sendWhatsAppMessage(from, whoMsg);
+    }
+    return;
+  }
+
   // ── LOCATION REQUEST (skip or wait for location pin) ──────
   if (session.step === 'location_request') {
     if (normalized === 'skip') {
       session.step = 'category_select';
+      session.location = null;  // Explicitly clear any stale location
       await saveSession(patientId, session);
       const skipMsg = await translateText('No problem! You can share your location anytime by sending a location pin.', lang);
       await sendWhatsAppMessage(from, skipMsg);
@@ -907,7 +971,7 @@ async function orchestrate(from, text, session) {
         phone_hash: patientId,
         language: lang,
         original_message: 'User requested to speak to a human.',
-        english_summary: 'User requested to speak to a human.',
+        english_summary: session.onBehalfOf ? `Requesting for ${session.onBehalfOf}. User requested to speak to a human.` : 'User requested to speak to a human.',
         triage_level: 'HUMAN_REQUEST',
         confidence: 'HIGH',
         method: 'menu',
@@ -915,6 +979,7 @@ async function orchestrate(from, text, session) {
         escalation: true,
         escalation_reason: 'USER_REQUESTED_HUMAN',
         needs_human_review: true,
+        on_behalf_of: session.onBehalfOf || null,
       });
       const humanMsg = await translateText(
         'Your request has been flagged. A healthcare worker will contact you on this number as soon as possible. If this is an emergency, please call *10177* immediately.',
@@ -998,7 +1063,7 @@ async function orchestrate(from, text, session) {
       phone_hash: patientId,
       language: lang,
       original_message: `Category ${category}, answer ${text.trim()}`,
-      english_summary: `Category ${category} (${getCategoryName(category)}), option ${text.trim()} selected.`,
+      english_summary: `${session.onBehalfOf ? `On behalf of ${session.onBehalfOf}. ` : ''}Category ${category} (${getCategoryName(category)}), option ${text.trim()} selected.`,
       triage_level: classification,
       confidence: 'HIGH',
       method: 'menu',
@@ -1011,6 +1076,7 @@ async function orchestrate(from, text, session) {
       facility_id: routing.facility?.id || null,
       location: session.location || null,
       needs_human_review: esc.escalate,
+      on_behalf_of: session.onBehalfOf || null,
     });
 
     // AGENT 6: Schedule follow-up
@@ -1064,7 +1130,7 @@ async function orchestrate(from, text, session) {
       phone_hash: patientId,
       language: lang,
       original_message: text,
-      english_summary: triage.englishSummary,
+      english_summary: `${session.onBehalfOf ? `On behalf of ${session.onBehalfOf}. ` : ''}${triage.englishSummary}`,
       triage_level: triage.classification,
       confidence: triage.confidence,
       method: triage.ruleOverride ? 'rule_override' : 'free_text',
@@ -1076,6 +1142,7 @@ async function orchestrate(from, text, session) {
       facility_id: routing.facility?.id || null,
       location: session.location || null,
       needs_human_review: esc.escalate,
+      on_behalf_of: session.onBehalfOf || null,
     });
 
     await scheduleFollowUp(patientId, from, triage.classification, logId);
@@ -1270,21 +1337,83 @@ app.post('/webhook', async (req, res) => {
         longitude: message.location.longitude,
       };
       session.phone = from;
+      const lang = session.lang || 'en';
+
       // If they were on the location_request step, advance to category_select
       if (session.step === 'location_request') {
         session.step = 'category_select';
-      }
-      await saveSession(patientId, session);
-      const lang = session.lang || 'en';
-      const locMsg = await translateText(
-        '📍 Location received! We\'ll find the nearest facility for you.',
-        lang
-      );
-      await sendWhatsAppMessage(from, locMsg);
-      // Show category menu if we just advanced
-      if (session.step === 'category_select') {
+        await saveSession(patientId, session);
+        const locMsg = await translateText(
+          '📍 Location received! We\'ll find the nearest facility for you.',
+          lang
+        );
+        await sendWhatsAppMessage(from, locMsg);
         const categoryMenu = await translateText(CATEGORY_MENU_EN, lang);
         await sendWhatsAppMessage(from, categoryMenu);
+        return;
+      }
+
+      await saveSession(patientId, session);
+
+      // Check if patient was already triaged at a critical level — auto-route them
+      const { data: recentTriage } = await supabase
+        .from('triage_logs')
+        .select('triage_level, facility_name')
+        .eq('patient_id', patientId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      const criticalLevels = ['RED', 'ORANGE', 'YELLOW'];
+      if (recentTriage && criticalLevels.includes(recentTriage.triage_level)) {
+        // Route them now that we have GPS
+        const routing = await routePatient(recentTriage.triage_level, session.location);
+
+        if (routing.facility) {
+          let routeMsg = await translateText('📍 Location received! Based on your symptoms, here is your nearest facility:', lang);
+          
+          if (routing.pathway === 'ambulance' || routing.pathway === 'emergency_unit') {
+            routeMsg += `\n\n🏥 *${routing.facility.name}*`;
+            routeMsg += `\n⏱ Estimated wait: ~${routing.facility.wait_time_minutes} mins`;
+          } else if (routing.pathway === 'clinic_visit') {
+            routeMsg += `\n\n🏥 *${routing.facility.name}*`;
+            routeMsg += `\n⏱ Estimated wait: ~${routing.facility.wait_time_minutes} mins`;
+          }
+
+          if (routing.directions) {
+            routeMsg += `\n📍 Directions: ${routing.directions}`;
+          }
+
+          await sendWhatsAppMessage(from, routeMsg);
+
+          // Update the triage log with the facility
+          await supabase.from('triage_logs')
+            .update({
+              facility_name: routing.facility.name,
+              facility_id: routing.facility.id,
+              location: session.location,
+            })
+            .eq('patient_id', patientId)
+            .order('created_at', { ascending: false })
+            .limit(1);
+
+          // Also notify supervisor with patient location for RED cases
+          if (recentTriage.triage_level === 'RED' && ALERT_PHONE) {
+            const mapsLink = `https://www.google.com/maps/dir/?api=1&destination=${session.location.latitude},${session.location.longitude}`;
+            await sendWhatsAppMessage(ALERT_PHONE,
+              `📍 *LOCATION UPDATE — RED CASE*\n` +
+              `Patient has shared their location.\n` +
+              `🏥 Nearest: ${routing.facility.name}\n` +
+              `📍 Patient location: ${mapsLink}`
+            );
+          }
+        } else {
+          const locMsg = await translateText('📍 Location received! Thank you.', lang);
+          await sendWhatsAppMessage(from, locMsg);
+        }
+      } else {
+        const locMsg = await translateText('📍 Location received! This helps us find the nearest facility for you.', lang);
+        await sendWhatsAppMessage(from, locMsg);
       }
       return;
     }
