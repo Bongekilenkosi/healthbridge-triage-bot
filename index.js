@@ -213,7 +213,22 @@ async function translateText(englishText, lang) {
     const response = await anthropic.messages.create({
       model: 'claude-sonnet-4-20250514',
       max_tokens: 512,
-      system: `Translate into ${langName}. Use simple everyday spoken language. Keep numbers, emoji, WhatsApp bold markers (*text*), and emergency phone numbers unchanged. Output only the translation.`,
+      system: `You are translating a WhatsApp health message into ${langName} for a South African patient.
+
+CRITICAL RULES:
+- Use simple, everyday spoken ${langName} — the way people actually talk in townships and rural areas, NOT formal textbook language.
+- Keep ALL numbers (1. 2. 3. etc.), emoji, WhatsApp bold markers (*text*), and emergency phone numbers (10177, 084 124, 011 807 2586) EXACTLY as they are.
+- Do NOT add or remove menu items, options, or information.
+- Use short sentences. Avoid complex grammar.
+- For medical terms that people commonly say in English even when speaking ${langName}, keep the English word (e.g. "clinic", "hospital", "ambulance", "ID", "medical aid").
+- Match the tone: urgent messages should sound urgent, calm messages should sound calm.
+- Output ONLY the translated text with no explanation.
+
+EXAMPLES of natural vs unnatural:
+- NATURAL isiZulu: "Shaya ucingo" (call/phone) — NOT "Thinta inombolo yocingo"
+- NATURAL isiZulu: "Ya esibhedlela" (go to hospital) — NOT "Hamba uye esibhedlela esiseduze nawe"
+- NATURAL Sesotho: "Leletsa" (call) — NOT "Etsa mohala"
+- Keep borrowed English words that everyone uses: "ambulance", "clinic", "hospital", "ID"`,
       messages: [{ role: 'user', content: englishText }],
     });
     for (const block of response.content) {
@@ -309,37 +324,51 @@ const MENTAL_HEALTH_CRISIS_REPLY = {
     'Please reach out — help is available right now.',
 };
 
-// SATS triage reply templates
-const TRIAGE_REPLIES_EN = {
-  RED:
-    '🔴 *CODE RED — EMERGENCY*\n' +
-    'Call *10177* for an ambulance immediately.\n' +
-    'Gauteng ER24: *084 124*\n' +
-    'Do not move the patient unless in danger. Stay on the line with the operator.',
-  ORANGE:
-    '🟠 *CODE ORANGE — VERY URGENT*\n' +
-    'Get to your nearest hospital emergency unit within 1 hour.\n' +
-    'If you cannot transport safely, call *10177*.\n' +
-    'Do not eat or drink until assessed.',
-  YELLOW:
-    '🟡 *CODE YELLOW — URGENT*\n' +
-    'Visit your nearest clinic or hospital within 4 hours.\n' +
-    'Bring your ID and medical aid card if you have one.',
-  GREEN:
-    '🟢 *CODE GREEN — ROUTINE*\n' +
-    'Book an appointment at your local clinic.\n' +
-    'You can also visit a pharmacy for over-the-counter advice.\n' +
-    'If symptoms worsen, message again.',
-  BLUE:
-    '🔵 *CODE BLUE — PALLIATIVE CARE*\n' +
-    'We are deeply sorry for what you and your loved one are going through.\n' +
-    'Hospice Palliative Care Association of SA: *011 807 2586*\n' +
-    'You are not alone.',
+// SATS triage reply templates — hardcoded in major languages, Claude fallback for others
+const TRIAGE_REPLIES = {
+  RED: {
+    en: '🔴 *CODE RED — EMERGENCY*\nCall *10177* for an ambulance immediately.\nGauteng ER24: *084 124*\nDo not move the patient unless in danger. Stay on the line with the operator.',
+    zu: '🔴 *IBOMVU — ISIMO ESIPHUTHUMAYO*\nShaya *10177* ucele i-ambulensi MANJE.\nER24: *084 124*\nUngamnyakazisi ogulayo ngaphandle uma esengozini. Hlala ucingweni nomshayeli.',
+    xh: '🔴 *IBOMVU — INGXAKI EPHUTHUMAYO*\nTsalela *10177* ucele i-ambulensi NGOKU.\nER24: *084 124*\nUngamhambisi umntu ogulayo ngaphandle kokuba esengozini. Hlala efownini nomqhubi.',
+    af: '🔴 *KODE ROOI — NOODGEVAL*\nBel *10177* vir \'n ambulans DADELIK.\nER24: *084 124*\nMoenie die pasiënt beweeg tensy in gevaar nie. Bly op die lyn met die operateur.',
+    st: '🔴 *KHOUTU E KHUBELU — TSHOHANYETSO*\nLeletsa *10177* o kope ambulense HONA JOALE.\nER24: *084 124*\nO se ke oa suthisa mokuli haese ha a le kotsing. Dula mohaleng le molaodi.',
+  },
+  ORANGE: {
+    en: '🟠 *CODE ORANGE — VERY URGENT*\nGet to your nearest hospital emergency unit within 1 hour.\nIf you cannot transport safely, call *10177*.\nDo not eat or drink until assessed.',
+    zu: '🟠 *IORENJI — KUPHUTHUMA KAKHULU*\nYa esibhedlela esiseduze ngaphakathi kwehora eli-1.\nUma ungakwazi ukuya ngokuphephile, shaya *10177*.\nUngadli futhi ungaphuzi uze uhlolwe.',
+    xh: '🟠 *IORENJI — IPHUTHUMILE KAKHULU*\nYiya kwisibhedlele esikufutshane ngaphakathi kweyure e-1.\nUkuba awukwazi ukuya ngokukhuselekileyo, tsalela *10177*.\nMusa ukutya okanye ukusela de uhlolwe.',
+    af: '🟠 *KODE ORANJE — BAIE DRINGEND*\nGaan na jou naaste hospitaal se noodafdeling binne 1 uur.\nAs jy nie veilig kan ry nie, bel *10177*.\nMoenie eet of drink totdat jy ondersoek is nie.',
+    st: '🟠 *KHOUTU E ORENTJHE — HO POTLAKA HAHOLO*\nEa sepetlele se haufi ka hora e le nngwe.\nHaeba o ke ke oa tsamaea ka polokeho, leletsa *10177*.\nO se ke oa ja kapa oa noa ho fihlela o hlahlojwa.',
+  },
+  YELLOW: {
+    en: '🟡 *CODE YELLOW — URGENT*\nVisit your nearest clinic or hospital within 4 hours.\nBring your ID and medical aid card if you have one.',
+    zu: '🟡 *IPHUZI — KUPHUTHUMA*\nVakashela ikhliniki noma isibhedlela esiseduze ngaphakathi kwamahora a-4.\nLetha ikhadi lakho le-ID nekhadi le-medical aid uma unalo.',
+    xh: '🟡 *IMTHUBI — IPHUTHUMILE*\nTyelela ikliniki okanye isibhedlele esikufutshane ngaphakathi kweeyure ezi-4.\nZisa ikhadi lakho le-ID kunye nekhadi le-medical aid ukuba unalo.',
+    af: '🟡 *KODE GEEL — DRINGEND*\nBesoek jou naaste kliniek of hospitaal binne 4 uur.\nBring jou ID en mediese hulpkaart as jy een het.',
+    st: '🟡 *KHOUTU E TSHEHLA — HO POTLAKA*\nEtela kliniki kapa sepetlele se haufi ka hora tse nne.\nTlisa karata ea hao ea ID le karata ea thuso ea bongaka haeba o na le eona.',
+  },
+  GREEN: {
+    en: '🟢 *CODE GREEN — ROUTINE*\nBook an appointment at your local clinic.\nYou can also visit a pharmacy for over-the-counter advice.\nIf symptoms worsen, message again.',
+    zu: '🟢 *ILUHLAZA — OKUJWAYELEKILE*\nBhuka isikhathi ekhliniki yakho.\nUngaya nasemakhemisi ukuthola iseluleko.\nUma izimpawu ziba zimbi, thumela umlayezo futhi.',
+    xh: '🟢 *ILUHLAZA — EQHELEKILEYO*\nBhukisha idinga kwikliniki yakho.\nUngaya nasekemisti ukuze ufumane icebiso.\nUkuba iimpawu ziba mbi, thumela umyalezo kwakhona.',
+    af: '🟢 *KODE GROEN — ROETINE*\nMaak \'n afspraak by jou plaaslike kliniek.\nJy kan ook \'n apteek besoek vir raad.\nAs simptome vererger, stuur weer \'n boodskap.',
+    st: '🟢 *KHOUTU E TALA — TLWAELO*\nBuka nako klinikeng ea hao.\nO ka etela hape kemising ho fumana keletso.\nHa matshwao a mpefala, romela molaetsa hape.',
+  },
+  BLUE: {
+    en: '🔵 *CODE BLUE — PALLIATIVE CARE*\nWe are deeply sorry for what you and your loved one are going through.\nHospice Palliative Care Association of SA: *011 807 2586*\nYou are not alone.',
+    zu: '🔵 *ILUHLAZA OKWESIBHAKABHAKA — UKUNAKEKELWA*\nSizwela kakhulu ngalokho okudlula kukho wena nomuntu wakho othandekayo.\nHospice SA: *011 807 2586*\nAwuwedwa.',
+    xh: '🔵 *IBLUWE — UKHATHALELO*\nSibuhlungu kakhulu ngoko ukudlulayo wena nomntu wakho othandekayo.\nHospice SA: *011 807 2586*\nAwuwedwa.',
+    af: '🔵 *KODE BLOU — PALLIATIEWE SORG*\nOns is innig jammer vir wat jy en jou geliefde deurmaak.\nHospice SA: *011 807 2586*\nJy is nie alleen nie.',
+    st: '🔵 *KHOUTU E BOLOU — TLHOKOMELO*\nRe maswabi haholo ka seo o se fetang wena le moratuwa wa hao.\nHospice SA: *011 807 2586*\nHa o le mong.',
+  },
 };
 
 async function buildTriageReply(classification, lang) {
-  const englishReply = TRIAGE_REPLIES_EN[classification] || TRIAGE_REPLIES_EN.GREEN;
-  return await translateText(englishReply, lang);
+  // Use hardcoded translation if available
+  const level = TRIAGE_REPLIES[classification] || TRIAGE_REPLIES.GREEN;
+  if (level[lang]) return level[lang];
+  // Fallback to Claude translation
+  return await translateText(level.en, lang);
 }
 
 async function claudeTriage(patientText) {
@@ -1317,12 +1346,33 @@ async function deliverTriageResult(patientId, from, session, lang, classificatio
   // Schedule follow-up
   await scheduleFollowUp(patientId, from, classification, logId);
 
-  // ORANGE → transport question
+  // If facility was routed and it's not RED (RED = ambulance, no choice needed)
+  // Ask if the facility is accessible
+  if (routing.facility && classification !== 'RED') {
+    session.step = 'facility_check';
+    session.lastTriageLogId = logId;
+    session.lastRouting = routing;
+    session.lastClassification = classification;
+    // Clean up pending fields
+    delete session.pendingClassification; delete session.pendingCategory;
+    delete session.pendingFollowupAnswer; delete session.pendingMethod;
+    delete session.pendingOriginalMessage; delete session.pendingEnglishSummary;
+    delete session.pendingConfidence; delete session.pendingRuleOverride;
+    delete session.rfa; delete session.rfaScore; delete session.rfaFactors; delete session.rfaOriginalLevel;
+    await saveSession(patientId, session);
+    const facilityQ = await translateText(
+      `Can you get to *${routing.facility.name}* easily?\n\n1. ✅ Yes, I can get there\n2. ❌ No, show me other options`,
+      lang
+    );
+    await sendWhatsAppMessage(from, facilityQ);
+    return;
+  }
+
+  // ORANGE without facility → transport question
   if (classification === 'ORANGE') {
     session.step = 'transport_select';
     session.lastTriageLogId = logId;
     session.lastRouting = routing;
-    // Clean up pending fields
     delete session.pendingClassification; delete session.pendingCategory;
     delete session.pendingFollowupAnswer; delete session.pendingMethod;
     delete session.pendingOriginalMessage; delete session.pendingEnglishSummary;
@@ -1367,7 +1417,7 @@ async function orchestrate(from, text, session) {
   }
 
   // ── AGENT 6: CHECK FOR PENDING FOLLOW-UP RESPONSE ─────────
-  if (session.step !== 'language_select' && session.step !== 'consent' && session.step !== 'location_request' && session.step !== 'transport_select' && session.step !== 'who_is_patient' && session.step !== 'rfa_age' && session.step !== 'rfa_conditions' && session.step !== 'rfa_function') {
+  if (session.step !== 'language_select' && session.step !== 'consent' && session.step !== 'location_request' && session.step !== 'transport_select' && session.step !== 'who_is_patient' && session.step !== 'rfa_age' && session.step !== 'rfa_conditions' && session.step !== 'rfa_function' && session.step !== 'facility_check' && session.step !== 'facility_choose') {
     const handled = await handleFollowUpResponse(patientId, session, normalized);
     if (handled) return;
   }
@@ -1684,6 +1734,125 @@ async function orchestrate(from, text, session) {
     session.rfaOriginalLevel = originalClass;
 
     await deliverTriageResult(patientId, from, session, lang, adjustedClass, category, originalMessage, method);
+    return;
+  }
+
+  // ── FACILITY ACCESSIBILITY CHECK ────────────────────────────
+  if (session.step === 'facility_check') {
+    if (normalized === '1') {
+      // Patient can reach the facility — proceed
+      const classification = session.lastClassification;
+      if (classification === 'ORANGE') {
+        session.step = 'transport_select';
+        await saveSession(patientId, session);
+        const transportQ = await translateText(TRANSPORT_QUESTION_EN, lang);
+        await sendWhatsAppMessage(from, transportQ);
+      } else {
+        session.step = 'post_triage';
+        delete session.lastTriageLogId; delete session.lastRouting; delete session.lastClassification;
+        await saveSession(patientId, session);
+        const postPrompt = await translateText(POST_TRIAGE_PROMPT_EN, lang);
+        await sendWhatsAppMessage(from, postPrompt);
+      }
+      return;
+    }
+
+    if (normalized === '2') {
+      // Show next 2 closest alternatives
+      const classification = session.lastClassification || 'YELLOW';
+      const currentFacilityId = session.lastRouting?.facility?.id;
+
+      if (session.location) {
+        const facilities = await getFacilities();
+        const preferredType = (classification === 'RED' || classification === 'ORANGE') ? 'hospital'
+          : classification === 'YELLOW' ? 'clinic' : null;
+
+        let candidates = preferredType ? facilities.filter(f => f.type === preferredType) : facilities;
+        if (candidates.length === 0) candidates = facilities;
+
+        // Sort by distance, exclude the one they rejected
+        const sorted = candidates
+          .filter(f => f.id !== currentFacilityId)
+          .map(f => ({
+            ...f,
+            distance: haversine(session.location.latitude, session.location.longitude, f.latitude, f.longitude),
+          }))
+          .sort((a, b) => a.distance - b.distance)
+          .slice(0, 2);
+
+        if (sorted.length > 0) {
+          let altMsg = await translateText('Here are other options near you:', lang);
+          altMsg += '\n';
+          sorted.forEach((f, i) => {
+            const directions = `https://www.google.com/maps/dir/?api=1&destination=${f.latitude},${f.longitude}`;
+            altMsg += `\n${i + 1}. 🏥 *${f.name}*\n   ⏱ Wait: ~${f.wait_time_minutes}min | 📍 ${f.distance.toFixed(1)}km\n   Directions: ${directions}`;
+          });
+          altMsg += '\n\n';
+          altMsg += await translateText('Reply 1 or 2 to choose, or type *0* to restart.', lang);
+          session.step = 'facility_choose';
+          session.altFacilities = sorted;
+          await saveSession(patientId, session);
+          await sendWhatsAppMessage(from, altMsg);
+        } else {
+          const noAlt = await translateText('No other facilities found nearby. Please try to reach the recommended facility or call *10177*.', lang);
+          await sendWhatsAppMessage(from, noAlt);
+          session.step = 'post_triage';
+          delete session.lastTriageLogId; delete session.lastRouting; delete session.lastClassification;
+          await saveSession(patientId, session);
+          const postPrompt = await translateText(POST_TRIAGE_PROMPT_EN, lang);
+          await sendWhatsAppMessage(from, postPrompt);
+        }
+      } else {
+        const noLoc = await translateText('📍 Please share your location so we can find alternatives near you.', lang);
+        await sendWhatsAppMessage(from, noLoc);
+      }
+      return;
+    }
+
+    // Invalid input
+    const facilityQ = await translateText(
+      `Can you get to *${session.lastRouting?.facility?.name || 'the facility'}* easily?\n\n1. ✅ Yes\n2. ❌ No, show me other options`,
+      lang
+    );
+    await sendWhatsAppMessage(from, facilityQ);
+    return;
+  }
+
+  // ── FACILITY CHOOSE (alternative selection) ────────────────
+  if (session.step === 'facility_choose') {
+    const idx = parseInt(normalized, 10) - 1;
+    const alts = session.altFacilities || [];
+
+    if (idx >= 0 && idx < alts.length) {
+      const chosen = alts[idx];
+      const confirmMsg = await translateText(`✅ *${chosen.name}* selected.\n📍 Directions: https://www.google.com/maps/dir/?api=1&destination=${chosen.latitude},${chosen.longitude}`, lang);
+      await sendWhatsAppMessage(from, confirmMsg);
+
+      // Update triage log with chosen facility
+      if (session.lastTriageLogId) {
+        await supabase.from('triage_logs').update({
+          facility_name: chosen.name,
+          facility_id: chosen.id,
+        }).eq('id', session.lastTriageLogId);
+      }
+    }
+
+    // Proceed to transport (ORANGE) or post-triage
+    const classification = session.lastClassification;
+    if (classification === 'ORANGE') {
+      session.step = 'transport_select';
+      session.lastRouting = { ...session.lastRouting, facility: alts[idx] || session.lastRouting?.facility };
+      delete session.altFacilities; delete session.lastClassification;
+      await saveSession(patientId, session);
+      const transportQ = await translateText(TRANSPORT_QUESTION_EN, lang);
+      await sendWhatsAppMessage(from, transportQ);
+    } else {
+      session.step = 'post_triage';
+      delete session.lastTriageLogId; delete session.lastRouting; delete session.lastClassification; delete session.altFacilities;
+      await saveSession(patientId, session);
+      const postPrompt = await translateText(POST_TRIAGE_PROMPT_EN, lang);
+      await sendWhatsAppMessage(from, postPrompt);
+    }
     return;
   }
 
