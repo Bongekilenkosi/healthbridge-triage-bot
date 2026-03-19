@@ -77,7 +77,7 @@ const WELCOME_MENU =
 
 const LANG_CONFIRMED = {
   en:  '✅ Language set to *English*.\nType *0* or *menu* anytime to change language.',
-  zu:  '✅ Ulimi lubekwe ku *isiZulu*.\nBhala *0* noma *menu* ukushintsha ulimi.',
+  zu:  '✅ Ulimi lusetelwe ku *isiZulu*.\nBhala *0* noma *menu* ukushintsha ulimi.',
   xh:  '✅ Ulwimi lusethwe kwi *isiXhosa*.\nTayipha *0* okanye *menu* ukuguqula ulwimi.',
   af:  '✅ Taal ingestel op *Afrikaans*.\nTik *0* of *menu* om taal te verander.',
   nso: '✅ Polelo e beelwe go *Sepedi*.\nŽwala *0* goba *menu* go fetola polelo.',
@@ -483,25 +483,52 @@ async function handleFollowUpResponse(patientId, session, text) {
 // DATABASE LAYER
 // ================================================================
 
+// In-memory session fallback (covers DB failures)
+const sessionCache = new Map();
+
 async function getSession(patientId) {
-  const { data, error } = await supabase
-    .from('sessions')
-    .select('data')
-    .eq('patient_id', patientId)
-    .maybeSingle();  // returns null instead of error when no row
-  if (error) { console.error('Session fetch error:', error.message); return {}; }
-  const session = data?.data || {};
-  console.log(`[session:get] ${patientId} → step=${session.step || 'none'}, lang=${session.lang || 'none'}`);
-  return session;
+  try {
+    const { data, error } = await supabase
+      .from('sessions')
+      .select('data')
+      .eq('patient_id', patientId)
+      .maybeSingle();
+    if (error) {
+      console.error('Session fetch error:', error.message);
+      // Fall back to in-memory cache
+      const cached = sessionCache.get(patientId);
+      console.log(`[session:get:cache] ${patientId} → step=${cached?.step || 'none'}`);
+      return cached || {};
+    }
+    const session = data?.data || {};
+    console.log(`[session:get:db] ${patientId} → step=${session.step || 'none'}, lang=${session.lang || 'none'}`);
+    // Keep cache in sync
+    if (session.step) sessionCache.set(patientId, session);
+    return session;
+  } catch (err) {
+    console.error('Session fetch exception:', err.message);
+    return sessionCache.get(patientId) || {};
+  }
 }
 
 async function saveSession(patientId, session) {
-  const { error } = await supabase.from('sessions').upsert(
-    { patient_id: patientId, data: session, updated_at: new Date().toISOString() },
-    { onConflict: 'patient_id' }
-  );
-  if (error) console.error('Session save error:', error.message);
-  else console.log(`[session:save] ${patientId} → step=${session.step}, lang=${session.lang || 'none'}`);
+  // Always save to in-memory cache first
+  sessionCache.set(patientId, { ...session });
+  
+  try {
+    const { error } = await supabase.from('sessions').upsert(
+      { patient_id: patientId, data: session, updated_at: new Date().toISOString() },
+      { onConflict: 'patient_id' }
+    );
+    if (error) {
+      console.error('Session save DB error:', error.message);
+    } else {
+      console.log(`[session:save:db] ${patientId} → step=${session.step}, lang=${session.lang || 'none'}`);
+    }
+  } catch (err) {
+    console.error('Session save exception:', err.message);
+  }
+  console.log(`[session:save:cache] ${patientId} → step=${session.step}, lang=${session.lang || 'none'}`);
 }
 
 async function logTriage(entry) {
@@ -542,6 +569,35 @@ async function sendWhatsAppMessage(to, text) {
   }
 }
 
+async function sendLocationRequest(to, bodyText) {
+  try {
+    const response = await fetch(WHATSAPP_API_URL, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        messaging_product: 'whatsapp',
+        recipient_type: 'individual',
+        to,
+        type: 'interactive',
+        interactive: {
+          type: 'location_request_message',
+          body: { text: bodyText },
+          action: { name: 'send_location' },
+        },
+      }),
+    });
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      console.error('WhatsApp location request error:', response.status, JSON.stringify(err));
+    }
+  } catch (err) {
+    console.error('Location request send failed:', err.message);
+  }
+}
+
 // ================================================================
 // POST-TRIAGE FLOW
 // ================================================================
@@ -576,7 +632,7 @@ async function orchestrate(from, text, session) {
   }
 
   // ── AGENT 6: CHECK FOR PENDING FOLLOW-UP RESPONSE ─────────
-  if (session.step !== 'language_select' && session.step !== 'consent') {
+  if (session.step !== 'language_select' && session.step !== 'consent' && session.step !== 'location_request') {
     const handled = await handleFollowUpResponse(patientId, session, normalized);
     if (handled) return;
   }
@@ -604,7 +660,7 @@ async function orchestrate(from, text, session) {
   if (session.step === 'consent') {
     if (normalized === '1') {
       session.consent = true;
-      session.step = 'category_select';
+      session.step = 'location_request';
       await saveSession(patientId, session);
       // Log consent
       await supabase.from('consent_log').insert({
@@ -614,8 +670,12 @@ async function orchestrate(from, text, session) {
       });
       const confirmMsg = await translateText(CONSENT_RECEIVED.en, lang);
       await sendWhatsAppMessage(from, confirmMsg);
-      const categoryMenu = await translateText(CATEGORY_MENU_EN, lang);
-      await sendWhatsAppMessage(from, categoryMenu);
+      // Ask for location
+      const locText = await translateText(
+        '📍 To find the nearest clinic or hospital, please share your location. Tap the button below.\n\nYou can also type *skip* to continue without sharing your location.',
+        lang
+      );
+      await sendLocationRequest(from, locText);
     } else if (normalized === '2') {
       session.consent = false;
       session.step = 'language_select';
@@ -630,6 +690,26 @@ async function orchestrate(from, text, session) {
     } else {
       const consentMsg = await translateText(CONSENT_PROMPT.en, lang);
       await sendWhatsAppMessage(from, consentMsg);
+    }
+    return;
+  }
+
+  // ── LOCATION REQUEST (skip or wait for location pin) ──────
+  if (session.step === 'location_request') {
+    if (normalized === 'skip') {
+      session.step = 'category_select';
+      await saveSession(patientId, session);
+      const skipMsg = await translateText('No problem! You can share your location anytime by sending a location pin.', lang);
+      await sendWhatsAppMessage(from, skipMsg);
+      const categoryMenu = await translateText(CATEGORY_MENU_EN, lang);
+      await sendWhatsAppMessage(from, categoryMenu);
+    } else {
+      // Re-prompt — they typed something other than skip and didn't send a location
+      const locText = await translateText(
+        '📍 Please tap the button to share your location, or type *skip* to continue without it.',
+        lang
+      );
+      await sendLocationRequest(from, locText);
     }
     return;
   }
@@ -883,12 +963,22 @@ app.post('/webhook', async (req, res) => {
         longitude: message.location.longitude,
       };
       session.phone = from;
+      // If they were on the location_request step, advance to category_select
+      if (session.step === 'location_request') {
+        session.step = 'category_select';
+      }
       await saveSession(patientId, session);
+      const lang = session.lang || 'en';
       const locMsg = await translateText(
-        '📍 Location received! This helps us find the nearest facility for you.',
-        session.lang || 'en'
+        '📍 Location received! We\'ll find the nearest facility for you.',
+        lang
       );
       await sendWhatsAppMessage(from, locMsg);
+      // Show category menu if we just advanced
+      if (session.step === 'category_select') {
+        const categoryMenu = await translateText(CATEGORY_MENU_EN, lang);
+        await sendWhatsAppMessage(from, categoryMenu);
+      }
       return;
     }
 
@@ -1056,7 +1146,3 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`   WhatsApp: ${process.env.WHATSAPP_TOKEN ? '✅' : '❌'}`);
   console.log(`   Anthropic: ${process.env.ANTHROPIC_API_KEY ? '✅' : '❌'}`);
 });
-
-
-
-     
