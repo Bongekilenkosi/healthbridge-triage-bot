@@ -1587,6 +1587,145 @@ app.get('/api/follow-ups', requireAuth, async (req, res) => {
 });
 
 // ================================================================
+// ANALYTICS API (Charts, Heatmaps, Outcomes)
+// ================================================================
+
+// Triage volume over time (by day, last 30 days)
+app.get('/api/analytics/timeline', requireAuth, async (req, res) => {
+  try {
+    const days = Math.min(parseInt(req.query.days) || 30, 90);
+    const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+    const { data, error } = await supabase
+      .from('triage_logs')
+      .select('triage_level, created_at')
+      .gte('created_at', since)
+      .order('created_at', { ascending: true });
+    if (error) throw error;
+
+    // Group by date and level
+    const byDay = {};
+    for (const log of (data || [])) {
+      const day = log.created_at.slice(0, 10); // YYYY-MM-DD
+      if (!byDay[day]) byDay[day] = { date: day, RED: 0, ORANGE: 0, YELLOW: 0, GREEN: 0, BLUE: 0, total: 0 };
+      byDay[day][log.triage_level] = (byDay[day][log.triage_level] || 0) + 1;
+      byDay[day].total++;
+    }
+
+    // Fill in missing days with zeros
+    const result = [];
+    const start = new Date(since);
+    const end = new Date();
+    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+      const key = d.toISOString().slice(0, 10);
+      result.push(byDay[key] || { date: key, RED: 0, ORANGE: 0, YELLOW: 0, GREEN: 0, BLUE: 0, total: 0 });
+    }
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Hourly distribution (what time of day do patients message)
+app.get('/api/analytics/hourly', requireAuth, async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('triage_logs')
+      .select('created_at');
+    if (error) throw error;
+
+    const hours = Array(24).fill(0);
+    for (const log of (data || [])) {
+      const h = new Date(log.created_at).getHours();
+      hours[h]++;
+    }
+    res.json(hours.map((count, hour) => ({ hour, count })));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Geographic data (patient locations for heatmap)
+app.get('/api/analytics/locations', requireAuth, async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('triage_logs')
+      .select('triage_level, location, facility_name, created_at')
+      .not('location', 'is', null)
+      .order('created_at', { ascending: false })
+      .limit(500);
+    if (error) throw error;
+    res.json((data || []).map(l => ({
+      level: l.triage_level,
+      lat: l.location?.latitude,
+      lng: l.location?.longitude,
+      facility: l.facility_name,
+      time: l.created_at,
+    })).filter(l => l.lat && l.lng));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Follow-up outcomes
+app.get('/api/analytics/outcomes', requireAuth, async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('follow_ups')
+      .select('status, response, triage_level, scheduled_at, completed_at');
+    if (error) throw error;
+
+    const outcomes = { better: 0, same: 0, worse: 0, visited: 0, no_response: 0, pending: 0 };
+    const byLevel = {};
+    const responseMap = { '1': 'better', '2': 'same', '3': 'worse', '4': 'visited' };
+
+    for (const f of (data || [])) {
+      if (f.status === 'completed' && f.response) {
+        const outcome = responseMap[f.response] || 'other';
+        outcomes[outcome] = (outcomes[outcome] || 0) + 1;
+        // Track by triage level
+        if (!byLevel[f.triage_level]) byLevel[f.triage_level] = { better: 0, same: 0, worse: 0, visited: 0 };
+        byLevel[f.triage_level][outcome] = (byLevel[f.triage_level][outcome] || 0) + 1;
+      } else if (f.status === 'sent') {
+        outcomes.no_response++;
+      } else if (f.status === 'pending') {
+        outcomes.pending++;
+      }
+    }
+
+    const total = data?.length || 0;
+    const responseRate = total > 0 ? Math.round(((total - outcomes.pending - outcomes.no_response) / total) * 100) : 0;
+
+    res.json({ outcomes, byLevel, total, responseRate });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Category breakdown
+app.get('/api/analytics/categories', requireAuth, async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('triage_logs')
+      .select('category, triage_level, on_behalf_of');
+    if (error) throw error;
+
+    const cats = {};
+    const behalfCounts = { self: 0, child: 0, family_member: 0, friend_neighbour: 0, stranger: 0 };
+
+    for (const l of (data || [])) {
+      const cat = l.category || 'unknown';
+      cats[cat] = (cats[cat] || 0) + 1;
+      const behalf = l.on_behalf_of || 'self';
+      behalfCounts[behalf] = (behalfCounts[behalf] || 0) + 1;
+    }
+
+    res.json({ categories: cats, behalfOf: behalfCounts });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ================================================================
 // DISPATCH TRACKING API
 // ================================================================
 
