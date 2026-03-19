@@ -4,849 +4,161 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>HealthBridgeSA — Clinical Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700&family=JetBrains+Mono:wght@400;500&display=swap');
-
-  :root {
-    --bg: #0c0f14;
-    --surface: #161a22;
-    --surface-2: #1e2330;
-    --border: #2a2f3c;
-    --text: #e4e7ec;
-    --text-muted: #8b92a5;
-    --accent: #3b82f6;
-    --red: #ef4444;
-    --orange: #f97316;
-    --yellow: #eab308;
-    --green: #22c55e;
-    --blue: #3b82f6;
-    --red-bg: #ef44441a;
-    --orange-bg: #f973161a;
-    --yellow-bg: #eab3081a;
-    --green-bg: #22c55e1a;
-    --blue-bg: #3b82f61a;
-    --radius: 10px;
-  }
-
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-
-  body {
-    font-family: 'DM Sans', -apple-system, sans-serif;
-    background: var(--bg);
-    color: var(--text);
-    min-height: 100vh;
-  }
-
-  .header {
-    background: var(--surface);
-    border-bottom: 1px solid var(--border);
-    padding: 16px 24px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    position: sticky;
-    top: 0;
-    z-index: 100;
-  }
-
-  .header h1 {
-    font-size: 18px;
-    font-weight: 700;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-
-  .header .live-dot {
-    width: 8px;
-    height: 8px;
-    background: var(--green);
-    border-radius: 50%;
-    animation: pulse 2s infinite;
-  }
-
-  @keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.4; }
-  }
-
-  .header .meta {
-    font-size: 13px;
-    color: var(--text-muted);
-    font-family: 'JetBrains Mono', monospace;
-  }
-
-  .container {
-    max-width: 1400px;
-    margin: 0 auto;
-    padding: 20px 24px;
-  }
-
-  /* ── Stats Grid ── */
-  .stats-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-    gap: 12px;
-    margin-bottom: 24px;
-  }
-
-  .stat-card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 16px;
-  }
-
-  .stat-card .label {
-    font-size: 12px;
-    color: var(--text-muted);
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    margin-bottom: 6px;
-  }
-
-  .stat-card .value {
-    font-size: 28px;
-    font-weight: 700;
-    font-family: 'JetBrains Mono', monospace;
-  }
-
-  .stat-card .sub {
-    font-size: 11px;
-    color: var(--text-muted);
-    margin-top: 4px;
-  }
-
-  /* ── Triage Level Bars ── */
-  .triage-bars {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 20px;
-    margin-bottom: 24px;
-  }
-
-  .triage-bars h2 {
-    font-size: 14px;
-    font-weight: 600;
-    margin-bottom: 16px;
-    color: var(--text-muted);
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-  }
-
-  .bar-row {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    margin-bottom: 10px;
-  }
-
-  .bar-label {
-    width: 70px;
-    font-size: 12px;
-    font-weight: 600;
-    font-family: 'JetBrains Mono', monospace;
-  }
-
-  .bar-track {
-    flex: 1;
-    height: 28px;
-    background: var(--surface-2);
-    border-radius: 6px;
-    overflow: hidden;
-    position: relative;
-  }
-
-  .bar-fill {
-    height: 100%;
-    border-radius: 6px;
-    transition: width 0.6s ease;
-    display: flex;
-    align-items: center;
-    padding-left: 10px;
-    font-size: 12px;
-    font-weight: 600;
-    font-family: 'JetBrains Mono', monospace;
-    min-width: fit-content;
-  }
-
-  .bar-count {
-    width: 40px;
-    text-align: right;
-    font-size: 13px;
-    font-weight: 600;
-    font-family: 'JetBrains Mono', monospace;
-  }
-
-  /* ── Sections ── */
-  .section {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    margin-bottom: 24px;
-    overflow: hidden;
-  }
-
-  .section-header {
-    padding: 16px 20px;
-    border-bottom: 1px solid var(--border);
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-  }
-
-  .section-header h2 {
-    font-size: 14px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: var(--text-muted);
-  }
-
-  .badge {
-    background: var(--red);
-    color: white;
-    font-size: 11px;
-    font-weight: 700;
-    padding: 2px 8px;
-    border-radius: 999px;
-    font-family: 'JetBrains Mono', monospace;
-  }
-
-  /* ── Table ── */
-  .table-wrap { overflow-x: auto; }
-
-  table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 13px;
-  }
-
-  th {
-    text-align: left;
-    padding: 10px 16px;
-    font-size: 11px;
-    font-weight: 600;
-    color: var(--text-muted);
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    border-bottom: 1px solid var(--border);
-    white-space: nowrap;
-  }
-
-  td {
-    padding: 10px 16px;
-    border-bottom: 1px solid var(--border);
-    vertical-align: top;
-  }
-
-  tr:last-child td { border-bottom: none; }
-
-  tr:hover { background: var(--surface-2); }
-
-  .level-pill {
-    display: inline-block;
-    padding: 2px 10px;
-    border-radius: 999px;
-    font-size: 11px;
-    font-weight: 700;
-    font-family: 'JetBrains Mono', monospace;
-  }
-
-  .level-RED    { background: var(--red-bg); color: var(--red); }
-  .level-ORANGE { background: var(--orange-bg); color: var(--orange); }
-  .level-YELLOW { background: var(--yellow-bg); color: var(--yellow); }
-  .level-GREEN  { background: var(--green-bg); color: var(--green); }
-  .level-BLUE   { background: var(--blue-bg); color: var(--blue); }
-  .level-HUMAN_REQUEST { background: #a855f71a; color: #a855f7; }
-  .level-RECHECK { background: var(--orange-bg); color: var(--orange); }
-
-  .conf-HIGH   { color: var(--green); }
-  .conf-MEDIUM { color: var(--yellow); }
-  .conf-LOW    { color: var(--red); }
-
-  .btn {
-    padding: 5px 14px;
-    border-radius: 6px;
-    border: 1px solid var(--border);
-    background: var(--surface-2);
-    color: var(--text);
-    font-size: 12px;
-    font-weight: 500;
-    cursor: pointer;
-    transition: background 0.15s;
-  }
-
-  .btn:hover { background: var(--border); }
-
-  .btn-primary {
-    background: var(--accent);
-    border-color: var(--accent);
-    color: white;
-  }
-
-  .btn-primary:hover { background: #2563eb; }
-
-  .empty-state {
-    padding: 40px;
-    text-align: center;
-    color: var(--text-muted);
-    font-size: 14px;
-  }
-
-  .tabs {
-    display: flex;
-    gap: 0;
-    border-bottom: 1px solid var(--border);
-    padding: 0 20px;
-  }
-
-  .tab {
-    padding: 12px 16px;
-    font-size: 13px;
-    font-weight: 500;
-    color: var(--text-muted);
-    cursor: pointer;
-    border-bottom: 2px solid transparent;
-    transition: all 0.15s;
-  }
-
-  .tab:hover { color: var(--text); }
-  .tab.active { color: var(--text); border-bottom-color: var(--accent); }
-
-  .summary-text {
-    max-width: 300px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .time-ago {
-    color: var(--text-muted);
-    font-size: 12px;
-    font-family: 'JetBrains Mono', monospace;
-  }
-
-  @media (max-width: 768px) {
-    .stats-grid { grid-template-columns: repeat(2, 1fr); }
-    .container { padding: 12px; }
-    .header { padding: 12px 16px; }
-    th, td { padding: 8px 10px; font-size: 12px; }
-  }
+  :root{--bg:#0c0f14;--surface:#161a22;--surface-2:#1e2330;--border:#2a2f3c;--text:#e4e7ec;--text-muted:#8b92a5;--accent:#3b82f6;--red:#ef4444;--orange:#f97316;--yellow:#eab308;--green:#22c55e;--blue:#3b82f6;--red-bg:#ef44441a;--orange-bg:#f973161a;--yellow-bg:#eab3081a;--green-bg:#22c55e1a;--blue-bg:#3b82f61a;--radius:10px}
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:'DM Sans',-apple-system,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+  .header{background:var(--surface);border-bottom:1px solid var(--border);padding:14px 24px;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;z-index:100}
+  .header h1{font-size:17px;font-weight:700;display:flex;align-items:center;gap:8px}
+  .live-dot{width:8px;height:8px;background:var(--green);border-radius:50%;animation:pulse 2s infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+  .container{max-width:1400px;margin:0 auto;padding:16px 24px}
+  .stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:16px}
+  .stat-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px}
+  .stat-card .label{font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px}
+  .stat-card .value{font-size:24px;font-weight:700;font-family:'JetBrains Mono',monospace}
+  .stat-card .sub{font-size:10px;color:var(--text-muted);margin-top:2px}
+  .chart-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px}
+  .chart-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px}
+  .chart-card h3{font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px}
+  .chart-card.full{grid-column:1/-1}
+  .section{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:16px;overflow:hidden}
+  .tabs{display:flex;gap:0;border-bottom:1px solid var(--border);padding:0 16px}
+  .tab{padding:10px 14px;font-size:12px;font-weight:500;color:var(--text-muted);cursor:pointer;border-bottom:2px solid transparent;transition:all .15s}
+  .tab:hover{color:var(--text)}.tab.active{color:var(--text);border-bottom-color:var(--accent)}
+  .badge{background:var(--red);color:#fff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:999px;font-family:'JetBrains Mono',monospace}
+  table{width:100%;border-collapse:collapse;font-size:12px}
+  th{text-align:left;padding:8px 12px;font-size:10px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em;border-bottom:1px solid var(--border);white-space:nowrap}
+  td{padding:8px 12px;border-bottom:1px solid var(--border);vertical-align:top}
+  tr:last-child td{border-bottom:none}tr:hover{background:var(--surface-2)}
+  .level-pill{display:inline-block;padding:2px 8px;border-radius:999px;font-size:10px;font-weight:700;font-family:'JetBrains Mono',monospace}
+  .level-RED{background:var(--red-bg);color:var(--red)}.level-ORANGE{background:var(--orange-bg);color:var(--orange)}.level-YELLOW{background:var(--yellow-bg);color:var(--yellow)}.level-GREEN{background:var(--green-bg);color:var(--green)}.level-BLUE{background:var(--blue-bg);color:var(--blue)}.level-HUMAN_REQUEST{background:#a855f71a;color:#a855f7}.level-RECHECK{background:var(--orange-bg);color:var(--orange)}
+  .conf-HIGH{color:var(--green)}.conf-MEDIUM{color:var(--yellow)}.conf-LOW{color:var(--red)}
+  .btn{padding:4px 10px;border-radius:6px;border:1px solid var(--border);background:var(--surface-2);color:var(--text);font-size:11px;font-weight:500;cursor:pointer;transition:background .15s}
+  .btn:hover{background:var(--border)}.btn-primary{background:var(--accent);border-color:var(--accent);color:#fff}.btn-primary:hover{background:#2563eb}
+  .empty-state{padding:24px;text-align:center;color:var(--text-muted);font-size:13px}
+  .time-ago{color:var(--text-muted);font-size:11px;font-family:'JetBrains Mono',monospace}
+  .summary-text{max-width:220px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .outcome-bar{display:flex;height:22px;border-radius:4px;overflow:hidden;margin-top:4px}
+  .outcome-bar div{display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;font-family:'JetBrains Mono',monospace;min-width:18px}
+  @media(max-width:900px){.chart-grid{grid-template-columns:1fr}}
+  @media(max-width:600px){.stats-grid{grid-template-columns:repeat(2,1fr)}.container{padding:10px}}
 </style>
 </head>
 <body>
-
 <div class="header">
-  <h1>
-    <span class="live-dot"></span>
-    HealthBridgeSA Dashboard
-  </h1>
-  <div style="display:flex;align-items:center;gap:16px">
-    <span class="meta" id="lastUpdated">Loading...</span>
-    <a href="/logout" class="btn" style="text-decoration:none;font-size:12px">Logout</a>
+  <h1><span class="live-dot"></span> HealthBridgeSA Dashboard</h1>
+  <div style="display:flex;align-items:center;gap:14px">
+    <span class="time-ago" id="lastUpdated">Loading...</span>
+    <a href="/logout" class="btn" style="text-decoration:none">Logout</a>
   </div>
 </div>
-
 <div class="container">
-  <!-- Stats -->
-  <div class="stats-grid" id="statsGrid">
-    <div class="stat-card"><div class="label">Total Triages</div><div class="value" id="statTotal">—</div></div>
-    <div class="stat-card"><div class="label">Last 24 Hours</div><div class="value" id="stat24h">—</div></div>
-    <div class="stat-card"><div class="label">Pending Escalations</div><div class="value" id="statEsc">—</div><div class="sub">Needs human review</div></div>
-    <div class="stat-card"><div class="label">RED Cases (24h)</div><div class="value" id="statRed" style="color:var(--red)">—</div></div>
+  <div class="stats-grid">
+    <div class="stat-card"><div class="label">Total triages</div><div class="value" id="sT">—</div></div>
+    <div class="stat-card"><div class="label">Last 24h</div><div class="value" id="s24">—</div></div>
+    <div class="stat-card"><div class="label">Escalations</div><div class="value" id="sE">—</div><div class="sub">Pending review</div></div>
+    <div class="stat-card"><div class="label">RED (24h)</div><div class="value" style="color:var(--red)" id="sR">—</div></div>
+    <div class="stat-card"><div class="label">Follow-up rate</div><div class="value" id="sFR">—</div></div>
   </div>
-
-  <!-- Triage Level Distribution -->
-  <div class="triage-bars">
-    <h2>Triage Level Distribution</h2>
-    <div id="triageBars"></div>
+  <div class="chart-grid">
+    <div class="chart-card full"><h3>Triage volume — last 30 days</h3><div style="position:relative;height:200px"><canvas id="cTimeline"></canvas></div></div>
+    <div class="chart-card"><h3>Triage levels</h3><div style="position:relative;height:200px"><canvas id="cLevel"></canvas></div><div id="cLevelLeg" style="display:flex;flex-wrap:wrap;gap:10px;margin-top:8px;font-size:10px;color:var(--text-muted)"></div></div>
+    <div class="chart-card"><h3>Follow-up outcomes</h3><div style="position:relative;height:200px"><canvas id="cOutcome"></canvas></div><div id="cOutLeg" style="display:flex;flex-wrap:wrap;gap:10px;margin-top:8px;font-size:10px;color:var(--text-muted)"></div></div>
+    <div class="chart-card"><h3>Peak hours</h3><div style="position:relative;height:170px"><canvas id="cHourly"></canvas></div></div>
+    <div class="chart-card"><h3>Symptom categories</h3><div style="position:relative;height:170px"><canvas id="cCat"></canvas></div></div>
   </div>
-
-  <!-- Tabs: Escalations / Recent Logs / Facilities -->
+  <div class="chart-card" style="margin-bottom:16px"><h3>Outcomes by triage level</h3><div id="outcomeByLevel"></div></div>
   <div class="section">
     <div class="tabs">
-      <div class="tab active" data-tab="escalations">
-        🚨 Escalations <span class="badge" id="escBadge" style="display:none">0</span>
-      </div>
-      <div class="tab" data-tab="logs">📋 Recent Logs</div>
-      <div class="tab" data-tab="facilities">🏥 Facilities</div>
-      <div class="tab" data-tab="followups">🔔 Follow-ups</div>
+      <div class="tab active" data-tab="escalations">Escalations <span class="badge" id="escBadge" style="display:none">0</span></div>
+      <div class="tab" data-tab="logs">Recent logs</div>
+      <div class="tab" data-tab="facilities">Facilities</div>
+      <div class="tab" data-tab="followups">Follow-ups</div>
     </div>
-
-    <div class="table-wrap" id="tabContent">
-      <div class="empty-state">Loading...</div>
-    </div>
+    <div class="table-wrap" id="tabContent"><div class="empty-state">Loading...</div></div>
   </div>
 </div>
-
 <script>
-const API_BASE = window.location.origin;
-let currentTab = 'escalations';
+const API=location.origin;let currentTab='escalations';
+const LD={en:'English',zu:'isiZulu',xh:'isiXhosa',af:'Afrikaans',nso:'Sepedi',tn:'Setswana',st:'Sesotho',ts:'Xitsonga',ss:'siSwati',ve:'Tshivenda',nr:'isiNdebele'};
+const CN={'1':'Breathing','2':'Head','3':'Pregnancy','4':'Bleeding','5':'Fever/Flu','6':'Stomach','7':'Child','8':'Medication','9':'Bone/Joint','10':'Mental health','11':'Allergy','12':'Free text','13':'Human'};
+const LC={RED:'#ef4444',ORANGE:'#f97316',YELLOW:'#eab308',GREEN:'#22c55e',BLUE:'#3b82f6'};
+document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>{document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));t.classList.add('active');currentTab=t.dataset.tab;renderTab();}));
+function timeAgo(ts){const m=Math.floor((Date.now()-new Date(ts).getTime())/60000);if(m<1)return'now';if(m<60)return m+'m';const h=Math.floor(m/60);if(h<24)return h+'h';return Math.floor(h/24)+'d';}
+function esc(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+async function af(u){const r=await fetch(u);if(r.status===401){location.href='/login';throw new Error('401');}return r.json();}
+let sD,eD=[],lD=[],fD=[],fuD=[],charts={};
+async function fetchAll(){try{
+const[s,e,ec,l,f,fu,tl,hr,loc,out,cat]=await Promise.all([af(`${API}/api/stats`),af(`${API}/api/escalations`),af(`${API}/api/escalations/count`),af(`${API}/api/logs?limit=50`),af(`${API}/api/facilities`),af(`${API}/api/follow-ups`),af(`${API}/api/analytics/timeline?days=30`),af(`${API}/api/analytics/hourly`),af(`${API}/api/analytics/locations`),af(`${API}/api/analytics/outcomes`),af(`${API}/api/analytics/categories`)]);
+sD=s;eD=e;lD=l;fD=f;fuD=fu;
+$('sT').textContent=s.total||0;$('s24').textContent=s.last24h||0;$('sE').textContent=ec.count||0;$('sR').textContent=s.byLevel?.RED||0;$('sFR').textContent=(out?.responseRate||0)+'%';
+const b=$('escBadge');if(ec.count>0){b.textContent=ec.count;b.style.display='inline';}else b.style.display='none';
+rTimeline(tl);rLevel(s.byLevel||{});rOutcome(out);rHourly(hr);rCategory(cat);rOutByLevel(out);renderTab();
+$('lastUpdated').textContent='Updated '+new Date().toLocaleTimeString();
+}catch(e){console.error(e);}}
+function $(id){return document.getElementById(id);}
 
-// ── Tabs ──
-document.querySelectorAll('.tab').forEach(tab => {
-  tab.addEventListener('click', () => {
-    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-    tab.classList.add('active');
-    currentTab = tab.dataset.tab;
-    renderTab();
-  });
-});
+function rTimeline(d){if(charts.tl)charts.tl.destroy();charts.tl=new Chart($('cTimeline'),{type:'bar',data:{labels:d.map(x=>x.date.slice(5)),datasets:['RED','ORANGE','YELLOW','GREEN','BLUE'].map(l=>({label:l,data:d.map(x=>x[l]||0),backgroundColor:LC[l],borderRadius:2}))},options:{responsive:true,maintainAspectRatio:false,scales:{x:{stacked:true,ticks:{color:'#8b92a5',font:{size:9},maxRotation:45,autoSkip:true,maxTicksLimit:15},grid:{display:false}},y:{stacked:true,ticks:{color:'#8b92a5',font:{size:9},stepSize:1},grid:{color:'rgba(255,255,255,.05)'}}},plugins:{legend:{display:false},tooltip:{mode:'index',intersect:false}}}});}
 
-// ── Language display names ──
-const LANG_DISPLAY = {
-  en: 'English', zu: 'isiZulu', xh: 'isiXhosa', af: 'Afrikaans',
-  nso: 'Sepedi', tn: 'Setswana', st: 'Sesotho', ts: 'Xitsonga',
-  ss: 'siSwati', ve: 'Tshivenda', nr: 'isiNdebele',
-};
+function rLevel(bl){if(charts.lv)charts.lv.destroy();const lvs=['RED','ORANGE','YELLOW','GREEN','BLUE'],cts=lvs.map(l=>bl[l]||0),tot=cts.reduce((a,b)=>a+b,0)||1;
+charts.lv=new Chart($('cLevel'),{type:'doughnut',data:{labels:lvs,datasets:[{data:cts,backgroundColor:lvs.map(l=>LC[l]),borderWidth:0}]},options:{responsive:true,maintainAspectRatio:false,cutout:'65%',plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.label+': '+c.raw+' ('+Math.round(c.raw/tot*100)+'%)'}}}}});
+$('cLevelLeg').innerHTML=lvs.map((l,i)=>`<span style="display:flex;align-items:center;gap:3px"><span style="width:8px;height:8px;border-radius:2px;background:${LC[l]}"></span>${l} ${cts[i]}</span>`).join('');}
 
-// ── Time formatting ──
-function timeAgo(ts) {
-  const diff = Date.now() - new Date(ts).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return 'just now';
-  if (mins < 60) return `${mins}m ago`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
-  const days = Math.floor(hrs / 24);
-  return `${days}d ago`;
-}
+function rOutcome(d){if(charts.oc)charts.oc.destroy();if(!d)return;const o=d.outcomes,lb=['Better','Same','Worse','Visited','No reply','Pending'],ct=[o.better,o.same,o.worse,o.visited,o.no_response,o.pending],co=['#22c55e','#eab308','#ef4444','#3b82f6','#6b7280','#374151'];
+charts.oc=new Chart($('cOutcome'),{type:'doughnut',data:{labels:lb,datasets:[{data:ct,backgroundColor:co,borderWidth:0}]},options:{responsive:true,maintainAspectRatio:false,cutout:'65%',plugins:{legend:{display:false}}}});
+$('cOutLeg').innerHTML=lb.map((l,i)=>ct[i]>0?`<span style="display:flex;align-items:center;gap:3px"><span style="width:8px;height:8px;border-radius:2px;background:${co[i]}"></span>${l} ${ct[i]}</span>`:'').join('');}
 
-// ── Data fetching ──
-let statsData = null;
-let escalationsData = [];
-let logsData = [];
-let facilitiesData = [];
-let followupsData = [];
+function rHourly(d){if(charts.hr)charts.hr.destroy();charts.hr=new Chart($('cHourly'),{type:'bar',data:{labels:d.map(x=>String(x.hour).padStart(2,'0')+':00'),datasets:[{data:d.map(x=>x.count),backgroundColor:'#3b82f680',borderRadius:2}]},options:{responsive:true,maintainAspectRatio:false,scales:{x:{ticks:{color:'#8b92a5',font:{size:8},maxRotation:45,autoSkip:true,maxTicksLimit:12},grid:{display:false}},y:{ticks:{color:'#8b92a5',font:{size:9},stepSize:1},grid:{color:'rgba(255,255,255,.05)'}}},plugins:{legend:{display:false}}}});}
 
-async function authFetch(url) {
-  const r = await fetch(url);
-  if (r.status === 401) { window.location.href = '/login'; throw new Error('Unauthorized'); }
-  return r.json();
-}
+function rCategory(d){if(charts.ct)charts.ct.destroy();if(!d)return;const e=Object.entries(d.categories).sort((a,b)=>b[1]-a[1]);
+charts.ct=new Chart($('cCat'),{type:'bar',data:{labels:e.map(([k])=>CN[k]||k),datasets:[{data:e.map(([,v])=>v),backgroundColor:'#8b5cf680',borderRadius:2}]},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,scales:{x:{ticks:{color:'#8b92a5',font:{size:9},stepSize:1},grid:{color:'rgba(255,255,255,.05)'}},y:{ticks:{color:'#8b92a5',font:{size:9}},grid:{display:false}}},plugins:{legend:{display:false}}}});}
 
-async function fetchAll() {
-  try {
-    const [stats, esc, escCount, logs, fac, fups] = await Promise.all([
-      authFetch(`${API_BASE}/api/stats`),
-      authFetch(`${API_BASE}/api/escalations`),
-      authFetch(`${API_BASE}/api/escalations/count`),
-      authFetch(`${API_BASE}/api/logs?limit=50`),
-      authFetch(`${API_BASE}/api/facilities`),
-      authFetch(`${API_BASE}/api/follow-ups`),
-    ]);
+function rOutByLevel(d){const el=$('outcomeByLevel');if(!d||!d.byLevel||!Object.keys(d.byLevel).length){el.innerHTML='<p style="color:#8b92a5;font-size:12px;padding:10px">No follow-up data yet</p>';return;}
+let h='';for(const lv of['RED','ORANGE','YELLOW','GREEN']){const x=d.byLevel[lv];if(!x)continue;const t=(x.better||0)+(x.same||0)+(x.worse||0)+(x.visited||0);if(!t)continue;
+h+=`<div style="margin-bottom:8px"><div style="display:flex;align-items:center;gap:6px;margin-bottom:3px"><span class="level-pill level-${lv}" style="font-size:9px">${lv}</span><span style="font-size:10px;color:#8b92a5">${t} responses</span></div><div class="outcome-bar">`;
+if(x.better)h+=`<div style="width:${x.better/t*100}%;background:#22c55e;color:#fff">${x.better}</div>`;
+if(x.same)h+=`<div style="width:${x.same/t*100}%;background:#eab308;color:#000">${x.same}</div>`;
+if(x.worse)h+=`<div style="width:${x.worse/t*100}%;background:#ef4444;color:#fff">${x.worse}</div>`;
+if(x.visited)h+=`<div style="width:${x.visited/t*100}%;background:#3b82f6;color:#fff">${x.visited}</div>`;
+h+=`</div></div>`;}
+h+='<div style="display:flex;gap:12px;margin-top:6px;font-size:10px;color:#8b92a5"><span style="display:flex;align-items:center;gap:3px"><span style="width:8px;height:8px;border-radius:2px;background:#22c55e"></span>Better</span><span style="display:flex;align-items:center;gap:3px"><span style="width:8px;height:8px;border-radius:2px;background:#eab308"></span>Same</span><span style="display:flex;align-items:center;gap:3px"><span style="width:8px;height:8px;border-radius:2px;background:#ef4444"></span>Worse</span><span style="display:flex;align-items:center;gap:3px"><span style="width:8px;height:8px;border-radius:2px;background:#3b82f6"></span>Visited</span></div>';
+el.innerHTML=h;}
 
-    statsData = stats;
-    escalationsData = esc;
-    logsData = logs;
-    facilitiesData = fac;
-    followupsData = fups;
+function renderTab(){const c=$('tabContent');
+if(currentTab==='escalations'){if(!eD.length){c.innerHTML='<div class="empty-state">No pending escalations</div>';return;}
+c.innerHTML=eD.map(e=>{const bc={RED:'var(--red)',ORANGE:'var(--orange)',HUMAN_REQUEST:'#a855f7',RECHECK:'var(--orange)'}[e.triage_level]||'var(--border)';const m=Math.floor((Date.now()-new Date(e.created_at).getTime())/60000);let urg,uc;if(m<15){urg=m+'m — ACT NOW';uc='var(--red)';}else if(m<60){urg=m+'m';uc='var(--orange)';}else{urg=timeAgo(e.created_at);uc='var(--text-muted)';}
+const cat=CN[e.category]||'';const act={RED:'Verify patient. Confirm ambulance (10177). Contact immediately.',ORANGE:'Contact within 30min. Confirm en route.',HUMAN_REQUEST:'Call patient ASAP.',RECHECK:'Worsening at follow-up. Re-assess.'}[e.triage_level]||'Review case.';
+const ph=e.patient_phone||'';const phB=ph?`<a href="https://wa.me/${ph}" target="_blank" class="btn btn-primary" style="text-decoration:none;font-size:10px;padding:3px 8px">WhatsApp</a><a href="tel:+${ph}" class="btn" style="text-decoration:none;font-size:10px;padding:3px 8px">Call</a>`:'';
+const behalf=e.on_behalf_of?`<span style="font-size:10px;padding:1px 6px;border-radius:999px;background:#a855f71a;color:#a855f7">For ${e.on_behalf_of}</span>`:'';
+return`<div style="border-left:4px solid ${bc};padding:14px 18px;border-bottom:1px solid var(--border)">
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:4px"><div style="display:flex;align-items:center;gap:6px"><span class="level-pill level-${e.triage_level}">${e.triage_level}</span><span style="font-size:10px;color:var(--text-muted)">#${e.id}</span>${behalf}</div><span style="font-size:11px;font-weight:600;color:${uc};font-family:'JetBrains Mono',monospace">${urg}</span></div>
+<div style="background:var(--surface-2);border-radius:6px;padding:8px 10px;margin-bottom:8px;font-size:12px"><span style="font-size:10px;color:var(--text-muted);text-transform:uppercase">Action: </span>${act}</div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;font-size:12px"><div><span style="font-size:10px;color:var(--text-muted);text-transform:uppercase">Category</span><br>${cat||'—'}</div><div><span style="font-size:10px;color:var(--text-muted);text-transform:uppercase">Reason</span><br>${esc((e.escalation_reason||'').replace(/_/g,' '))||'—'}</div></div>
+<div style="margin-bottom:8px;font-size:12px"><span style="font-size:10px;color:var(--text-muted);text-transform:uppercase">Message</span><div style="background:var(--bg);padding:6px 8px;border-radius:4px;border:1px solid var(--border);margin-top:2px">${esc(e.original_message||'—')}</div></div>
+<div style="margin-bottom:8px;font-size:12px"><span style="font-size:10px;color:var(--text-muted);text-transform:uppercase">Summary</span><br>${esc(e.english_summary||'—')}</div>
+<div style="display:flex;gap:12px;flex-wrap:wrap;font-size:10px;color:var(--text-muted);margin-bottom:8px"><span>${LD[e.language]||e.language||'—'}</span><span>Conf: <span class="conf-${e.confidence||'LOW'}" style="font-weight:600">${e.confidence||'—'}</span></span><span>${e.facility_name||'No facility'}</span><span>${e.pathway||'—'}</span></div>
+${(e.triage_level==='RED'||e.triage_level==='ORANGE')?`<div id="dispatch-${e.id}" style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:10px;margin-bottom:8px"><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;margin-bottom:6px">Dispatch</div><div style="display:flex;gap:3px;flex-wrap:wrap;margin-bottom:4px"><button class="btn" onclick="dispatch(${e.id},'called_10177','10177')" style="font-size:10px;padding:2px 6px">10177</button><button class="btn" onclick="dispatch(${e.id},'called_er24','ER24')" style="font-size:10px;padding:2px 6px">ER24</button><button class="btn" onclick="dispatch(${e.id},'called_netcare','Netcare')" style="font-size:10px;padding:2px 6px">Netcare</button><button class="btn" onclick="dispatch(${e.id},'self_transport','Self')" style="font-size:10px;padding:2px 6px">Self</button><button class="btn" onclick="dispatch(${e.id},'dispatched')" style="font-size:10px;padding:2px 6px">Dispatched</button><button class="btn" onclick="dispatch(${e.id},'en_route')" style="font-size:10px;padding:2px 6px">En route</button><button class="btn" onclick="dispatch(${e.id},'arrived')" style="font-size:10px;padding:2px 6px">Arrived</button><button class="btn" onclick="dispatch(${e.id},'patient_handed_over')" style="font-size:10px;padding:2px 6px;background:var(--green);border-color:var(--green);color:#fff">Done</button></div><div style="display:flex;gap:4px"><input id="dr-${e.id}" placeholder="Ref#" style="flex:1;padding:3px 6px;background:var(--surface);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:10px;outline:none"><input id="dn-${e.id}" placeholder="Name" style="flex:1;padding:3px 6px;background:var(--surface);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:10px;outline:none"></div><div id="ds-${e.id}" style="margin-top:4px;font-size:10px;color:var(--text-muted)"></div></div>`:``}
+<div style="display:flex;justify-content:space-between;align-items:flex-end;gap:8px;flex-wrap:wrap;padding-top:8px;border-top:1px solid var(--border)"><div style="display:flex;gap:4px;align-items:center">${phB}</div><div style="display:flex;gap:4px;align-items:flex-end"><textarea id="notes-${e.id}" placeholder="Notes..." style="width:160px;height:28px;padding:3px 6px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:10px;resize:none;outline:none"></textarea><button class="btn btn-primary" onclick="markReviewed(${e.id})" style="font-size:10px;padding:3px 8px">Reviewed</button></div></div></div>`;}).join('');
+eD.forEach(e=>{if(e.triage_level==='RED'||e.triage_level==='ORANGE')loadDS(e.id);});return;}
 
-    renderStats(stats, escCount.count);
-    renderTriageBars(stats.byLevel || {});
-    renderTab();
+if(currentTab==='logs'){if(!lD.length){c.innerHTML='<div class="empty-state">No logs yet</div>';return;}
+c.innerHTML=`<table><tr><th>Time</th><th>Level</th><th>Method</th><th>Cat</th><th>Summary</th><th>Lang</th><th>Conf</th><th>Facility</th><th>Status</th><th>Reviewer</th><th>Notes</th></tr>${lD.map(l=>{let rs='—';if(l.needs_human_review&&l.reviewed)rs='<span style="color:var(--green);font-size:9px;font-weight:600">DONE</span>';else if(l.needs_human_review)rs='<span style="color:var(--red);font-size:9px;font-weight:600">PENDING</span>';return`<tr><td class="time-ago">${timeAgo(l.created_at)}</td><td><span class="level-pill level-${l.triage_level}">${l.triage_level}</span></td><td>${l.method||'—'}</td><td>${l.category||'—'}</td><td class="summary-text" title="${esc(l.english_summary||l.original_message)}">${esc(l.english_summary||l.original_message||'—')}</td><td>${l.language||'—'}</td><td class="conf-${l.confidence||''}">${l.confidence||'—'}</td><td>${l.facility_name||'—'}</td><td>${rs}</td><td>${esc(l.reviewed_by||'—')}</td><td style="max-width:120px;font-size:10px">${esc(l.review_notes||'—')}</td></tr>`;}).join('')}</table>`;return;}
 
-    document.getElementById('lastUpdated').textContent =
-      'Updated ' + new Date().toLocaleTimeString();
+if(currentTab==='facilities'){c.innerHTML=`<table><tr><th>Name</th><th>Type</th><th>Queue</th><th>Cap</th><th>Wait</th><th>Address</th></tr>${fD.map(f=>{const ld=f.capacity>0?(f.current_queue/f.capacity*100).toFixed(0):0;const lc=ld>80?'var(--red)':ld>50?'var(--yellow)':'var(--green)';return`<tr><td style="font-weight:600">${f.name}</td><td>${f.type}</td><td style="color:${lc};font-weight:600">${f.current_queue}</td><td>${f.capacity}</td><td>${f.wait_time_minutes}m</td><td style="color:var(--text-muted)">${f.address||'—'}</td></tr>`;}).join('')}</table>`;return;}
 
-  } catch (err) {
-    console.error('Fetch error:', err);
-  }
-}
+if(currentTab==='followups'){if(!fuD.length){c.innerHTML='<div class="empty-state">No follow-ups</div>';return;}
+const rm={'1':'Better','2':'Same','3':'Worse','4':'Visited'};c.innerHTML=`<table><tr><th>Scheduled</th><th>Status</th><th>Level</th><th>Response</th><th>Sent</th><th>Done</th></tr>${fuD.map(f=>{const sc=f.status==='completed'?'var(--green)':f.status==='sent'?'var(--yellow)':'var(--text-muted)';return`<tr><td class="time-ago">${timeAgo(f.scheduled_at)}</td><td style="color:${sc};font-weight:600;font-size:10px;text-transform:uppercase">${f.status}</td><td><span class="level-pill level-${f.triage_level}">${f.triage_level}</span></td><td>${rm[f.response]||f.response||'—'}</td><td class="time-ago">${f.sent_at?timeAgo(f.sent_at):'—'}</td><td class="time-ago">${f.completed_at?timeAgo(f.completed_at):'—'}</td></tr>`;}).join('')}</table>`;return;}}
 
-// ── Render stats cards ──
-function renderStats(stats, escCount) {
-  document.getElementById('statTotal').textContent = stats.total || 0;
-  document.getElementById('stat24h').textContent = stats.last24h || 0;
-  document.getElementById('statEsc').textContent = escCount || 0;
-  document.getElementById('statRed').textContent = stats.byLevel?.RED || 0;
+async function loadDS(id){try{const d=await af(`${API}/api/dispatch/${id}`);const el=$(`ds-${id}`);if(!el||!d?.status)return;const sl={pending:'Pending',called_10177:'Called 10177',called_er24:'ER24',called_netcare:'Netcare',self_transport:'Self',dispatched:'Dispatched',en_route:'En route',arrived:'Arrived',patient_handed_over:'Done'};let h=`<span style="font-weight:600;color:var(--accent)">${sl[d.status]||d.status}</span>`;if(d.reference_number)h+=` Ref:${d.reference_number}`;if(d.nurse_name)h+=` — ${d.nurse_name}`;el.innerHTML=h;const r=$(`dr-${id}`),n=$(`dn-${id}`);if(r&&d.reference_number)r.value=d.reference_number;if(n&&d.nurse_name)n.value=d.nurse_name;}catch(e){}}
 
-  const badge = document.getElementById('escBadge');
-  if (escCount > 0) {
-    badge.textContent = escCount;
-    badge.style.display = 'inline';
-  } else {
-    badge.style.display = 'none';
-  }
-}
+async function dispatch(id,status,svc){const r=$(`dr-${id}`),n=$(`dn-${id}`),s=$(`ds-${id}`);const nm=n?n.value.trim():'';if(!nm){alert('Enter your name first.');if(n)n.focus();return;}if(!confirm(`Update: ${status.replace(/_/g,' ')}?\nPatient+supervisor notified.`))return;if(s)s.innerHTML='<span style="color:var(--yellow)">...</span>';try{await fetch(`${API}/api/dispatch`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({triage_log_id:id,status,service:svc||null,reference_number:r?r.value.trim():null,nurse_name:nm})});await loadDS(id);}catch(e){if(s)s.innerHTML='<span style="color:var(--red)">Failed</span>';}}
 
-// ── Render triage bars ──
-function renderTriageBars(byLevel) {
-  const container = document.getElementById('triageBars');
-  const levels = [
-    { key: 'RED', color: 'var(--red)', bg: 'var(--red-bg)' },
-    { key: 'ORANGE', color: 'var(--orange)', bg: 'var(--orange-bg)' },
-    { key: 'YELLOW', color: 'var(--yellow)', bg: 'var(--yellow-bg)' },
-    { key: 'GREEN', color: 'var(--green)', bg: 'var(--green-bg)' },
-    { key: 'BLUE', color: 'var(--blue)', bg: 'var(--blue-bg)' },
-  ];
+async function markReviewed(id){const n=$(`notes-${id}`),notes=n?n.value.trim():'';if(!confirm(`Mark #${id} reviewed?${notes?'\n'+notes:''}`))return;try{await fetch(`${API}/api/escalations/${id}/review`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({reviewed_by:'dashboard_user',review_notes:notes||null})});fetchAll();}catch(e){console.error(e);}}
 
-  const total = Object.values(byLevel).reduce((s, v) => s + v, 0) || 1;
-
-  container.innerHTML = levels.map(l => {
-    const count = byLevel[l.key] || 0;
-    const pct = Math.max(2, (count / total) * 100);
-    return `
-      <div class="bar-row">
-        <span class="bar-label" style="color:${l.color}">${l.key}</span>
-        <div class="bar-track">
-          <div class="bar-fill" style="width:${pct}%; background:${l.bg}; color:${l.color}">
-            ${count > 0 ? count : ''}
-          </div>
-        </div>
-        <span class="bar-count">${count}</span>
-      </div>`;
-  }).join('');
-}
-
-// ── Render tab content ──
-function renderTab() {
-  const container = document.getElementById('tabContent');
-
-  if (currentTab === 'escalations') {
-    if (escalationsData.length === 0) {
-      container.innerHTML = '<div class="empty-state">No pending escalations ✅</div>';
-      return;
-    }
-    container.innerHTML = escalationsData.map(e => {
-      const levelColors = { RED:'var(--red)', ORANGE:'var(--orange)', YELLOW:'var(--yellow)', GREEN:'var(--green)', BLUE:'var(--blue)', HUMAN_REQUEST:'#a855f7', RECHECK:'var(--orange)' };
-      const borderColor = levelColors[e.triage_level] || 'var(--border)';
-
-      // Urgency timer
-      const minsAgo = Math.floor((Date.now() - new Date(e.created_at).getTime()) / 60000);
-      let urgencyLabel, urgencyColor;
-      if (minsAgo < 15) { urgencyLabel = `${minsAgo}m ago — ACT NOW`; urgencyColor = 'var(--red)'; }
-      else if (minsAgo < 60) { urgencyLabel = `${minsAgo}m ago — URGENT`; urgencyColor = 'var(--orange)'; }
-      else if (minsAgo < 240) { urgencyLabel = `${Math.floor(minsAgo/60)}h ${minsAgo%60}m ago`; urgencyColor = 'var(--yellow)'; }
-      else { urgencyLabel = timeAgo(e.created_at); urgencyColor = 'var(--text-muted)'; }
-
-      // Map category to readable symptom description
-      const categorySymptoms = {
-        '1': '🫁 Breathing problems / Chest pain',
-        '2': '🤕 Head injury / Severe headache',
-        '3': '🤰 Pregnancy related',
-        '4': '🩸 Bleeding / Wound',
-        '5': '🤒 Fever / Flu / Cough',
-        '6': '🤢 Stomach pain / Vomiting / Diarrhoea',
-        '7': '👶 Baby or child is sick',
-        '8': '💊 Medication / Chronic condition',
-        '9': '🦴 Bone / Joint / Back pain',
-        '10': '😔 Mental health / Feeling distressed',
-        '11': '⚡ Allergic reaction / Rash / Swelling',
-        '12': '🔢 Free text (typed symptoms)',
-        '13': '👤 Requested to speak to human',
-      };
-      const symptomDesc = categorySymptoms[e.category] || 'Unknown category';
-
-      // Recommended nurse action based on triage level
-      const nurseActions = {
-        RED: '🚨 Verify patient status. Confirm ambulance dispatched (10177). Contact patient immediately.',
-        ORANGE: '⚡ Contact patient within 30 minutes. Confirm they are en route to hospital. Arrange transport if needed.',
-        HUMAN_REQUEST: '📞 Patient requested human contact. Call them as soon as possible.',
-        RECHECK: '⚠️ Patient reported worsening symptoms at 48hr follow-up. Re-assess and escalate if needed.',
-        YELLOW: '🟡 Review case. Contact patient if confidence is low.',
-      };
-      const action = nurseActions[e.triage_level] || 'Review case details and take appropriate action.';
-
-      // Phone buttons
-      const phoneNum = e.patient_phone || '';
-      const phoneButtons = phoneNum
-        ? `<a href="https://wa.me/${phoneNum}" target="_blank" class="btn btn-primary" style="text-decoration:none;font-size:11px;padding:6px 10px;">💬 WhatsApp</a>
-           <a href="tel:+${phoneNum}" class="btn" style="text-decoration:none;font-size:11px;padding:6px 10px;">📞 Call</a>`
-        : '<span style="font-size:11px;color:var(--text-muted)">No phone available</span>';
-
-      return `
-      <div style="border-left:4px solid ${borderColor}; padding:20px; border-bottom:1px solid var(--border);">
-
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; flex-wrap:wrap; gap:8px;">
-          <div style="display:flex; align-items:center; gap:10px;">
-            <span class="level-pill level-${e.triage_level}" style="font-size:12px; padding:3px 12px;">${e.triage_level}</span>
-            <span style="font-size:12px; color:var(--text-muted);">Log #${e.id}</span>
-          </div>
-          <div style="font-size:12px; font-weight:600; color:${urgencyColor}; font-family:'JetBrains Mono',monospace;">
-            ⏱ ${urgencyLabel}
-          </div>
-        </div>
-
-        <div style="background:var(--surface-2); border-radius:8px; padding:14px; margin-bottom:14px;">
-          <div style="font-size:11px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.04em; margin-bottom:6px;">Recommended Action</div>
-          <div style="font-size:13px; font-weight:500; line-height:1.5;">${action}</div>
-        </div>
-
-        <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:14px;">
-          <div>
-            <div style="font-size:11px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.04em; margin-bottom:4px;">Symptom Category</div>
-            <div style="font-size:13px;">${symptomDesc}</div>
-          </div>
-          <div>
-            <div style="font-size:11px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.04em; margin-bottom:4px;">Escalation Reason</div>
-            <div style="font-size:13px;">${esc((e.escalation_reason || '—').replace(/_/g, ' '))}</div>
-          </div>
-        </div>
-
-        <div style="margin-bottom:14px;">
-          <div style="font-size:11px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.04em; margin-bottom:4px;">Patient Message</div>
-          <div style="font-size:13px; background:var(--bg); padding:10px 12px; border-radius:6px; border:1px solid var(--border); white-space:pre-wrap;">${esc(e.original_message || '—')}</div>
-        </div>
-
-        <div style="margin-bottom:14px;">
-          <div style="font-size:11px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.04em; margin-bottom:4px;">English Summary</div>
-          <div style="font-size:13px;">${esc(e.english_summary || '—')}</div>
-        </div>
-
-        <div style="display:flex; gap:16px; flex-wrap:wrap; font-size:12px; color:var(--text-muted); margin-bottom:14px;">
-          <span>🌐 ${LANG_DISPLAY[e.language] || e.language || '—'}</span>
-          <span>📊 Confidence: <span class="conf-${e.confidence || 'LOW'}" style="font-weight:600">${e.confidence || '—'}</span></span>
-          <span>🏥 ${e.facility_name || 'No facility'}</span>
-          <span>🔀 ${e.method || '—'}</span>
-          <span>🛤 ${e.pathway || '—'}</span>
-        </div>
-
-        ${(e.triage_level === 'RED' || e.triage_level === 'ORANGE') ? `
-        <div id="dispatch-${e.id}" style="background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:14px; margin-bottom:14px;">
-          <div style="font-size:11px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.04em; margin-bottom:10px;">🚑 Ambulance Dispatch Tracking</div>
-          <div style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px;">
-            <button class="btn" onclick="dispatch(${e.id},'called_10177','10177')" style="font-size:11px;">📞 Called 10177</button>
-            <button class="btn" onclick="dispatch(${e.id},'called_er24','ER24')" style="font-size:11px;">📞 Called ER24</button>
-            <button class="btn" onclick="dispatch(${e.id},'called_netcare','Netcare911')" style="font-size:11px;">📞 Called Netcare</button>
-            <button class="btn" onclick="dispatch(${e.id},'self_transport','Self')" style="font-size:11px;">🚗 Self Transport</button>
-          </div>
-          <div style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px;">
-            <button class="btn" onclick="dispatch(${e.id},'dispatched')" style="font-size:11px;">✅ Dispatched</button>
-            <button class="btn" onclick="dispatch(${e.id},'en_route')" style="font-size:11px;">🚑 En Route</button>
-            <button class="btn" onclick="dispatch(${e.id},'arrived')" style="font-size:11px;">🏥 Arrived</button>
-            <button class="btn" onclick="dispatch(${e.id},'patient_handed_over')" style="font-size:11px;background:var(--green);border-color:var(--green);color:white;">✅ Handed Over</button>
-          </div>
-          <div style="display:flex; gap:8px; flex-wrap:wrap;">
-            <input id="dispatch-ref-${e.id}" placeholder="Ambulance ref #" style="
-              flex:1; min-width:120px; padding:6px 10px; background:var(--surface); border:1px solid var(--border);
-              border-radius:6px; color:var(--text); font-size:12px; font-family:'DM Sans',sans-serif; outline:none;
-            ">
-            <input id="dispatch-nurse-${e.id}" placeholder="Your name" style="
-              flex:1; min-width:120px; padding:6px 10px; background:var(--surface); border:1px solid var(--border);
-              border-radius:6px; color:var(--text); font-size:12px; font-family:'DM Sans',sans-serif; outline:none;
-            ">
-          </div>
-          <div id="dispatch-status-${e.id}" style="margin-top:8px; font-size:12px; color:var(--text-muted);"></div>
-        </div>
-        ` : ''}
-
-        <div style="display:flex; justify-content:space-between; align-items:flex-end; gap:12px; flex-wrap:wrap; padding-top:12px; border-top:1px solid var(--border);">
-          <div style="display:flex; gap:8px; align-items:center;">
-            ${phoneButtons}
-          </div>
-          <div style="display:flex; gap:8px; align-items:flex-end;">
-            <textarea id="notes-${e.id}" placeholder="Review notes..." style="
-              width:220px; height:40px; padding:6px 10px; background:var(--bg); border:1px solid var(--border);
-              border-radius:6px; color:var(--text); font-size:12px; font-family:'DM Sans',sans-serif;
-              resize:none; outline:none;
-            "></textarea>
-            <button class="btn btn-primary" onclick="markReviewed(${e.id})" style="white-space:nowrap;">✓ Reviewed</button>
-          </div>
-        </div>
-
-      </div>`;
-    }).join('');
-
-    // Load dispatch statuses for all RED/ORANGE cases
-    escalationsData.forEach(e => {
-      if (e.triage_level === 'RED' || e.triage_level === 'ORANGE') {
-        loadDispatchStatus(e.id);
-      }
-    });
-
-    return;
-  }
-
-  if (currentTab === 'logs') {
-    if (logsData.length === 0) {
-      container.innerHTML = '<div class="empty-state">No triage logs yet.</div>';
-      return;
-    }
-    container.innerHTML = `<table>
-      <tr>
-        <th>Time</th><th>Level</th><th>Method</th><th>Category</th><th>Summary</th><th>Lang</th><th>Confidence</th><th>Facility</th><th>Review Status</th><th>Reviewed By</th><th>Notes / Action Taken</th>
-      </tr>
-      ${logsData.map(l => {
-        let reviewStatus = '—';
-        if (l.needs_human_review && l.reviewed) {
-          reviewStatus = '<span style="color:var(--green);font-weight:600;font-size:11px;">✅ REVIEWED</span>';
-        } else if (l.needs_human_review && !l.reviewed) {
-          reviewStatus = '<span style="color:var(--red);font-weight:600;font-size:11px;">⏳ PENDING</span>';
-        }
-        const reviewedBy = l.reviewed_by || '—';
-        const reviewNotes = l.review_notes || '—';
-        const reviewTime = l.reviewed_at ? `<br><span style="font-size:10px;color:var(--text-muted)">${timeAgo(l.reviewed_at)}</span>` : '';
-        return `
-        <tr>
-          <td class="time-ago">${timeAgo(l.created_at)}</td>
-          <td><span class="level-pill level-${l.triage_level}">${l.triage_level}</span></td>
-          <td>${l.method || '—'}</td>
-          <td>${l.category || '—'}</td>
-          <td class="summary-text" title="${esc(l.english_summary || l.original_message || '')}">${esc(l.english_summary || l.original_message || '—')}</td>
-          <td>${l.language || '—'}</td>
-          <td class="conf-${l.confidence || ''}">${l.confidence || '—'}</td>
-          <td>${l.facility_name || '—'}</td>
-          <td>${reviewStatus}</td>
-          <td>${esc(reviewedBy)}${reviewTime}</td>
-          <td style="max-width:200px;white-space:pre-wrap;font-size:12px;">${esc(reviewNotes)}</td>
-        </tr>`;
-      }).join('')}
-    </table>`;
-    return;
-  }
-
-  if (currentTab === 'facilities') {
-    container.innerHTML = `<table>
-      <tr>
-        <th>Name</th><th>Type</th><th>Queue</th><th>Capacity</th><th>Wait (min)</th><th>Address</th>
-      </tr>
-      ${facilitiesData.map(f => {
-        const load = f.capacity > 0 ? (f.current_queue / f.capacity * 100).toFixed(0) : 0;
-        const loadColor = load > 80 ? 'var(--red)' : load > 50 ? 'var(--yellow)' : 'var(--green)';
-        return `
-          <tr>
-            <td style="font-weight:600">${f.name}</td>
-            <td>${f.type}</td>
-            <td style="color:${loadColor}; font-weight:600">${f.current_queue}</td>
-            <td>${f.capacity}</td>
-            <td>${f.wait_time_minutes}</td>
-            <td style="color:var(--text-muted)">${f.address || '—'}</td>
-          </tr>`;
-      }).join('')}
-    </table>`;
-    return;
-  }
-
-  if (currentTab === 'followups') {
-    if (followupsData.length === 0) {
-      container.innerHTML = '<div class="empty-state">No follow-ups scheduled yet.</div>';
-      return;
-    }
-    container.innerHTML = `<table>
-      <tr>
-        <th>Scheduled</th><th>Status</th><th>Level</th><th>Response</th><th>Sent</th><th>Completed</th>
-      </tr>
-      ${followupsData.map(f => {
-        const statusColor = f.status === 'completed' ? 'var(--green)'
-          : f.status === 'sent' ? 'var(--yellow)'
-          : f.status === 'pending' ? 'var(--text-muted)' : 'var(--red)';
-        const responseMap = { '1': 'Better', '2': 'Same', '3': 'Worse', '4': 'Visited facility' };
-        return `
-          <tr>
-            <td class="time-ago">${timeAgo(f.scheduled_at)}</td>
-            <td style="color:${statusColor}; font-weight:600; text-transform:uppercase; font-size:11px">${f.status}</td>
-            <td><span class="level-pill level-${f.triage_level}">${f.triage_level}</span></td>
-            <td>${responseMap[f.response] || f.response || '—'}</td>
-            <td class="time-ago">${f.sent_at ? timeAgo(f.sent_at) : '—'}</td>
-            <td class="time-ago">${f.completed_at ? timeAgo(f.completed_at) : '—'}</td>
-          </tr>`;
-      }).join('')}
-    </table>`;
-    return;
-  }
-}
-
-function esc(str) {
-  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
-
-async function markReviewed(id) {
-  const notesEl = document.getElementById(`notes-${id}`);
-  const notes = notesEl ? notesEl.value.trim() : '';
-  
-  if (!confirm(`Mark escalation #${id} as reviewed?${notes ? '\n\nNotes: ' + notes : ''}`)) return;
-  
-  try {
-    await fetch(`${API_BASE}/api/escalations/${id}/review`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ reviewed_by: 'dashboard_user', review_notes: notes || null }),
-    });
-    fetchAll();
-  } catch (err) {
-    console.error('Review error:', err);
-  }
-}
-
-// ── Dispatch tracking ──
-async function loadDispatchStatus(triageLogId) {
-  try {
-    const data = await authFetch(`${API_BASE}/api/dispatch/${triageLogId}`);
-    const el = document.getElementById(`dispatch-status-${triageLogId}`);
-    if (!el) return;
-    if (data && data.status) {
-      const statusLabels = {
-        pending: '⏳ Pending', called_10177: '📞 Called 10177', called_er24: '📞 Called ER24',
-        called_netcare: '📞 Called Netcare', self_transport: '🚗 Self transport',
-        dispatched: '✅ Dispatched', en_route: '🚑 En route', arrived: '🏥 Arrived',
-        patient_handed_over: '✅ Handed over', cancelled: '❌ Cancelled',
-      };
-      let html = `<span style="font-weight:600; color:var(--accent);">${statusLabels[data.status] || data.status}</span>`;
-      if (data.reference_number) html += ` — Ref: ${data.reference_number}`;
-      if (data.nurse_name) html += ` — Nurse: ${data.nurse_name}`;
-      if (data.service) html += ` — Service: ${data.service}`;
-      html += ` — Updated ${timeAgo(data.updated_at)}`;
-      el.innerHTML = html;
-      // Pre-fill fields
-      const refEl = document.getElementById(`dispatch-ref-${triageLogId}`);
-      const nurseEl = document.getElementById(`dispatch-nurse-${triageLogId}`);
-      if (refEl && data.reference_number) refEl.value = data.reference_number;
-      if (nurseEl && data.nurse_name) nurseEl.value = data.nurse_name;
-    }
-  } catch (err) {
-    // No dispatch record yet — that's fine
-  }
-}
-
-async function dispatch(triageLogId, status, service) {
-  const refEl = document.getElementById(`dispatch-ref-${triageLogId}`);
-  const nurseEl = document.getElementById(`dispatch-nurse-${triageLogId}`);
-  const statusEl = document.getElementById(`dispatch-status-${triageLogId}`);
-
-  const reference_number = refEl ? refEl.value.trim() : '';
-  const nurse_name = nurseEl ? nurseEl.value.trim() : '';
-
-  if (!nurse_name) {
-    alert('Please enter your name before updating dispatch status.');
-    if (nurseEl) nurseEl.focus();
-    return;
-  }
-
-  const statusLabels = {
-    called_10177: 'Called 10177', called_er24: 'Called ER24', called_netcare: 'Called Netcare',
-    self_transport: 'Self transport', dispatched: 'Dispatched', en_route: 'En route',
-    arrived: 'Arrived', patient_handed_over: 'Patient handed over',
-  };
-
-  if (!confirm(`Update dispatch to: ${statusLabels[status] || status}?\n\nThis will notify the patient and supervisor via WhatsApp.`)) return;
-
-  if (statusEl) statusEl.innerHTML = '<span style="color:var(--yellow)">Updating...</span>';
-
-  try {
-    await fetch(`${API_BASE}/api/dispatch`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        triage_log_id: triageLogId,
-        status,
-        service: service || null,
-        reference_number: reference_number || null,
-        nurse_name,
-      }),
-    });
-    await loadDispatchStatus(triageLogId);
-  } catch (err) {
-    console.error('Dispatch error:', err);
-    if (statusEl) statusEl.innerHTML = '<span style="color:var(--red)">Update failed. Try again.</span>';
-  }
-}
-
-// ── Init + Auto-refresh ──
-fetchAll();
-setInterval(fetchAll, 30000); // Refresh every 30s
+fetchAll();setInterval(fetchAll,30000);
 </script>
 </body>
 </html>
