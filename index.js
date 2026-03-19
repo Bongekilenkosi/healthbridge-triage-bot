@@ -560,6 +560,350 @@ async function runFollowUpAgent() {
 // Run follow-up agent every 5 minutes
 setInterval(runFollowUpAgent, 5 * 60 * 1000);
 
+// ================================================================
+// AGENT 8: OUTBREAK DETECTION
+// ================================================================
+
+async function getOutbreakConfig() {
+  const { data, error } = await supabase.from('outbreak_config').select('key, value');
+  if (error) { console.error('Outbreak config error:', error.message); return null; }
+  const config = {};
+  for (const row of (data || [])) config[row.key] = row.value;
+  return config;
+}
+
+async function runOutbreakScan() {
+  try {
+    const config = await getOutbreakConfig();
+    if (!config || config.enabled !== 'true') return;
+
+    const timeWindowHrs = parseInt(config.time_window_hrs) || 48;
+    const radiusKm = parseFloat(config.radius_km) || 5;
+    const minCases = parseInt(config.min_cases) || 3;
+    const warningCases = parseInt(config.warning_cases) || 5;
+    const criticalCases = parseInt(config.critical_cases) || 10;
+    const baselineMultiplier = parseFloat(config.baseline_multiplier) || 2.5;
+    const baselineWindowDays = parseInt(config.baseline_window_days) || 14;
+    const growthThresholdPct = parseFloat(config.growth_threshold_pct) || 100;
+    const weightRed = parseInt(config.severity_weight_red) || 3;
+    const weightOrange = parseInt(config.severity_weight_orange) || 2;
+    const weightYellow = parseInt(config.severity_weight_yellow) || 1;
+
+    const since = new Date(Date.now() - timeWindowHrs * 60 * 60 * 1000).toISOString();
+    const baselineSince = new Date(Date.now() - baselineWindowDays * 24 * 60 * 60 * 1000).toISOString();
+    const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const dayBefore = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
+
+    // Fetch recent triage logs with location (current window)
+    const { data: logs, error } = await supabase
+      .from('triage_logs')
+      .select('id, category, location, triage_level, english_summary, created_at')
+      .gte('created_at', since)
+      .not('location', 'is', null)
+      .not('category', 'is', null);
+    if (error || !logs || logs.length === 0) return;
+
+    // Fetch baseline data (older window for comparison)
+    const { data: baselineLogs } = await supabase
+      .from('triage_logs')
+      .select('category, created_at')
+      .gte('created_at', baselineSince)
+      .lt('created_at', since)
+      .not('category', 'is', null);
+
+    // Calculate baseline rates per category (cases per time_window period)
+    const baselineRates = {};
+    if (baselineLogs && baselineLogs.length > 0) {
+      const baselineDays = baselineWindowDays - (timeWindowHrs / 24);
+      const periodsInBaseline = Math.max(1, baselineDays / (timeWindowHrs / 24));
+      const baseCounts = {};
+      for (const bl of baselineLogs) {
+        baseCounts[bl.category] = (baseCounts[bl.category] || 0) + 1;
+      }
+      for (const [cat, count] of Object.entries(baseCounts)) {
+        baselineRates[cat] = count / periodsInBaseline;
+      }
+    }
+
+    // Fetch 24h-ago data for growth rate calculation
+    const { data: prevDayLogs } = await supabase
+      .from('triage_logs')
+      .select('category, location')
+      .gte('created_at', dayBefore)
+      .lt('created_at', yesterday)
+      .not('location', 'is', null)
+      .not('category', 'is', null);
+
+    const prevDayCounts = {};
+    if (prevDayLogs) {
+      for (const pl of prevDayLogs) {
+        prevDayCounts[pl.category] = (prevDayCounts[pl.category] || 0) + 1;
+      }
+    }
+
+    // Filter to logs with valid GPS and apply severity weighting
+    const geoLogs = logs.filter(l => l.location?.latitude && l.location?.longitude);
+    if (geoLogs.length === 0) return;
+
+    // Apply severity weights
+    const weightedLogs = geoLogs.map(l => ({
+      ...l,
+      weight: l.triage_level === 'RED' ? weightRed : l.triage_level === 'ORANGE' ? weightOrange : weightYellow,
+    }));
+
+    // Group by category
+    const byCategory = {};
+    for (const log of weightedLogs) {
+      if (!byCategory[log.category]) byCategory[log.category] = [];
+      byCategory[log.category].push(log);
+    }
+
+    // For each category, find geographic clusters and apply 3-layer detection
+    for (const [category, catLogs] of Object.entries(byCategory)) {
+      const clusters = findGeoClusters(catLogs, radiusKm);
+
+      for (const cluster of clusters) {
+        const rawCount = cluster.length;
+        const weightedCount = cluster.reduce((s, l) => s + l.weight, 0);
+
+        // === LAYER 1: Absolute threshold (weighted) ===
+        const absTriggered = weightedCount >= minCases;
+
+        // === LAYER 2: Baseline comparison ===
+        const baseline = baselineRates[category] || 0;
+        const baselineTriggered = baseline > 0 && rawCount >= baseline * baselineMultiplier;
+
+        // === LAYER 3: Growth rate (24h) ===
+        const prevCount = prevDayCounts[category] || 0;
+        const last24Count = cluster.filter(l => new Date(l.created_at) >= new Date(yesterday)).length;
+        const growthRate = prevCount > 0 ? ((last24Count - prevCount) / prevCount) * 100 : (last24Count >= 2 ? 999 : 0);
+        const growthTriggered = growthRate >= growthThresholdPct;
+
+        // ANY trigger fires the alert
+        if (!absTriggered && !baselineTriggered && !growthTriggered) continue;
+
+        // Determine which triggers fired
+        const triggers = [];
+        if (absTriggered) triggers.push('absolute');
+        if (baselineTriggered) triggers.push('baseline');
+        if (growthTriggered) triggers.push('growth_rate');
+        const triggerReason = triggers.join('+');
+
+        // Calculate cluster center
+        const centerLat = cluster.reduce((s, l) => s + l.location.latitude, 0) / cluster.length;
+        const centerLng = cluster.reduce((s, l) => s + l.location.longitude, 0) / cluster.length;
+        const clusterId = `${category}-${centerLat.toFixed(3)}-${centerLng.toFixed(3)}`;
+
+        // Determine severity (use weighted count)
+        let severity = 'WATCH';
+        if (weightedCount >= criticalCases || growthRate >= 200) severity = 'CRITICAL';
+        else if (weightedCount >= warningCases || baselineTriggered) severity = 'WARNING';
+
+        // Build enhanced report
+        const report = generateOutbreakReport(
+          category, cluster, centerLat, centerLng, radiusKm, timeWindowHrs, severity,
+          { triggerReason, weightedCount, baseline, growthRate: Math.round(growthRate), prevCount, last24Count }
+        );
+
+        // Check for existing alert
+        const { data: existing } = await supabase
+          .from('outbreak_alerts')
+          .select('id, case_count, severity')
+          .eq('cluster_id', clusterId)
+          .in('status', ['active', 'monitoring'])
+          .maybeSingle();
+
+        if (existing) {
+          if (rawCount > existing.case_count || severity !== existing.severity) {
+            await supabase.from('outbreak_alerts').update({
+              case_count: rawCount,
+              severity,
+              triage_log_ids: cluster.map(l => l.id),
+              report,
+              trigger_reason: triggerReason,
+              updated_at: new Date().toISOString(),
+              notified: severity !== existing.severity ? false : true,
+            }).eq('id', existing.id);
+
+            if (severity !== existing.severity) {
+              await sendOutbreakAlert(clusterId, category, cluster, centerLat, centerLng, severity, report, triggerReason);
+              await supabase.from('outbreak_alerts').update({ notified: true }).eq('id', existing.id);
+            }
+          }
+        } else {
+          const { data: inserted } = await supabase.from('outbreak_alerts').insert({
+            cluster_id: clusterId, category, category_name: getCategoryName(category),
+            center_lat: centerLat, center_lng: centerLng, radius_km: radiusKm,
+            case_count: rawCount, time_window_hrs: timeWindowHrs,
+            triage_log_ids: cluster.map(l => l.id), severity, report,
+            trigger_reason: triggerReason, notified: false,
+          }).select('id').single();
+
+          await sendOutbreakAlert(clusterId, category, cluster, centerLat, centerLng, severity, report, triggerReason);
+          if (inserted) await supabase.from('outbreak_alerts').update({ notified: true }).eq('id', inserted.id);
+          console.log(`[outbreak] NEW ${severity} (${triggerReason}): ${rawCount} cases (weighted:${weightedCount}) of cat ${category}`);
+        }
+      }
+    }
+  } catch (err) {
+    console.error('Outbreak scan error:', err.message);
+  }
+}
+
+function findGeoClusters(logs, radiusKm) {
+  // Simple density-based clustering: pick each point as potential center,
+  // find all points within radius, keep clusters that meet threshold
+  const used = new Set();
+  const clusters = [];
+
+  // Sort by time (newest first) so we anchor on recent cases
+  const sorted = [...logs].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+  for (const anchor of sorted) {
+    if (used.has(anchor.id)) continue;
+
+    const nearby = sorted.filter(l =>
+      !used.has(l.id) &&
+      haversine(anchor.location.latitude, anchor.location.longitude, l.location.latitude, l.location.longitude) <= radiusKm
+    );
+
+    if (nearby.length >= 2) { // at least 2 nearby (including self)
+      clusters.push(nearby);
+      nearby.forEach(l => used.add(l.id));
+    }
+  }
+
+  return clusters;
+}
+
+function generateOutbreakReport(category, cluster, centerLat, centerLng, radiusKm, timeWindowHrs, severity, detection = {}) {
+  const catName = getCategoryName(category);
+  const timestamp = new Date().toLocaleString('en-ZA', { timeZone: 'Africa/Johannesburg' });
+  const mapsLink = `https://www.google.com/maps/@${centerLat},${centerLng},14z`;
+
+  const levelBreakdown = {};
+  const summaries = [];
+  for (const log of cluster) {
+    levelBreakdown[log.triage_level] = (levelBreakdown[log.triage_level] || 0) + 1;
+    if (log.english_summary && summaries.length < 5) summaries.push(log.english_summary);
+  }
+
+  let report = `OUTBREAK DETECTION REPORT\n`;
+  report += `========================\n\n`;
+  report += `Generated: ${timestamp}\n`;
+  report += `Severity: ${severity}\n`;
+  report += `Status: Active — Requires Investigation\n\n`;
+
+  report += `DETECTION METHOD\n`;
+  const reasons = (detection.triggerReason || 'absolute').split('+');
+  if (reasons.includes('absolute')) report += `  ✓ Absolute threshold: ${detection.weightedCount || cluster.length} weighted cases (threshold met)\n`;
+  if (reasons.includes('baseline')) report += `  ✓ Baseline exceeded: ${cluster.length} cases vs ${(detection.baseline || 0).toFixed(1)} baseline (${((cluster.length / (detection.baseline || 1)) * 100).toFixed(0)}% of normal)\n`;
+  if (reasons.includes('growth_rate')) report += `  ✓ Rapid growth: ${detection.growthRate || 0}% increase in 24hrs (${detection.prevCount || 0} → ${detection.last24Count || 0} cases)\n`;
+  report += `\n`;
+
+  report += `CLUSTER DETAILS\n`;
+  report += `Symptom category: ${catName} (category ${category})\n`;
+  report += `Raw cases: ${cluster.length}\n`;
+  if (detection.weightedCount) report += `Severity-weighted cases: ${detection.weightedCount} (RED=×3, ORANGE=×2, YELLOW=×1)\n`;
+  report += `Time window: Last ${timeWindowHrs} hours\n`;
+  report += `Geographic radius: ${radiusKm}km\n`;
+  report += `Center: ${centerLat.toFixed(4)}, ${centerLng.toFixed(4)}\n`;
+  report += `Map: ${mapsLink}\n\n`;
+
+  report += `TRIAGE LEVEL BREAKDOWN\n`;
+  for (const [level, count] of Object.entries(levelBreakdown)) {
+    report += `  ${level}: ${count} cases\n`;
+  }
+
+  if (detection.baseline > 0) {
+    report += `\nBASELINE COMPARISON\n`;
+    report += `  Normal rate: ~${detection.baseline.toFixed(1)} cases per ${timeWindowHrs}hrs\n`;
+    report += `  Current rate: ${cluster.length} cases (${((cluster.length / detection.baseline) * 100).toFixed(0)}% of normal)\n`;
+  }
+
+  if (detection.growthRate > 0) {
+    report += `\nGROWTH ANALYSIS\n`;
+    report += `  Previous 24hrs: ${detection.prevCount || 0} cases\n`;
+    report += `  Latest 24hrs: ${detection.last24Count || 0} cases\n`;
+    report += `  Growth rate: ${detection.growthRate}%\n`;
+  }
+
+  report += `\nPATIENT SUMMARIES (up to 5)\n`;
+  summaries.forEach((s, i) => { report += `  ${i + 1}. ${s}\n`; });
+  report += `\nRECOMMENDED ACTIONS\n`;
+  if (severity === 'CRITICAL') {
+    report += `  1. IMMEDIATELY notify District Health Office\n`;
+    report += `  2. Deploy mobile health team to affected area\n`;
+    report += `  3. Alert nearest facilities to prepare for surge\n`;
+    report += `  4. Begin contact tracing if infectious disease suspected\n`;
+    report += `  5. Prepare situation report for Provincial Health\n`;
+  } else if (severity === 'WARNING') {
+    report += `  1. Notify facility managers in affected area\n`;
+    report += `  2. Increase monitoring frequency\n`;
+    report += `  3. Prepare resources for potential escalation\n`;
+    report += `  4. Review patient summaries for common exposure\n`;
+  } else {
+    report += `  1. Monitor cluster over next 24 hours\n`;
+    report += `  2. Review if cases share common exposure\n`;
+    report += `  3. Escalate if case count increases\n`;
+  }
+  report += `\n--- End of Report ---`;
+  return report;
+}
+
+async function sendOutbreakAlert(clusterId, category, cluster, lat, lng, severity, report, triggerReason) {
+  if (!ALERT_PHONE) return;
+
+  const sevEmoji = { WATCH: '🟡', WARNING: '🟠', CRITICAL: '🔴' };
+  const catName = getCategoryName(category);
+  const mapsLink = `https://www.google.com/maps/@${lat},${lng},14z`;
+
+  let msg = `${sevEmoji[severity] || '🔔'} *OUTBREAK ${severity}: ${catName}*\n\n`;
+  msg += `📊 ${cluster.length} cases in area\n`;
+  msg += `📍 Area: ${mapsLink}\n`;
+  msg += `🏥 Category: ${catName}\n`;
+
+  // Show what triggered the alert
+  const triggers = (triggerReason || 'absolute').split('+');
+  msg += `\n🔬 *Triggered by:*\n`;
+  if (triggers.includes('absolute')) msg += `  • Case count exceeded threshold\n`;
+  if (triggers.includes('baseline')) msg += `  • Unusual rate vs baseline (2.5× normal)\n`;
+  if (triggers.includes('growth_rate')) msg += `  • Rapid growth (100%+ in 24hrs)\n`;
+  msg += `\n`;
+
+  if (severity === 'CRITICAL') {
+    msg += `🚨 *CRITICAL — Notify District Health Office immediately*\n`;
+    msg += `Consider deploying mobile health team.\n`;
+  } else if (severity === 'WARNING') {
+    msg += `⚠️ *WARNING — Alert facility managers in area*\n`;
+    msg += `Increase monitoring. Prepare for escalation.\n`;
+  } else {
+    msg += `👁 *WATCH — Monitor over next 24 hours*\n`;
+  }
+
+  msg += `\n📋 Full report available on dashboard.`;
+
+  try {
+    await sendWhatsAppMessage(ALERT_PHONE, msg);
+    console.log(`[outbreak] Alert sent: ${severity} for ${catName}`);
+  } catch (err) {
+    console.error('[outbreak] Alert failed:', err.message);
+  }
+}
+
+// Run outbreak scan periodically (default every 15 minutes)
+let outbreakInterval = null;
+async function startOutbreakScanner() {
+  const config = await getOutbreakConfig();
+  const mins = parseInt(config?.scan_interval_mins) || 15;
+  if (outbreakInterval) clearInterval(outbreakInterval);
+  outbreakInterval = setInterval(runOutbreakScan, mins * 60 * 1000);
+  // Run immediately on startup
+  setTimeout(runOutbreakScan, 10000);
+  console.log(`[outbreak] Scanner started, interval: ${mins}min`);
+}
+startOutbreakScanner();
+
 async function handleFollowUpResponse(patientId, session, text) {
   const { data: pending, error } = await supabase
     .from('follow_ups')
@@ -1720,6 +2064,97 @@ app.get('/api/analytics/categories', requireAuth, async (req, res) => {
     }
 
     res.json({ categories: cats, behalfOf: behalfCounts });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ================================================================
+// OUTBREAK DETECTION API
+// ================================================================
+
+// Get active outbreak alerts
+app.get('/api/outbreaks', requireAuth, async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('outbreak_alerts')
+      .select('*')
+      .in('status', ['active', 'monitoring'])
+      .order('severity', { ascending: true }) // CRITICAL first
+      .order('case_count', { ascending: false });
+    if (error) throw error;
+    res.json(data || []);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get outbreak history (resolved)
+app.get('/api/outbreaks/history', requireAuth, async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('outbreak_alerts')
+      .select('*')
+      .in('status', ['resolved', 'dismissed'])
+      .order('created_at', { ascending: false })
+      .limit(50);
+    if (error) throw error;
+    res.json(data || []);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Update outbreak status (resolve, dismiss, monitor)
+app.post('/api/outbreaks/:id/update', requireAuth, async (req, res) => {
+  try {
+    const { status, resolved_by, resolve_notes } = req.body;
+    const { error } = await supabase.from('outbreak_alerts').update({
+      status,
+      resolved_by: resolved_by || 'dashboard_user',
+      resolved_at: ['resolved', 'dismissed'].includes(status) ? new Date().toISOString() : null,
+      resolve_notes: resolve_notes || null,
+      updated_at: new Date().toISOString(),
+    }).eq('id', parseInt(req.params.id, 10));
+    if (error) throw error;
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get/update outbreak config
+app.get('/api/outbreaks/config', requireAuth, async (req, res) => {
+  try {
+    const { data, error } = await supabase.from('outbreak_config').select('*').order('id');
+    if (error) throw error;
+    res.json(data || []);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/outbreaks/config', requireAuth, async (req, res) => {
+  try {
+    const { key, value } = req.body;
+    if (!key || value === undefined) return res.status(400).json({ error: 'key and value required' });
+    const { error } = await supabase.from('outbreak_config')
+      .update({ value: String(value), updated_at: new Date().toISOString() })
+      .eq('key', key);
+    if (error) throw error;
+    // Restart scanner with new config
+    startOutbreakScanner();
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Trigger manual scan
+app.post('/api/outbreaks/scan', requireAuth, async (req, res) => {
+  try {
+    await runOutbreakScan();
+    res.json({ success: true, message: 'Scan completed' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
