@@ -1165,6 +1165,188 @@ const WHO_IS_PATIENT_EN =
   '5. 🆘 A stranger who needs help';
 
 // ================================================================
+// RISK FACTOR ASSESSMENT (RFA) — lightweight TEWS proxy
+// ================================================================
+
+const RFA_AGE_QUESTION_EN =
+  '📋 *Quick health check* (helps us assess urgency)\n\n' +
+  'What is the patient\'s age group?\n\n' +
+  '1. Under 5 years\n' +
+  '2. 5 to 64 years\n' +
+  '3. 65 to 79 years\n' +
+  '4. 80 years or older';
+
+const RFA_CONDITIONS_QUESTION_EN =
+  'Does the patient have any of these conditions? (Type the numbers, e.g. *1,3,5*)\n\n' +
+  '1. Diabetes\n' +
+  '2. High blood pressure\n' +
+  '3. Heart disease\n' +
+  '4. HIV positive\n' +
+  '5. Asthma / lung disease\n' +
+  '6. Cancer\n' +
+  '7. Kidney disease\n' +
+  '8. Pregnant\n' +
+  '9. None of the above';
+
+const RFA_FUNCTION_QUESTION_EN =
+  'Can the patient:\n\n' +
+  '1. Walk and drink fluids normally\n' +
+  '2. Walk but struggling to drink\n' +
+  '3. Cannot walk\n' +
+  '4. Cannot walk AND cannot drink';
+
+function calculateRiskScore(rfa) {
+  let score = 0;
+  let factors = [];
+
+  // Age
+  if (rfa.ageGroup === '1') { score += 1; factors.push('Under 5'); }
+  if (rfa.ageGroup === '3') { score += 1; factors.push('Over 65'); }
+  if (rfa.ageGroup === '4') { score += 2; factors.push('Over 80'); }
+
+  // Conditions
+  const conditions = rfa.conditions || [];
+  const condMap = {
+    '1': { name: 'Diabetes', pts: 1 },
+    '2': { name: 'Hypertension', pts: 1 },
+    '3': { name: 'Heart disease', pts: 1 },
+    '4': { name: 'HIV+', pts: 1 },
+    '5': { name: 'Asthma/COPD', pts: 1 },
+    '6': { name: 'Cancer', pts: 1 },
+    '7': { name: 'Kidney disease', pts: 1 },
+    '8': { name: 'Pregnant', pts: 1 },
+  };
+  for (const c of conditions) {
+    if (condMap[c]) { score += condMap[c].pts; factors.push(condMap[c].name); }
+  }
+
+  // Functional status
+  if (rfa.function === '2') { score += 1; factors.push('Cannot drink'); }
+  if (rfa.function === '3') { score += 1; factors.push('Cannot walk'); }
+  if (rfa.function === '4') { score += 2; factors.push('Cannot walk or drink'); }
+
+  return { score, factors };
+}
+
+function applyRiskAdjustment(classification, riskScore) {
+  // RED is never changed
+  if (classification === 'RED') return classification;
+
+  // Risk score thresholds for upgrading
+  if (riskScore >= 4) {
+    // Upgrade one level
+    if (classification === 'GREEN') return 'YELLOW';
+    if (classification === 'YELLOW') return 'ORANGE';
+    if (classification === 'ORANGE') return 'RED';
+  } else if (riskScore >= 2) {
+    // Only upgrade GREEN → YELLOW
+    if (classification === 'GREEN') return 'YELLOW';
+  }
+
+  return classification;
+}
+
+// ================================================================
+// SHARED: Deliver triage result (used by both menu and free-text paths)
+// ================================================================
+
+async function deliverTriageResult(patientId, from, session, lang, classification, category, originalMessage, method) {
+  const followupAnswer = session.pendingFollowupAnswer;
+  const englishSummary = session.pendingEnglishSummary || `Category ${category} (${getCategoryName(category)})${followupAnswer ? `, option ${followupAnswer} selected` : ''}`;
+  const confidence = session.pendingConfidence || 'HIGH';
+  const ruleOverride = session.pendingRuleOverride;
+
+  // Build triage reply
+  let reply = await buildTriageReply(classification, lang);
+
+  // Facility routing
+  const routing = await routePatient(classification, session.location);
+  reply += buildRoutingMessage(routing, lang);
+
+  // Escalation check
+  const esc = needsEscalation(classification, confidence, ruleOverride);
+  if (esc.escalate) {
+    if (classification === 'RED') {
+      const alert = await translateText('A healthcare worker has been alerted and will follow up with you.', lang);
+      reply += `\n\n${alert}`;
+    } else if (confidence === 'LOW' || confidence === 'MEDIUM') {
+      const reviewNote = await translateText('Note: A healthcare worker will review your case for accuracy.', lang);
+      reply += `\n\n${reviewNote}`;
+    }
+  }
+
+  // Add risk factor note if adjusted
+  if (session.rfaScore && session.rfaScore >= 2 && session.rfaOriginalLevel && session.rfaOriginalLevel !== classification) {
+    reply += `\n\n📋 Risk factors considered: ${session.rfaFactors.join(', ')}`;
+  }
+
+  await sendWhatsAppMessage(from, reply);
+
+  // Build enhanced summary
+  let fullSummary = session.onBehalfOf ? `On behalf of ${session.onBehalfOf}. ` : '';
+  fullSummary += englishSummary;
+  if (session.rfaScore && session.rfaScore >= 1) {
+    fullSummary += ` | RFA score: ${session.rfaScore} (${session.rfaFactors.join(', ')})`;
+    if (session.rfaOriginalLevel && session.rfaOriginalLevel !== classification) {
+      fullSummary += ` | Upgraded from ${session.rfaOriginalLevel} to ${classification}`;
+    }
+  }
+
+  // Log to database
+  const logId = await logTriage({
+    patient_id: patientId,
+    phone_hash: patientId,
+    language: lang,
+    original_message: originalMessage,
+    english_summary: fullSummary,
+    triage_level: classification,
+    confidence,
+    method,
+    category,
+    followup_answer: followupAnswer || null,
+    escalation: esc.escalate,
+    escalation_reason: esc.reason,
+    pathway: routing.pathway,
+    facility_name: routing.facility?.name || null,
+    facility_id: routing.facility?.id || null,
+    location: session.location || null,
+    needs_human_review: esc.escalate,
+    on_behalf_of: session.onBehalfOf || null,
+  });
+
+  // Schedule follow-up
+  await scheduleFollowUp(patientId, from, classification, logId);
+
+  // ORANGE → transport question
+  if (classification === 'ORANGE') {
+    session.step = 'transport_select';
+    session.lastTriageLogId = logId;
+    session.lastRouting = routing;
+    // Clean up pending fields
+    delete session.pendingClassification; delete session.pendingCategory;
+    delete session.pendingFollowupAnswer; delete session.pendingMethod;
+    delete session.pendingOriginalMessage; delete session.pendingEnglishSummary;
+    delete session.pendingConfidence; delete session.pendingRuleOverride;
+    delete session.rfa; delete session.rfaScore; delete session.rfaFactors; delete session.rfaOriginalLevel;
+    await saveSession(patientId, session);
+    const transportQ = await translateText(TRANSPORT_QUESTION_EN, lang);
+    await sendWhatsAppMessage(from, transportQ);
+    return;
+  }
+
+  // All other levels → post-triage
+  session.step = 'post_triage';
+  delete session.pendingClassification; delete session.pendingCategory;
+  delete session.pendingFollowupAnswer; delete session.pendingMethod;
+  delete session.pendingOriginalMessage; delete session.pendingEnglishSummary;
+  delete session.pendingConfidence; delete session.pendingRuleOverride;
+  delete session.rfa; delete session.rfaScore; delete session.rfaFactors; delete session.rfaOriginalLevel;
+  await saveSession(patientId, session);
+  const postPrompt = await translateText(POST_TRIAGE_PROMPT_EN, lang);
+  await sendWhatsAppMessage(from, postPrompt);
+}
+
+// ================================================================
 // ORCHESTRATOR — routes each message through the agent pipeline
 // ================================================================
 
@@ -1185,7 +1367,7 @@ async function orchestrate(from, text, session) {
   }
 
   // ── AGENT 6: CHECK FOR PENDING FOLLOW-UP RESPONSE ─────────
-  if (session.step !== 'language_select' && session.step !== 'consent' && session.step !== 'location_request' && session.step !== 'transport_select' && session.step !== 'who_is_patient') {
+  if (session.step !== 'language_select' && session.step !== 'consent' && session.step !== 'location_request' && session.step !== 'transport_select' && session.step !== 'who_is_patient' && session.step !== 'rfa_age' && session.step !== 'rfa_conditions' && session.step !== 'rfa_function') {
     const handled = await handleFollowUpResponse(patientId, session, normalized);
     if (handled) return;
   }
@@ -1385,62 +1567,22 @@ async function orchestrate(from, text, session) {
       await sendWhatsAppMessage(from, crisisMsg);
     }
 
-    // Build and send triage reply
-    let reply = await buildTriageReply(classification, lang);
-
-    // AGENT 4: Facility routing
-    const routing = await routePatient(classification, session.location);
-    reply += buildRoutingMessage(routing, lang);
-
-    // AGENT 5: Escalation check
-    const esc = needsEscalation(classification, 'HIGH', null);
-    if (esc.escalate && classification === 'RED') {
-      const alert = await translateText('A healthcare worker has been alerted and will follow up with you.', lang);
-      reply += `\n\n${alert}`;
-    }
-
-    await sendWhatsAppMessage(from, reply);
-
-    // Log to database
-    const logId = await logTriage({
-      patient_id: patientId,
-      phone_hash: patientId,
-      language: lang,
-      original_message: `Category ${category}, answer ${text.trim()}`,
-      english_summary: `${session.onBehalfOf ? `On behalf of ${session.onBehalfOf}. ` : ''}Category ${category} (${getCategoryName(category)}), option ${text.trim()} selected.`,
-      triage_level: classification,
-      confidence: 'HIGH',
-      method: 'menu',
-      category,
-      followup_answer: text.trim(),
-      escalation: esc.escalate,
-      escalation_reason: esc.reason,
-      pathway: routing.pathway,
-      facility_name: routing.facility?.name || null,
-      facility_id: routing.facility?.id || null,
-      location: session.location || null,
-      needs_human_review: esc.escalate,
-      on_behalf_of: session.onBehalfOf || null,
-    });
-
-    // AGENT 6: Schedule follow-up
-    await scheduleFollowUp(patientId, from, classification, logId);
-
-    // ORANGE cases → ask about transport
-    if (classification === 'ORANGE') {
-      session.step = 'transport_select';
-      session.lastTriageLogId = logId;
-      session.lastRouting = routing;
-      await saveSession(patientId, session);
-      const transportQ = await translateText(TRANSPORT_QUESTION_EN, lang);
-      await sendWhatsAppMessage(from, transportQ);
+    // RED cases skip RFA — go straight to result (seconds matter)
+    if (classification === 'RED') {
+      await deliverTriageResult(patientId, from, session, lang, classification, category, text.trim(), 'menu');
       return;
     }
 
-    session.step = 'post_triage';
+    // Non-RED: collect risk factors before delivering result
+    session.step = 'rfa_age';
+    session.pendingClassification = classification;
+    session.pendingCategory = category;
+    session.pendingFollowupAnswer = text.trim();
+    session.pendingMethod = 'menu';
+    session.rfa = {};
     await saveSession(patientId, session);
-    const postPrompt = await translateText(POST_TRIAGE_PROMPT_EN, lang);
-    await sendWhatsAppMessage(from, postPrompt);
+    const ageQ = await translateText(RFA_AGE_QUESTION_EN, lang);
+    await sendWhatsAppMessage(from, ageQ);
     return;
   }
 
@@ -1449,63 +1591,99 @@ async function orchestrate(from, text, session) {
     let triage = await claudeTriage(text);
     triage = applyClinicalRules(text, triage);
 
-    let reply = await buildTriageReply(triage.classification, lang);
-
-    // AGENT 4: Routing
-    const routing = await routePatient(triage.classification, session.location);
-    reply += buildRoutingMessage(routing, lang);
-
-    // AGENT 5: Escalation
-    const esc = needsEscalation(triage.classification, triage.confidence, triage.ruleOverride);
-    if (esc.escalate) {
-      if (triage.classification === 'RED') {
-        const alert = await translateText('A healthcare worker has been alerted and will follow up with you.', lang);
-        reply += `\n\n${alert}`;
-      } else {
-        const reviewNote = await translateText('Note: A healthcare worker will review your case for accuracy.', lang);
-        reply += `\n\n${reviewNote}`;
-      }
-    }
-
-    await sendWhatsAppMessage(from, reply);
-
-    const logId = await logTriage({
-      patient_id: patientId,
-      phone_hash: patientId,
-      language: lang,
-      original_message: text,
-      english_summary: `${session.onBehalfOf ? `On behalf of ${session.onBehalfOf}. ` : ''}${triage.englishSummary}`,
-      triage_level: triage.classification,
-      confidence: triage.confidence,
-      method: triage.ruleOverride ? 'rule_override' : 'free_text',
-      category: '12',
-      escalation: esc.escalate,
-      escalation_reason: esc.reason,
-      pathway: routing.pathway,
-      facility_name: routing.facility?.name || null,
-      facility_id: routing.facility?.id || null,
-      location: session.location || null,
-      needs_human_review: esc.escalate,
-      on_behalf_of: session.onBehalfOf || null,
-    });
-
-    await scheduleFollowUp(patientId, from, triage.classification, logId);
-
-    // ORANGE cases → ask about transport
-    if (triage.classification === 'ORANGE') {
-      session.step = 'transport_select';
-      session.lastTriageLogId = logId;
-      session.lastRouting = routing;
-      await saveSession(patientId, session);
-      const transportQ = await translateText(TRANSPORT_QUESTION_EN, lang);
-      await sendWhatsAppMessage(from, transportQ);
+    // RED cases skip RFA
+    if (triage.classification === 'RED') {
+      session.pendingEnglishSummary = triage.englishSummary;
+      session.pendingConfidence = triage.confidence;
+      session.pendingRuleOverride = triage.ruleOverride;
+      await deliverTriageResult(patientId, from, session, lang, triage.classification, '12', text, triage.ruleOverride ? 'rule_override' : 'free_text');
       return;
     }
 
-    session.step = 'post_triage';
+    // Non-RED: collect risk factors
+    session.step = 'rfa_age';
+    session.pendingClassification = triage.classification;
+    session.pendingCategory = '12';
+    session.pendingFollowupAnswer = null;
+    session.pendingMethod = triage.ruleOverride ? 'rule_override' : 'free_text';
+    session.pendingOriginalMessage = text;
+    session.pendingEnglishSummary = triage.englishSummary;
+    session.pendingConfidence = triage.confidence;
+    session.pendingRuleOverride = triage.ruleOverride;
+    session.rfa = {};
     await saveSession(patientId, session);
-    const postPrompt = await translateText(POST_TRIAGE_PROMPT_EN, lang);
-    await sendWhatsAppMessage(from, postPrompt);
+    const ageQ = await translateText(RFA_AGE_QUESTION_EN, lang);
+    await sendWhatsAppMessage(from, ageQ);
+    return;
+  }
+
+  // ── RISK FACTOR ASSESSMENT STEPS ───────────────────────────
+  if (session.step === 'rfa_age') {
+    if (!['1', '2', '3', '4'].includes(normalized)) {
+      const ageQ = await translateText(RFA_AGE_QUESTION_EN, lang);
+      await sendWhatsAppMessage(from, ageQ);
+      return;
+    }
+    session.rfa = session.rfa || {};
+    session.rfa.ageGroup = normalized;
+    session.step = 'rfa_conditions';
+    await saveSession(patientId, session);
+    const condQ = await translateText(RFA_CONDITIONS_QUESTION_EN, lang);
+    await sendWhatsAppMessage(from, condQ);
+    return;
+  }
+
+  if (session.step === 'rfa_conditions') {
+    session.rfa = session.rfa || {};
+    // Parse comma-separated or single number
+    const parts = normalized.replace(/\s/g, '').split(/[,;]+/).filter(p => /^[1-9]$/.test(p));
+    if (parts.includes('9') || parts.length === 0) {
+      session.rfa.conditions = [];
+    } else {
+      session.rfa.conditions = parts.filter(p => p !== '9');
+    }
+    session.step = 'rfa_function';
+    await saveSession(patientId, session);
+    const funcQ = await translateText(RFA_FUNCTION_QUESTION_EN, lang);
+    await sendWhatsAppMessage(from, funcQ);
+    return;
+  }
+
+  if (session.step === 'rfa_function') {
+    if (!['1', '2', '3', '4'].includes(normalized)) {
+      const funcQ = await translateText(RFA_FUNCTION_QUESTION_EN, lang);
+      await sendWhatsAppMessage(from, funcQ);
+      return;
+    }
+    session.rfa = session.rfa || {};
+    session.rfa.function = normalized;
+
+    // Calculate risk score and apply adjustment
+    const { score, factors } = calculateRiskScore(session.rfa);
+    const originalClass = session.pendingClassification;
+    const adjustedClass = applyRiskAdjustment(originalClass, score);
+
+    // Notify patient if upgraded
+    if (adjustedClass !== originalClass) {
+      const upgradeMsg = await translateText(
+        `⚠️ Based on your health profile (${factors.join(', ')}), we are increasing the urgency of your case.`,
+        lang
+      );
+      await sendWhatsAppMessage(from, upgradeMsg);
+    }
+
+    // Deliver the final triage result
+    const category = session.pendingCategory || '12';
+    const followupAnswer = session.pendingFollowupAnswer;
+    const method = session.pendingMethod || 'menu';
+    const originalMessage = session.pendingOriginalMessage || `Category ${category}, answer ${followupAnswer}`;
+
+    // Store RFA data for logging
+    session.rfaScore = score;
+    session.rfaFactors = factors;
+    session.rfaOriginalLevel = originalClass;
+
+    await deliverTriageResult(patientId, from, session, lang, adjustedClass, category, originalMessage, method);
     return;
   }
 
