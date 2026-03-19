@@ -71,12 +71,24 @@
     <div class="chart-card"><h3>Symptom categories</h3><div style="position:relative;height:170px"><canvas id="cCat"></canvas></div></div>
   </div>
   <div class="chart-card" style="margin-bottom:16px"><h3>Outcomes by triage level</h3><div id="outcomeByLevel"></div></div>
+
+  <!-- Outbreak Alert Banner -->
+  <div id="outbreakBanner" style="display:none;background:#ef44441a;border:1px solid #ef444440;border-radius:var(--radius);padding:14px 18px;margin-bottom:16px">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+      <div style="display:flex;align-items:center;gap:8px"><span style="font-size:18px">🚨</span><span style="font-size:14px;font-weight:700;color:var(--red)">OUTBREAK ALERT</span><span id="outbreakCount" class="badge">0</span></div>
+      <button class="btn" onclick="document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));document.querySelector('[data-tab=outbreaks]').classList.add('active');currentTab='outbreaks';renderTab();" style="font-size:11px">View details</button>
+    </div>
+    <div id="outbreakSummary" style="font-size:12px;color:var(--text-muted);margin-top:6px"></div>
+  </div>
+
   <div class="section">
     <div class="tabs">
       <div class="tab active" data-tab="escalations">Escalations <span class="badge" id="escBadge" style="display:none">0</span></div>
+      <div class="tab" data-tab="outbreaks">Outbreaks <span class="badge" id="outbreakBadge" style="display:none;background:#f97316">0</span></div>
       <div class="tab" data-tab="logs">Recent logs</div>
       <div class="tab" data-tab="facilities">Facilities</div>
       <div class="tab" data-tab="followups">Follow-ups</div>
+      <div class="tab" data-tab="outbreak_config">Config</div>
     </div>
     <div class="table-wrap" id="tabContent"><div class="empty-state">Loading...</div></div>
   </div>
@@ -90,12 +102,20 @@ document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>{doc
 function timeAgo(ts){const m=Math.floor((Date.now()-new Date(ts).getTime())/60000);if(m<1)return'now';if(m<60)return m+'m';const h=Math.floor(m/60);if(h<24)return h+'h';return Math.floor(h/24)+'d';}
 function esc(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 async function af(u){const r=await fetch(u);if(r.status===401){location.href='/login';throw new Error('401');}return r.json();}
-let sD,eD=[],lD=[],fD=[],fuD=[],charts={};
+let sD,eD=[],lD=[],fD=[],fuD=[],obD=[],obConf=[],charts={};
 async function fetchAll(){try{
-const[s,e,ec,l,f,fu,tl,hr,loc,out,cat]=await Promise.all([af(`${API}/api/stats`),af(`${API}/api/escalations`),af(`${API}/api/escalations/count`),af(`${API}/api/logs?limit=50`),af(`${API}/api/facilities`),af(`${API}/api/follow-ups`),af(`${API}/api/analytics/timeline?days=30`),af(`${API}/api/analytics/hourly`),af(`${API}/api/analytics/locations`),af(`${API}/api/analytics/outcomes`),af(`${API}/api/analytics/categories`)]);
-sD=s;eD=e;lD=l;fD=f;fuD=fu;
+const[s,e,ec,l,f,fu,tl,hr,loc,out,cat,ob,obc]=await Promise.all([af(`${API}/api/stats`),af(`${API}/api/escalations`),af(`${API}/api/escalations/count`),af(`${API}/api/logs?limit=50`),af(`${API}/api/facilities`),af(`${API}/api/follow-ups`),af(`${API}/api/analytics/timeline?days=30`),af(`${API}/api/analytics/hourly`),af(`${API}/api/analytics/locations`),af(`${API}/api/analytics/outcomes`),af(`${API}/api/analytics/categories`),af(`${API}/api/outbreaks`),af(`${API}/api/outbreaks/config`)]);
+sD=s;eD=e;lD=l;fD=f;fuD=fu;obD=ob;obConf=obc;
 $('sT').textContent=s.total||0;$('s24').textContent=s.last24h||0;$('sE').textContent=ec.count||0;$('sR').textContent=s.byLevel?.RED||0;$('sFR').textContent=(out?.responseRate||0)+'%';
 const b=$('escBadge');if(ec.count>0){b.textContent=ec.count;b.style.display='inline';}else b.style.display='none';
+// Outbreak banner
+const obBanner=$('outbreakBanner'),obBadge=$('outbreakBadge');
+if(ob&&ob.length>0){obBanner.style.display='block';$('outbreakCount').textContent=ob.length;
+const crit=ob.filter(o=>o.severity==='CRITICAL').length;const warn=ob.filter(o=>o.severity==='WARNING').length;
+$('outbreakSummary').textContent=`${crit?crit+' CRITICAL, ':''}${warn?warn+' WARNING, ':''}${ob.length} active cluster${ob.length>1?'s':''}`;
+obBanner.style.background=crit?'#ef44441a':'#f973161a';obBanner.style.borderColor=crit?'#ef444440':'#f9731640';
+obBadge.textContent=ob.length;obBadge.style.display='inline';obBadge.style.background=crit?'#ef4444':'#f97316';
+}else{obBanner.style.display='none';obBadge.style.display='none';}
 rTimeline(tl);rLevel(s.byLevel||{});rOutcome(out);rHourly(hr);rCategory(cat);rOutByLevel(out);renderTab();
 $('lastUpdated').textContent='Updated '+new Date().toLocaleTimeString();
 }catch(e){console.error(e);}}
@@ -150,13 +170,59 @@ c.innerHTML=`<table><tr><th>Time</th><th>Level</th><th>Method</th><th>Cat</th><t
 if(currentTab==='facilities'){c.innerHTML=`<table><tr><th>Name</th><th>Type</th><th>Queue</th><th>Cap</th><th>Wait</th><th>Address</th></tr>${fD.map(f=>{const ld=f.capacity>0?(f.current_queue/f.capacity*100).toFixed(0):0;const lc=ld>80?'var(--red)':ld>50?'var(--yellow)':'var(--green)';return`<tr><td style="font-weight:600">${f.name}</td><td>${f.type}</td><td style="color:${lc};font-weight:600">${f.current_queue}</td><td>${f.capacity}</td><td>${f.wait_time_minutes}m</td><td style="color:var(--text-muted)">${f.address||'—'}</td></tr>`;}).join('')}</table>`;return;}
 
 if(currentTab==='followups'){if(!fuD.length){c.innerHTML='<div class="empty-state">No follow-ups</div>';return;}
-const rm={'1':'Better','2':'Same','3':'Worse','4':'Visited'};c.innerHTML=`<table><tr><th>Scheduled</th><th>Status</th><th>Level</th><th>Response</th><th>Sent</th><th>Done</th></tr>${fuD.map(f=>{const sc=f.status==='completed'?'var(--green)':f.status==='sent'?'var(--yellow)':'var(--text-muted)';return`<tr><td class="time-ago">${timeAgo(f.scheduled_at)}</td><td style="color:${sc};font-weight:600;font-size:10px;text-transform:uppercase">${f.status}</td><td><span class="level-pill level-${f.triage_level}">${f.triage_level}</span></td><td>${rm[f.response]||f.response||'—'}</td><td class="time-ago">${f.sent_at?timeAgo(f.sent_at):'—'}</td><td class="time-ago">${f.completed_at?timeAgo(f.completed_at):'—'}</td></tr>`;}).join('')}</table>`;return;}}
+const rm={'1':'Better','2':'Same','3':'Worse','4':'Visited'};c.innerHTML=`<table><tr><th>Scheduled</th><th>Status</th><th>Level</th><th>Response</th><th>Sent</th><th>Done</th></tr>${fuD.map(f=>{const sc=f.status==='completed'?'var(--green)':f.status==='sent'?'var(--yellow)':'var(--text-muted)';return`<tr><td class="time-ago">${timeAgo(f.scheduled_at)}</td><td style="color:${sc};font-weight:600;font-size:10px;text-transform:uppercase">${f.status}</td><td><span class="level-pill level-${f.triage_level}">${f.triage_level}</span></td><td>${rm[f.response]||f.response||'—'}</td><td class="time-ago">${f.sent_at?timeAgo(f.sent_at):'—'}</td><td class="time-ago">${f.completed_at?timeAgo(f.completed_at):'—'}</td></tr>`;}).join('')}</table>`;return;}
+
+if(currentTab==='outbreaks'){
+if(!obD.length){c.innerHTML='<div class="empty-state">No active outbreak clusters detected. The system scans automatically every 15 minutes.</div>';return;}
+c.innerHTML=obD.map(o=>{
+const sevC={CRITICAL:'var(--red)',WARNING:'var(--orange)',WATCH:'var(--yellow)'};
+const sevE={CRITICAL:'🔴',WARNING:'🟠',WATCH:'🟡'};
+const bc=sevC[o.severity]||'var(--border)';
+const mapsLink=`https://www.google.com/maps/@${o.center_lat},${o.center_lng},14z`;
+return`<div style="border-left:4px solid ${bc};padding:16px 18px;border-bottom:1px solid var(--border)">
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:6px">
+<div style="display:flex;align-items:center;gap:8px"><span style="font-size:16px">${sevE[o.severity]||'🔔'}</span><span style="font-size:14px;font-weight:700;color:${bc}">${o.severity}</span><span style="font-size:12px;color:var(--text-muted)">#${o.id}</span></div>
+<span class="time-ago">${timeAgo(o.created_at)}</span>
+</div>
+<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:12px">
+<div style="background:var(--surface-2);border-radius:6px;padding:10px;text-align:center"><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;margin-bottom:2px">Cases</div><div style="font-size:22px;font-weight:700;font-family:'JetBrains Mono',monospace;color:${bc}">${o.case_count}</div></div>
+<div style="background:var(--surface-2);border-radius:6px;padding:10px;text-align:center"><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;margin-bottom:2px">Category</div><div style="font-size:13px;font-weight:600">${o.category_name||CN[o.category]||o.category}</div></div>
+<div style="background:var(--surface-2);border-radius:6px;padding:10px;text-align:center"><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;margin-bottom:2px">Radius</div><div style="font-size:13px;font-weight:600">${o.radius_km}km / ${o.time_window_hrs}hrs</div></div>
+</div>
+<div style="margin-bottom:10px"><a href="${mapsLink}" target="_blank" style="font-size:12px;color:var(--accent)">📍 View cluster area on map</a></div>
+<details style="margin-bottom:10px"><summary style="font-size:11px;color:var(--text-muted);cursor:pointer;text-transform:uppercase">View full report</summary><pre style="font-size:11px;background:var(--bg);padding:12px;border-radius:6px;border:1px solid var(--border);margin-top:6px;white-space:pre-wrap;color:var(--text);max-height:300px;overflow-y:auto">${esc(o.report||'No report generated')}</pre></details>
+<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+<button class="btn" onclick="updateOutbreak(${o.id},'monitoring')" style="font-size:10px;padding:3px 8px">👁 Monitor</button>
+<button class="btn" onclick="updateOutbreak(${o.id},'resolved')" style="font-size:10px;padding:3px 8px;background:var(--green);border-color:var(--green);color:#fff">✓ Resolved</button>
+<button class="btn" onclick="updateOutbreak(${o.id},'dismissed')" style="font-size:10px;padding:3px 8px">✕ Dismiss</button>
+<button class="btn btn-primary" onclick="triggerScan()" style="font-size:10px;padding:3px 8px">🔄 Re-scan now</button>
+</div>
+</div>`;}).join('');return;}
+
+if(currentTab==='outbreak_config'){
+const cfgDesc={min_cases:'Minimum cases for WATCH alert',warning_cases:'Cases for WARNING escalation',critical_cases:'Cases for CRITICAL escalation',time_window_hrs:'Time window (hours)',radius_km:'Geographic radius (km)',scan_interval_mins:'Scan interval (minutes)',enabled:'Outbreak detection enabled'};
+c.innerHTML=`<div style="padding:16px 20px"><h3 style="font-size:13px;font-weight:600;color:var(--text-muted);text-transform:uppercase;margin-bottom:14px">Outbreak detection settings</h3>
+${obConf.map(cfg=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border)">
+<div><div style="font-size:13px;font-weight:500">${cfgDesc[cfg.key]||cfg.key}</div><div style="font-size:11px;color:var(--text-muted)">${cfg.key}</div></div>
+<div style="display:flex;gap:6px;align-items:center">
+<input id="cfg-${cfg.key}" value="${esc(cfg.value)}" style="width:80px;padding:4px 8px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:12px;text-align:center;outline:none;font-family:'JetBrains Mono',monospace">
+<button class="btn" onclick="saveConfig('${cfg.key}')" style="font-size:10px;padding:3px 8px">Save</button>
+</div></div>`).join('')}
+<div style="margin-top:16px;display:flex;gap:8px"><button class="btn btn-primary" onclick="triggerScan()" style="font-size:11px">🔄 Run outbreak scan now</button></div>
+</div>`;return;}}
 
 async function loadDS(id){try{const d=await af(`${API}/api/dispatch/${id}`);const el=$(`ds-${id}`);if(!el||!d?.status)return;const sl={pending:'Pending',called_10177:'Called 10177',called_er24:'ER24',called_netcare:'Netcare',self_transport:'Self',dispatched:'Dispatched',en_route:'En route',arrived:'Arrived',patient_handed_over:'Done'};let h=`<span style="font-weight:600;color:var(--accent)">${sl[d.status]||d.status}</span>`;if(d.reference_number)h+=` Ref:${d.reference_number}`;if(d.nurse_name)h+=` — ${d.nurse_name}`;el.innerHTML=h;const r=$(`dr-${id}`),n=$(`dn-${id}`);if(r&&d.reference_number)r.value=d.reference_number;if(n&&d.nurse_name)n.value=d.nurse_name;}catch(e){}}
 
 async function dispatch(id,status,svc){const r=$(`dr-${id}`),n=$(`dn-${id}`),s=$(`ds-${id}`);const nm=n?n.value.trim():'';if(!nm){alert('Enter your name first.');if(n)n.focus();return;}if(!confirm(`Update: ${status.replace(/_/g,' ')}?\nPatient+supervisor notified.`))return;if(s)s.innerHTML='<span style="color:var(--yellow)">...</span>';try{await fetch(`${API}/api/dispatch`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({triage_log_id:id,status,service:svc||null,reference_number:r?r.value.trim():null,nurse_name:nm})});await loadDS(id);}catch(e){if(s)s.innerHTML='<span style="color:var(--red)">Failed</span>';}}
 
 async function markReviewed(id){const n=$(`notes-${id}`),notes=n?n.value.trim():'';if(!confirm(`Mark #${id} reviewed?${notes?'\n'+notes:''}`))return;try{await fetch(`${API}/api/escalations/${id}/review`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({reviewed_by:'dashboard_user',review_notes:notes||null})});fetchAll();}catch(e){console.error(e);}}
+
+async function updateOutbreak(id,status){const notes=prompt(`${status==='resolved'?'Resolution':'Dismissal'} notes (optional):`)||'';
+try{await fetch(`${API}/api/outbreaks/${id}/update`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({status,resolve_notes:notes||null})});fetchAll();}catch(e){console.error(e);}}
+
+async function triggerScan(){try{const r=await fetch(`${API}/api/outbreaks/scan`,{method:'POST'});const d=await r.json();alert(d.message||'Scan complete');fetchAll();}catch(e){alert('Scan failed');}}
+
+async function saveConfig(key){const el=$(`cfg-${key}`);if(!el)return;try{await fetch(`${API}/api/outbreaks/config`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key,value:el.value})});alert('Saved');fetchAll();}catch(e){alert('Save failed');}}
 
 fetchAll();setInterval(fetchAll,30000);
 </script>
