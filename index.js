@@ -1213,7 +1213,7 @@ app.get('/api/stats', requireAuth, async (req, res) => {
   }
 });
 
-// Escalation queue — cases needing human review
+// Escalation queue — cases needing human review (enriched with patient phone)
 app.get('/api/escalations', requireAuth, async (req, res) => {
   try {
     const { data, error } = await supabase
@@ -1224,7 +1224,22 @@ app.get('/api/escalations', requireAuth, async (req, res) => {
       .order('created_at', { ascending: false })
       .limit(100);
     if (error) throw error;
-    res.json(data || []);
+
+    // Enrich with patient phone numbers from sessions
+    const enriched = [];
+    for (const log of (data || [])) {
+      let phone = null;
+      if (log.patient_id) {
+        const { data: sess } = await supabase
+          .from('sessions')
+          .select('data')
+          .eq('patient_id', log.patient_id)
+          .maybeSingle();
+        phone = sess?.data?.phone || null;
+      }
+      enriched.push({ ...log, patient_phone: phone });
+    }
+    res.json(enriched);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -1311,6 +1326,170 @@ app.get('/api/follow-ups', requireAuth, async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
+// ================================================================
+// DISPATCH TRACKING API
+// ================================================================
+
+// Get dispatch status for a triage log
+app.get('/api/dispatch/:triageLogId', requireAuth, async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('dispatch_log')
+      .select('*')
+      .eq('triage_log_id', parseInt(req.params.triageLogId, 10))
+      .order('updated_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (error) throw error;
+    res.json(data || null);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Create or update dispatch record
+app.post('/api/dispatch', requireAuth, async (req, res) => {
+  try {
+    const { triage_log_id, status, service, reference_number, nurse_name, notes } = req.body;
+    if (!triage_log_id || !status) {
+      return res.status(400).json({ error: 'triage_log_id and status are required' });
+    }
+
+    // Get patient info from triage log + session
+    const { data: triageLog } = await supabase
+      .from('triage_logs')
+      .select('*')
+      .eq('id', triage_log_id)
+      .single();
+
+    let patientPhone = null;
+    let patientLocation = null;
+    let mapsLink = null;
+    if (triageLog?.patient_id) {
+      const { data: sess } = await supabase
+        .from('sessions')
+        .select('data')
+        .eq('patient_id', triageLog.patient_id)
+        .maybeSingle();
+      patientPhone = sess?.data?.phone || null;
+      if (sess?.data?.location) {
+        patientLocation = sess.data.location;
+        mapsLink = `https://www.google.com/maps/dir/?api=1&destination=${patientLocation.latitude},${patientLocation.longitude}`;
+      }
+    }
+
+    // Check for existing dispatch record
+    const { data: existing } = await supabase
+      .from('dispatch_log')
+      .select('id')
+      .eq('triage_log_id', triage_log_id)
+      .maybeSingle();
+
+    let dispatch;
+    if (existing) {
+      // Update existing
+      const { data, error } = await supabase
+        .from('dispatch_log')
+        .update({
+          status,
+          service: service || null,
+          reference_number: reference_number || null,
+          nurse_name: nurse_name || null,
+          notes: notes || null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', existing.id)
+        .select()
+        .single();
+      if (error) throw error;
+      dispatch = data;
+    } else {
+      // Create new
+      const { data, error } = await supabase
+        .from('dispatch_log')
+        .insert({
+          triage_log_id,
+          patient_id: triageLog?.patient_id || 'unknown',
+          patient_phone: patientPhone,
+          status,
+          service: service || null,
+          reference_number: reference_number || null,
+          nurse_name: nurse_name || null,
+          notes: notes || null,
+          patient_location: patientLocation,
+          maps_link: mapsLink,
+        })
+        .select()
+        .single();
+      if (error) throw error;
+      dispatch = data;
+    }
+
+    // Send WhatsApp notifications
+    await sendDispatchNotifications(dispatch, triageLog, patientPhone, mapsLink);
+
+    res.json(dispatch);
+  } catch (err) {
+    console.error('Dispatch error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Dispatch notification logic
+async function sendDispatchNotifications(dispatch, triageLog, patientPhone, mapsLink) {
+  const statusMessages = {
+    called_10177:    { patient: '🚑 An ambulance has been requested for you via 10177. Please stay where you are and keep your phone nearby.', supervisor: '📞 Nurse called 10177' },
+    called_er24:     { patient: '🚑 An ER24 ambulance has been requested for you. Please stay where you are and keep your phone nearby.', supervisor: '📞 Nurse called ER24' },
+    called_netcare:  { patient: '🚑 A Netcare 911 ambulance has been requested for you. Please stay where you are and keep your phone nearby.', supervisor: '📞 Nurse called Netcare 911' },
+    self_transport:  { patient: '🚗 We understand you are arranging your own transport. Please get to the nearest hospital emergency unit as quickly as possible.', supervisor: '🚗 Patient self-transporting' },
+    dispatched:      { patient: '✅ An ambulance has been dispatched and is on its way to you.', supervisor: '✅ Ambulance dispatched' },
+    en_route:        { patient: '🚑 The ambulance is en route to your location. Please stay calm and keep your phone nearby.', supervisor: '🚑 Ambulance en route' },
+    arrived:         { patient: '🏥 The ambulance has arrived. Please follow the paramedics\' instructions.', supervisor: '🏥 Ambulance arrived at patient' },
+    patient_handed_over: { patient: '✅ You have been handed over to the medical team. We wish you a speedy recovery.', supervisor: '✅ Patient handed over to medical team' },
+    cancelled:       { patient: null, supervisor: '❌ Dispatch cancelled' },
+  };
+
+  const msgs = statusMessages[dispatch.status];
+  if (!msgs) return;
+
+  const timestamp = new Date().toLocaleString('en-ZA', { timeZone: 'Africa/Johannesburg' });
+
+  // Notify patient
+  if (msgs.patient && patientPhone) {
+    let patientMsg = msgs.patient;
+    if (dispatch.reference_number) {
+      patientMsg += `\n\n📋 Reference: ${dispatch.reference_number}`;
+    }
+    if (mapsLink && ['self_transport'].includes(dispatch.status)) {
+      patientMsg += `\n\n📍 Hospital directions: ${mapsLink}`;
+    }
+    try {
+      await sendWhatsAppMessage(patientPhone, patientMsg);
+      console.log(`[dispatch] Patient notified: ${dispatch.status}`);
+    } catch (err) {
+      console.error('[dispatch] Patient notification failed:', err.message);
+    }
+  }
+
+  // Notify supervisor
+  if (ALERT_PHONE) {
+    let supervisorMsg = `🚑 *DISPATCH UPDATE — Log #${dispatch.triage_log_id}*\n`;
+    supervisorMsg += `${msgs.supervisor}\n`;
+    supervisorMsg += `🕐 ${timestamp}\n`;
+    if (dispatch.nurse_name) supervisorMsg += `👩‍⚕️ Nurse: ${dispatch.nurse_name}\n`;
+    if (dispatch.service) supervisorMsg += `🏥 Service: ${dispatch.service}\n`;
+    if (dispatch.reference_number) supervisorMsg += `📋 Ref: ${dispatch.reference_number}\n`;
+    if (dispatch.notes) supervisorMsg += `📝 Notes: ${dispatch.notes}\n`;
+    if (mapsLink) supervisorMsg += `📍 Patient location: ${mapsLink}`;
+    try {
+      await sendWhatsAppMessage(ALERT_PHONE, supervisorMsg);
+      console.log(`[dispatch] Supervisor notified: ${dispatch.status}`);
+    } catch (err) {
+      console.error('[dispatch] Supervisor notification failed:', err.message);
+    }
+  }
+}
 
 // ================================================================
 // START
