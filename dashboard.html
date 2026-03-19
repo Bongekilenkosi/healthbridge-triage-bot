@@ -503,22 +503,57 @@ function renderTab() {
       container.innerHTML = '<div class="empty-state">No pending escalations ✅</div>';
       return;
     }
-    container.innerHTML = `<table>
-      <tr>
-        <th>Time</th><th>Level</th><th>Reason</th><th>Summary</th><th>Lang</th><th>Confidence</th><th>Action</th>
-      </tr>
-      ${escalationsData.map(e => `
-        <tr>
-          <td class="time-ago">${timeAgo(e.created_at)}</td>
-          <td><span class="level-pill level-${e.triage_level}">${e.triage_level}</span></td>
-          <td style="font-size:12px">${e.escalation_reason || '—'}</td>
-          <td class="summary-text" title="${esc(e.english_summary || e.original_message || '')}">${esc(e.english_summary || e.original_message || '—')}</td>
-          <td>${e.language || '—'}</td>
-          <td class="conf-${e.confidence || 'LOW'}">${e.confidence || '—'}</td>
-          <td><button class="btn btn-primary" onclick="markReviewed(${e.id})">✓ Review</button></td>
-        </tr>
-      `).join('')}
-    </table>`;
+    container.innerHTML = escalationsData.map(e => {
+      const levelColors = { RED:'var(--red)', ORANGE:'var(--orange)', YELLOW:'var(--yellow)', GREEN:'var(--green)', BLUE:'var(--blue)', HUMAN_REQUEST:'#a855f7', RECHECK:'var(--orange)' };
+      const borderColor = levelColors[e.triage_level] || 'var(--border)';
+      return `
+      <div class="esc-card" style="border-left:3px solid ${borderColor}; padding:16px 20px; border-bottom:1px solid var(--border);">
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap;">
+          <div style="flex:1; min-width:250px;">
+            <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
+              <span class="level-pill level-${e.triage_level}">${e.triage_level}</span>
+              <span class="time-ago">${timeAgo(e.created_at)}</span>
+              <span style="font-size:11px; color:var(--text-muted)">Log #${e.id}</span>
+            </div>
+
+            <div style="margin-bottom:10px;">
+              <div style="font-size:11px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.04em; margin-bottom:3px;">Reason</div>
+              <div style="font-size:13px; font-weight:500;">${esc((e.escalation_reason || '—').replace(/_/g, ' '))}</div>
+            </div>
+
+            <div style="margin-bottom:10px;">
+              <div style="font-size:11px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.04em; margin-bottom:3px;">Patient Message (Original)</div>
+              <div style="font-size:13px; background:var(--surface-2); padding:8px 12px; border-radius:6px; white-space:pre-wrap;">${esc(e.original_message || '—')}</div>
+            </div>
+
+            <div style="margin-bottom:10px;">
+              <div style="font-size:11px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.04em; margin-bottom:3px;">English Summary</div>
+              <div style="font-size:13px;">${esc(e.english_summary || '—')}</div>
+            </div>
+
+            <div style="display:flex; gap:20px; flex-wrap:wrap; font-size:12px; color:var(--text-muted);">
+              <span>🌐 ${e.language || '—'}</span>
+              <span>📊 Confidence: <span class="conf-${e.confidence || 'LOW'}" style="font-weight:600">${e.confidence || '—'}</span></span>
+              <span>🏥 ${e.facility_name || 'No facility assigned'}</span>
+              <span>🔀 Method: ${e.method || '—'}</span>
+              ${e.category ? `<span>📂 Category: ${e.category}</span>` : ''}
+              ${e.pathway ? `<span>🛤 Pathway: ${e.pathway}</span>` : ''}
+            </div>
+          </div>
+
+          <div style="display:flex; flex-direction:column; gap:8px; min-width:200px;">
+            <textarea id="notes-${e.id}" placeholder="Add review notes..." style="
+              width:100%; height:60px; padding:8px 10px; background:var(--bg); border:1px solid var(--border);
+              border-radius:6px; color:var(--text); font-size:12px; font-family:'DM Sans',sans-serif;
+              resize:vertical; outline:none;
+            "></textarea>
+            <div style="display:flex; gap:6px;">
+              <button class="btn btn-primary" onclick="markReviewed(${e.id})" style="flex:1;">✓ Mark Reviewed</button>
+            </div>
+          </div>
+        </div>
+      </div>`;
+    }).join('');
     return;
   }
 
@@ -603,11 +638,16 @@ function esc(str) {
 }
 
 async function markReviewed(id) {
+  const notesEl = document.getElementById(`notes-${id}`);
+  const notes = notesEl ? notesEl.value.trim() : '';
+  
+  if (!confirm(`Mark escalation #${id} as reviewed?${notes ? '\n\nNotes: ' + notes : ''}`)) return;
+  
   try {
     await fetch(`${API_BASE}/api/escalations/${id}/review`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ reviewed_by: 'dashboard_user' }),
+      body: JSON.stringify({ reviewed_by: 'dashboard_user', review_notes: notes || null }),
     });
     fetchAll();
   } catch (err) {
