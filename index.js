@@ -1112,7 +1112,7 @@ async function translateWithClaude(text, targetLang) {
   };
 
   const res = await anthropic.messages.create({
-    model: 'claude-3-5-haiku-20241022',
+    model: 'claude-haiku-4-5-20241001',
     max_tokens: 400,
     system: `You are a South African language translator specialising in healthcare communication.
 
@@ -1137,7 +1137,7 @@ RULES:
 async function runTriage(text, lang) {
   try {
     const res = await anthropic.messages.create({
-      model: 'claude-3-5-haiku-20241022',
+      model: 'claude-haiku-4-5-20241001',
       max_tokens: 300,
       system: `You are a clinical triage classifier for South Africa, aligned with the South African Triage Scale (SATS).
 
@@ -1287,7 +1287,7 @@ async function reprocessFailedTriages() {
     // Test if API is available with a simple call
     try {
       await anthropic.messages.create({
-        model: 'claude-3-5-haiku-20241022',
+        model: 'claude-haiku-4-5-20241001',
         max_tokens: 10,
         messages: [{ role: 'user', content: 'test' }]
       });
