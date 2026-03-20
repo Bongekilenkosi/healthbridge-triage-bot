@@ -27,6 +27,16 @@ const supabase = createClient(
 
 const CONFIDENCE_THRESHOLD = 75;
 
+// ================== FEATURE FLAGS ==================
+// Set these to true when partnerships/integrations are ready
+const FEATURES = {
+  CCMDD_ROUTING: false,          // Enable when CCMDD partnership agreements signed
+  VIRTUAL_CONSULTS: false,       // Enable when telemedicine provider integrated
+  CCMDD_API_URL: process.env.CCMDD_API_URL || null,       // Future: CCMDD system API endpoint
+  VIRTUAL_CONSULT_URL: process.env.VIRTUAL_CONSULT_URL || null,  // Future: telemedicine booking API
+  VIRTUAL_CONSULT_PHONE: process.env.VIRTUAL_CONSULT_PHONE || null, // Fallback: WhatsApp number for virtual consult booking
+};
+
 // ================== HELPERS ==================
 function hashPhone(phone) {
   return crypto.createHash('sha256').update(phone).digest('hex').slice(0, 16);
@@ -866,6 +876,872 @@ function getTriagePathway(triageLevel) {
 }
 
 // ================================================================
+// CCMDD MODULE — Chronic Medication Distribution & Dispensing
+// STATUS: Architecture ready. Activate via FEATURES.CCMDD_ROUTING
+// ================================================================
+// INFORMED BY: Moeng M. (2025) "Patterns and Factors Associated with
+// Deactivation of Adult Patients on CCMDD in North-West Province"
+// Wits MPH — Key findings integrated:
+//   - 96.6% deactivation rate in NMM District (16,266 patients)
+//   - Top modifiable cause: patient defaulting (198/1070 documented)
+//   - 67.8% HIV, 43.8% hypertension, 17% angina — multimorbidity common
+//   - Rural geography compounds collection barriers
+// ================================================================
+// When active, this module:
+// 1. Detects chronic medication patients (category 8: Medication/Chronic)
+// 2. Identifies specific chronic conditions for tailored messaging
+// 3. Checks if patient is stable (not acute symptoms on top of chronic)
+// 4. Routes to nearest CCMDD pickup point instead of clinic
+// 5. Runs escalating reminder chain (24h, 48h, 72h) to prevent defaulting
+// 6. Captures reason for missed collection to build evidence base
+// 7. Flags at-risk patients (multimorbid, elderly) for priority follow-up
+// 8. Re-engages defaulted patients proactively
+// ================================================================
+
+// Supabase tables needed:
+// ccmdd_pickup_points: id, name, type, latitude, longitude, operating_hours, address, province
+// ccmdd_collections: id, patient_id, pickup_point_id, medication_type, scheduled_date,
+//                    collected_at, status (scheduled/reminded/collected/missed/defaulted),
+//                    missed_reason, reminder_count
+// ccmdd_patient_profiles: patient_id, conditions (jsonb), risk_level, last_collection_date,
+//                         consecutive_misses, total_collections, total_misses
+
+const CCMDD_MESSAGES = {
+  chronic_check: {
+    en: `Are you here for a chronic medication refill?
+1 — Yes, I need my regular medication
+2 — No, I have new or worsening symptoms`,
+    zu: `Ingabe ulapha ukuthola umuthi wakho wamahlalakhona?
+1 — Yebo, ngidinga umuthi wami wejwayelekile
+2 — Cha, nginezimpawu ezintsha noma ezimbi kakhulu`,
+    xh: `Ingaba ulapha ukuza kuthatha amayeza akho aqhelekileyo?
+1 — Ewe, ndifuna amayeza am aqhelekileyo
+2 — Hayi, ndineempawu ezintsha okanye ezimbi ngakumbi`,
+    af: `Is jy hier vir 'n chroniese medikasie hervulling?
+1 — Ja, ek het my gereelde medikasie nodig
+2 — Nee, ek het nuwe of erger simptome`,
+  },
+
+  // Condition identification — ask what they're collecting for
+  condition_check: {
+    en: `What medication do you collect? (Select all that apply)
+1 — ARVs (HIV)
+2 — Blood pressure / Hypertension
+3 — Diabetes (sugar)
+4 — Heart / Angina
+5 — Asthma / Lung
+6 — Epilepsy
+7 — Other chronic medication`,
+    zu: `Umuthi wani owuthathayo? (Khetha konke okufanele)
+1 — Ama-ARV (HIV)
+2 — Umuthi wegazi eliphakeme
+3 — Ushukela (Diabetes)
+4 — Inhliziyo / I-Angina
+5 — Isifuba / Iphaphu
+6 — Isifo sokuwa (Epilepsy)
+7 — Omunye umuthi wamahlalakhona`,
+    xh: `Yiyiphi imiyalelo oyithatayo? (Khetha konke okufanelekileyo)
+1 — Ii-ARV (HIV)
+2 — Uxinzelelo lwegazi
+3 — Iswekile (Diabetes)
+4 — Intliziyo / I-Angina
+5 — Isifuba / Imiphunga
+6 — Isifo sokuwa (Epilepsy)
+7 — Esinye isigulo esinganyangekiyo`,
+    af: `Watter medikasie haal jy af? (Kies alles wat van toepassing is)
+1 — ARV's (MIV)
+2 — Bloeddruk / Hipertensie
+3 — Diabetes (suiker)
+4 — Hart / Angina
+5 — Asma / Long
+6 — Epilepsie
+7 — Ander chroniese medikasie`,
+  },
+
+  ccmdd_route: {
+    en: (name, dist) => `💊 Your nearest medication pickup point is:\n*${name}* (${dist} km)\n\nYou can collect your chronic medication there without queuing at a clinic.\n\nCan you get there?\n1 — Yes\n2 — No, show alternatives`,
+    zu: (name, dist) => `💊 Indawo yakho eseduze yokuthola umuthi:\n*${name}* (${dist} km)\n\nUngathola umuthi wakho wamahlalakhona lapho ngaphandle kokulinda emtholampilo.\n\nUngafika?\n1 — Yebo\n2 — Cha, ngikhombise ezinye`,
+    xh: (name, dist) => `💊 Indawo yakho ekufutshane yokuthatha amayeza:\n*${name}* (${dist} km)\n\nUngathatha amayeza akho aqhelekileyo apho ngaphandle kokulinda ekliniki.\n\nUngafikelela?\n1 — Ewe\n2 — Hayi, ndibonise ezinye`,
+    af: (name, dist) => `💊 Jou naaste medikasie-afhaal punt is:\n*${name}* (${dist} km)\n\nJy kan jou chroniese medikasie daar afhaal sonder om by 'n kliniek tou te staan.\n\nKan jy daar uitkom?\n1 — Ja\n2 — Nee, wys my ander`,
+  },
+
+  ccmdd_confirmed: {
+    en: (name) => `✅ Go to *${name}* to collect your medication.\n\nRemember to bring your ID and prescription/clinic card.\n\nWe will remind you when your next collection is due.`,
+    zu: (name) => `✅ Yana ku-*${name}* ukuthola umuthi wakho.\n\nKhumbula ukuletha i-ID yakho nekhadi lakho lasemtholampilo.\n\nSizokukhumbuza uma isikhathi sokuthatha umuthi olandelayo sesifikile.`,
+    xh: (name) => `✅ Yiya ku-*${name}* ukuthatha amayeza akho.\n\nKhumbula ukuzisa i-ID yakho nekhadi lakho lasekliniki.\n\nSiza kukukhumbuza xa ixesha lokuthatha okulandelayo lifikile.`,
+    af: (name) => `✅ Gaan na *${name}* om jou medikasie af te haal.\n\nOnthou om jou ID en voorskrif/kliniekkaart saam te bring.\n\nOns sal jou herinner wanneer jou volgende afhaal nodig is.`,
+  },
+
+  ccmdd_not_available: {
+    en: '💊 CCMDD pickup is not yet available in your area. Please visit your nearest clinic for your medication refill.',
+    zu: '💊 Indawo yokuthola umuthi ayikakafinyeleleki endaweni yakho okwamanje. Sicela uvakashele umtholampilo oseduze.',
+    xh: '💊 Indawo yokuthatha amayeza ayikafumaneki kwindawo yakho okwangoku. Nceda utyelele ikliniki ekufutshane.',
+    af: '💊 CCMDD-afhaal is nog nie in jou area beskikbaar nie. Besoek asseblief jou naaste kliniek.',
+  },
+
+  // ============ ESCALATING REMINDER CHAIN ============
+  // Based on NMM data: defaulting is the #1 modifiable deactivation cause
+  reminder_24h: {
+    en: (name) => `💊 Reminder: Your medication is ready for collection at *${name}*.\n\nPlease collect today if possible. Your health depends on taking your medication consistently.`,
+    zu: (name) => `💊 Isikhumbuzo: Umuthi wakho ulungele ukuthathwa ku-*${name}*.\n\nSicela uwuthathe namuhla uma kungenzeka. Impilo yakho incike ekuthatheni umuthi ngokuqhubekayo.`,
+    xh: (name) => `💊 Isikhumbuzo: Amayeza akho alungile ukuthathwa ku-*${name}*.\n\nNceda uwathathe namhlanje ukuba kunokwenzeka. Impilo yakho ixhomekeke ekuthatheni amayeza rhoqo.`,
+    af: (name) => `💊 Herinnering: Jou medikasie is gereed vir afhaal by *${name}*.\n\nHaal dit asseblief vandag af indien moontlik. Jou gesondheid hang af van konsekwente medikasie-gebruik.`,
+  },
+
+  reminder_48h: {
+    en: (name) => `⚠️ Your medication at *${name}* has not been collected yet.\n\nMissing your medication can cause your condition to worsen. Please collect as soon as possible.\n\nHaving trouble getting there?\n1 — I will collect today\n2 — I cannot get to this location\n3 — I have a problem (tell us)`,
+    zu: (name) => `⚠️ Umuthi wakho ku-*${name}* awukathathwa.\n\nUkungathathi umuthi kungabangela isimo sakho sibe sibi. Sicela uwuthathe ngokushesha.\n\nUnenkinga yokufika?\n1 — Ngizowuthatha namuhla\n2 — Angikwazi ukufika kule ndawo\n3 — Nginenkinga (sitshele)`,
+    xh: (name) => `⚠️ Amayeza akho ku-*${name}* awakathathwa.\n\nUkungawathathi amayeza kunokubangela imeko yakho ibe mbi. Nceda uwathathe ngokukhawuleza.\n\nUnengxaki yokufika?\n1 — Ndiza kuwathatha namhlanje\n2 — Andikwazi ukufikelela kule ndawo\n3 — Ndinengxaki (sixelele)`,
+    af: (name) => `⚠️ Jou medikasie by *${name}* is nog nie afgehaal nie.\n\nAs jy jou medikasie mis kan dit jou toestand vererger. Haal dit asseblief so gou moontlik af.\n\nSukkel jy om daar te kom?\n1 — Ek sal vandag afhaal\n2 — Ek kan nie by hierdie plek uitkom nie\n3 — Ek het 'n probleem (vertel ons)`,
+  },
+
+  reminder_72h_escalation: {
+    en: `🔴 You have not collected your medication for 3 days.\n\nMissing medication puts your health at serious risk. A healthcare worker has been notified.\n\nPlease tell us what is preventing you from collecting:\n1 — Transport / distance problem\n2 — Cannot take time off work\n3 — Pickup point was closed when I went\n4 — Medication was not available\n5 — Side effects — I stopped taking medication\n6 — Other reason`,
+    zu: `🔴 Awukathathi umuthi wakho izinsuku ezi-3.\n\nUkungathathi umuthi kubeka impilo yakho engozini enkulu. Isisebenzi sezempilo sazisiwe.\n\nSicela usitshele okukuvimbelayo:\n1 — Inkinga yezokuhamba / ibanga\n2 — Angikwazi ukuthola isikhathi emsebenzini\n3 — Indawo yokuthatha ivaliwe ngesikhathi ngifika\n4 — Umuthi ubungekho\n5 — Imiphumela emibi — ngiyekile ukuthatha umuthi\n6 — Esinye isizathu`,
+    xh: `🔴 Awukawathathi amayeza akho iintsuku ezi-3.\n\nUkungawathathi amayeza kubeka impilo yakho emngciphekweni omkhulu. Umsebenzi wezempilo wazisiwe.\n\nNceda usixelele okukuthintelayo:\n1 — Ingxaki yothutho / umgama\n2 — Andikwazi ukufumana ixesha emsebenzini\n3 — Indawo yokuthatha ibivaliwe xa ndifika\n4 — Amayeza ebengatholakalanga\n5 — Imiphumo emibi — ndiyekile ukuthatha amayeza\n6 — Esinye isizathu`,
+    af: `🔴 Jy het nie jou medikasie vir 3 dae afgehaal nie.\n\nOntbrekende medikasie plaas jou gesondheid in ernstige gevaar. 'n Gesondheidswerker is in kennis gestel.\n\nVertel ons asseblief wat jou verhinder:\n1 — Vervoer / afstand probleem\n2 — Kan nie tyd van werk af kry nie\n3 — Afhaal punt was toe toe ek gekom het\n4 — Medikasie was nie beskikbaar nie\n5 — Newe-effekte — ek het opgehou medikasie gebruik\n6 — Ander rede`,
+  },
+
+  // Response to missed-collection reasons
+  missed_transport: {
+    en: 'We understand. Let us find a closer pickup point for your next collection. Please share your location.',
+    zu: 'Siyaqonda. Ake sithole indawo eseduze kakhulu yokuthatha umuthi wakho olandelayo. Sicela uthumele indawo yakho.',
+    xh: 'Siyaqonda. Masifumane indawo ekufutshane ngakumbi yokuthatha amayeza akho alandelayo. Nceda uthumele indawo yakho.',
+    af: 'Ons verstaan. Laat ons \'n nader afhaal punt vind vir jou volgende afhaal. Deel asseblief jou ligging.',
+  },
+
+  missed_work: {
+    en: 'We understand. We are working on extended collection hours and weekend options. For now, you can ask someone you trust to collect on your behalf with your ID and clinic card.',
+    zu: 'Siyaqonda. Sisebenza ngamahora engeziwe okuthatha nangezimpelasonto. Okwamanje, ungacela umuntu omethembayo ukuthi akuthathele ngokusebenzisa i-ID yakho nekhadi lakho.',
+    xh: 'Siyaqonda. Sisebenza ngeeyure ezongezelelweyo zokuthatha nangempelaveki. Okwangoku, ungacela umntu omthembayo ukuba akuthathele nge-ID yakho nekhadi lakho.',
+    af: 'Ons verstaan. Ons werk aan verlengde afhaal-ure en naweek-opsies. Vir nou kan jy iemand vertrou om namens jou af te haal met jou ID en kliniekkaart.',
+  },
+
+  missed_closed: {
+    en: 'Thank you for telling us. We have logged this issue and will follow up with the pickup point. Please try again tomorrow, or we can suggest an alternative location.',
+    zu: 'Siyabonga ngokusitshela. Siqophe le nkinga futhi sizokulandela nendawo yokuthatha. Sicela uzame futhi kusasa, noma singaphakamisa enye indawo.',
+    xh: 'Enkosi ngokusixelela. Sibhale le ngxaki kwaye siza kulandela nendawo yokuthatha. Nceda uzame kwakhona ngomso, okanye sinokuphakamisa enye indawo.',
+    af: 'Dankie dat jy ons laat weet. Ons het hierdie probleem aangeteken en sal opvolg. Probeer asseblief weer môre, of ons kan \'n alternatiewe plek voorstel.',
+  },
+
+  missed_no_stock: {
+    en: 'Thank you for telling us. We have reported this stock issue. We will notify you as soon as your medication is available. We are sorry for the inconvenience.',
+    zu: 'Siyabonga ngokusitshela. Sibike le nkinga yesitoko. Sizokwazisa uma umuthi wakho utholakalile. Siyaxolisa ngokuphazamisa.',
+    xh: 'Enkosi ngokusixelela. Siyixele le ngxaki yesitoko. Siza kukwazisa xa amayeza akho efumaneka. Siyaxolisa ngokuphazamisa.',
+    af: 'Dankie dat jy ons laat weet. Ons het hierdie voorraad probleem gerapporteer. Ons sal jou in kennis stel sodra jou medikasie beskikbaar is. Ons vra om verskoning.',
+  },
+
+  missed_side_effects: {
+    en: '⚠️ Please do not stop taking your medication without speaking to a healthcare worker first. Stopping suddenly can be dangerous.\n\nA nurse has been notified and will contact you to discuss your side effects and explore alternatives.\n\nIf you feel very unwell, call *10177* or visit your nearest clinic.',
+    zu: '⚠️ Sicela ungayeki ukuthatha umuthi wakho ngaphandle kokukhuluma nesisebenzi sezempilo kuqala. Ukuyeka kungazumeki kungaba yingozi.\n\nUnesi wazisiwe futhi uzokuxhumana nawe ukuxoxa ngemiphumela emibi nokuhlola ezinye izindlela.\n\nUma uzizwa ungaphilile kakhulu, shaya *10177* noma uvakashele umtholampilo oseduze.',
+    xh: '⚠️ Nceda musa ukuyeka ukuthatha amayeza akho ngaphandle kokuthetha nomsebenzi wezempilo kuqala. Ukuyeka ngequbuliso kunobungozi.\n\nUmongikazi wazisiwe kwaye uya kuqhagamshelana nawe ukuxoxa ngemiphumo emibi nokuphonononga ezinye iindlela.\n\nUkuba uziva ungaphilanga kakhulu, tsalela *10177* okanye utyelele ikliniki ekufutshane.',
+    af: '⚠️ Moet asseblief nie ophou met jou medikasie sonder om eers met \'n gesondheidswerker te praat nie. Skielike staking kan gevaarlik wees.\n\n\'n Verpleegster is in kennis gestel en sal jou kontak om newe-effekte te bespreek en alternatiewe te ondersoek.\n\nAs jy baie sleg voel, bel *10177* of besoek jou naaste kliniek.',
+  },
+
+  // Re-engagement for previously defaulted patients
+  reengagement: {
+    en: `Hello from HealthBridgeSA 💊\n\nWe noticed you haven't collected your chronic medication recently. We know life gets busy and collecting can be difficult.\n\nWe want to help you get back on track. Your health matters.\n\nWould you like help finding a convenient pickup point?\n1 — Yes, help me collect my medication\n2 — I am collecting elsewhere now\n3 — I need to speak to someone`,
+    zu: `Sawubona kusuka ku-HealthBridgeSA 💊\n\nSibonile ukuthi awukathathi umuthi wakho wamahlalakhona muva nje. Siyazi ukuthi impilo iba matasa futhi ukuthatha kungaba nzima.\n\nSifuna ukukusiza ubuyele emgudwini. Impilo yakho ibalulekile.\n\nUngathanda usizo lokuthola indawo elula yokuthatha?\n1 — Yebo, ngisize ngithole umuthi\n2 — Sengithatha kwenye indawo\n3 — Ngidinga ukukhuluma nomuntu`,
+    xh: `Molo ukusuka ku-HealthBridgeSA 💊\n\nSiqaphele ukuba awukawathathanga amayeza akho aqhelekileyo kutshanje. Siyazi ukuba ubomi buxakekile kwaye ukuthatha kunokuba nzima.\n\nSifuna ukukunceda ubuyele endleleni. Impilo yakho ibalulekile.\n\nUngathanda uncedo lokufumana indawo elula yokuthatha?\n1 — Ewe, ndincede ndifumane amayeza\n2 — Ndithatha kwenye indawo ngoku\n3 — Ndifuna ukuthetha nomntu`,
+    af: `Hallo van HealthBridgeSA 💊\n\nOns het opgemerk dat jy nie onlangs jou chroniese medikasie afgehaal het nie. Ons weet die lewe raak besig en afhaal kan moeilik wees.\n\nOns wil jou help om weer op koers te kom. Jou gesondheid is belangrik.\n\nWil jy hulp hê om 'n gerieflike afhaal punt te vind?\n1 — Ja, help my om my medikasie te kry\n2 — Ek haal nou elders af\n3 — Ek moet met iemand praat`,
+  },
+
+  // Multimorbidity warning
+  multimorbidity_warning: {
+    en: (conditions) => `⚠️ Important: You collect medication for *${conditions}*. Missing your medication affects ALL of these conditions. Please collect as soon as possible.`,
+    zu: (conditions) => `⚠️ Okubalulekile: Uthatha umuthi we-*${conditions}*. Ukungathathi umuthi kuthinta ZONKE lezi zifo. Sicela uwuthathe ngokushesha.`,
+    xh: (conditions) => `⚠️ Okubalulekileyo: Uthatha amayeza e-*${conditions}*. Ukungawathathi amayeza kuchaphazela ZONKE ezi zifo. Nceda uwathathe ngokukhawuleza.`,
+    af: (conditions) => `⚠️ Belangrik: Jy haal medikasie af vir *${conditions}*. Ontbrekende medikasie affekteer AL hierdie toestande. Haal asseblief so gou moontlik af.`,
+  },
+};
+
+// ============ CONDITION MAPPING ============
+const CONDITION_MAP = {
+  '1': { key: 'hiv', label_en: 'HIV/ARVs', label_zu: 'HIV/Ama-ARV', db_field: 'adultshivaids' },
+  '2': { key: 'hypertension', label_en: 'Hypertension', label_zu: 'Igazi eliphakeme', db_field: 'hypertensioninadults' },
+  '3': { key: 'diabetes', label_en: 'Diabetes', label_zu: 'Ushukela', db_field: 'type2diabetesmellitusadult' },
+  '4': { key: 'angina', label_en: 'Heart/Angina', label_zu: 'Inhliziyo', db_field: 'anginapectorisstable' },
+  '5': { key: 'asthma', label_en: 'Asthma/Lung', label_zu: 'Isifuba', db_field: 'chronicasthma' },
+  '6': { key: 'epilepsy', label_en: 'Epilepsy', label_zu: 'Isifo sokuwa', db_field: 'epilepsy' },
+  '7': { key: 'other', label_en: 'Other chronic', label_zu: 'Okunye', db_field: 'other_chronic' },
+};
+
+// ============ RISK SCORING ============
+// Based on NMM data: older adults (65+) and multimorbid patients most at risk
+function calculateCCMDDRisk(session) {
+  let riskScore = 0;
+  const conditions = session.ccmddConditions || [];
+
+  // Multimorbidity: 2+ conditions
+  if (conditions.length >= 2) riskScore += 2;
+  if (conditions.length >= 3) riskScore += 1;
+
+  // HIV patients — highest volume, highest consequence of defaulting
+  if (conditions.some(c => c.key === 'hiv')) riskScore += 1;
+
+  // Age risk (from session if available)
+  const age = session.patientAge;
+  if (age && age >= 60) riskScore += 1;
+  if (age && age >= 75) riskScore += 1;
+
+  // Previous misses
+  const consecutiveMisses = session.consecutiveMisses || 0;
+  if (consecutiveMisses >= 1) riskScore += 2;
+  if (consecutiveMisses >= 3) riskScore += 3;
+
+  // Risk levels: LOW (0-1), MEDIUM (2-3), HIGH (4+)
+  if (riskScore >= 4) return 'HIGH';
+  if (riskScore >= 2) return 'MEDIUM';
+  return 'LOW';
+}
+
+// ============ DATABASE FUNCTIONS ============
+async function getCCMDDPickupPoints(patientLocation, limit = 3) {
+  if (!FEATURES.CCMDD_ROUTING || !patientLocation) return [];
+
+  const { data } = await supabase
+    .from('ccmdd_pickup_points')
+    .select('*');
+
+  if (!data || data.length === 0) return [];
+
+  const results = data.map(point => ({
+    ...point,
+    distance: Math.round(getDistance(
+      patientLocation.latitude, patientLocation.longitude,
+      point.latitude, point.longitude
+    ) * 10) / 10
+  }));
+
+  results.sort((a, b) => a.distance - b.distance);
+  return results.slice(0, limit);
+}
+
+async function logCCMDDCollection(entry) {
+  try {
+    await supabase.from('ccmdd_collections').insert(entry);
+  } catch (e) {
+    console.error('Failed to log CCMDD collection:', e);
+  }
+}
+
+async function updateCCMDDProfile(patientId, updates) {
+  try {
+    await supabase.from('ccmdd_patient_profiles').upsert({
+      patient_id: patientId,
+      ...updates,
+      updated_at: new Date()
+    });
+  } catch (e) {
+    console.error('Failed to update CCMDD profile:', e);
+  }
+}
+
+async function getDefaultedPatients(daysSinceLastCollection = 30) {
+  try {
+    const cutoff = new Date(Date.now() - daysSinceLastCollection * 24 * 60 * 60 * 1000);
+    const { data } = await supabase
+      .from('ccmdd_patient_profiles')
+      .select('*')
+      .lt('last_collection_date', cutoff.toISOString())
+      .gt('total_collections', 0); // Only patients who collected at least once
+    return data || [];
+  } catch (e) {
+    return [];
+  }
+}
+
+// ============ DETECT CHRONIC MED REQUEST ============
+function isChronicMedRequest(message, categoryChoice) {
+  if (categoryChoice === '8') return true;
+  const lower = (message || '').toLowerCase();
+  const chronicKeywords = [
+    'medication', 'refill', 'chronic', 'pills', 'prescription', 'collect',
+    'umuthi', 'amapilisi', 'ipilisi',       // isiZulu/isiXhosa
+    'medikasie', 'pille',                     // Afrikaans
+    'dihlare', 'dipilisi',                    // Sepedi/Setswana
+    'meriana', 'dipilisi',                    // Sesotho
+    'murhi', 'tipilisi',                      // Xitsonga
+    'umutsi', 'emapilisi',                    // siSwati
+    'mushonga',                               // Tshivenda
+    'sugar', 'high blood', 'arvs', 'arv', 'hiv pills',
+    'bp tablets', 'blood pressure', 'diabetes',
+    'dablapmeds', 'dablap',                   // CCMDD brand name
+    'collect my meds', 'fetch my pills', 'pickup my medication',
+    'thatha umuthi', 'thatha amayeza',        // isiZulu/isiXhosa: "take/fetch medication"
+  ];
+  return chronicKeywords.some(kw => lower.includes(kw));
+}
+
+// ============ HANDLE CCMDD CONVERSATION FLOW ============
+async function handleCCMDD(patientId, from, message, session) {
+  const lang = session.language || 'en';
+
+  // Step 1: Confirm it's a chronic med request (not acute on chronic)
+  if (session.ccmddStep === 'confirm_chronic') {
+    if (message === '1') {
+      // Ask what conditions they have
+      session.ccmddStep = 'identify_conditions';
+      await saveSession(patientId, session);
+      const condMsg = CCMDD_MESSAGES.condition_check[lang] || CCMDD_MESSAGES.condition_check['en'];
+      await sendWhatsAppMessage(from, condMsg);
+      return true;
+    }
+    if (message === '2') {
+      session.ccmddStep = null;
+      await saveSession(patientId, session);
+      return false; // Proceed to normal triage
+    }
+  }
+
+  // Step 2: Capture conditions
+  if (session.ccmddStep === 'identify_conditions') {
+    // Parse comma-separated or single number responses: "1", "1,2", "1 2", "1, 3"
+    const choices = message.replace(/[, ]+/g, ',').split(',').filter(c => CONDITION_MAP[c.trim()]);
+    if (choices.length > 0) {
+      session.ccmddConditions = choices.map(c => CONDITION_MAP[c.trim()]);
+      const riskLevel = calculateCCMDDRisk(session);
+      session.ccmddRiskLevel = riskLevel;
+
+      // Update patient profile
+      await updateCCMDDProfile(patientId, {
+        conditions: session.ccmddConditions.map(c => c.key),
+        risk_level: riskLevel
+      });
+
+      // Route to pickup
+      if (!session.location) {
+        session.ccmddStep = 'awaiting_location';
+        await saveSession(patientId, session);
+        await sendWhatsAppMessage(from, msg('request_location', lang));
+        return true;
+      }
+      return await routeToCCMDD(patientId, from, session, lang);
+    }
+  }
+
+  // Step 3: Got location, now route
+  if (session.ccmddStep === 'awaiting_location' && session.location) {
+    return await routeToCCMDD(patientId, from, session, lang);
+  }
+
+  // Step 4: Confirm pickup point
+  if (session.ccmddStep === 'confirm_pickup') {
+    if (message === '1') {
+      const point = session.suggestedPickup;
+      session.ccmddStep = null;
+      session.confirmedPickup = point;
+      await saveSession(patientId, session);
+      const confirmMsg = (CCMDD_MESSAGES.ccmdd_confirmed[lang] || CCMDD_MESSAGES.ccmdd_confirmed['en'])(point.name);
+      await sendWhatsAppMessage(from, confirmMsg);
+
+      const conditionLabels = (session.ccmddConditions || []).map(c => c.label_en).join(', ');
+      await logTriage({
+        patient_id: patientId,
+        triage_level: 'GREEN',
+        confidence: 100,
+        escalation: false,
+        pathway: 'ccmdd_pickup',
+        facility_name: point.name,
+        location: session.location,
+        symptoms: `chronic_medication_refill: ${conditionLabels}`
+      });
+
+      await logCCMDDCollection({
+        patient_id: patientId,
+        pickup_point_name: point.name,
+        medication_type: conditionLabels,
+        status: 'scheduled',
+        scheduled_date: new Date(),
+        risk_level: session.ccmddRiskLevel || 'LOW'
+      });
+
+      await updateCCMDDProfile(patientId, {
+        last_collection_date: new Date(),
+        consecutive_misses: 0
+      });
+
+      // Schedule collection reminder (24h)
+      await scheduleCollectionReminder(patientId, from, point, 24);
+      return true;
+    }
+    if (message === '2') {
+      const alternatives = session.alternativePickups || [];
+      if (alternatives.length > 0) {
+        const listStr = alternatives.map((f, i) => `${i + 1}. *${f.name}* (${f.distance} km)`).join('\n');
+        session.ccmddStep = 'choose_alternative_pickup';
+        await saveSession(patientId, session);
+        const altMsg = (MESSAGES.facility_alternatives[lang] || MESSAGES.facility_alternatives['en'])(listStr);
+        await sendWhatsAppMessage(from, altMsg);
+      } else {
+        const naMsg = CCMDD_MESSAGES.ccmdd_not_available[lang] || CCMDD_MESSAGES.ccmdd_not_available['en'];
+        await sendWhatsAppMessage(from, naMsg);
+        session.ccmddStep = null;
+        await saveSession(patientId, session);
+      }
+      return true;
+    }
+  }
+
+  // Step 5: Choose alternative pickup
+  if (session.ccmddStep === 'choose_alternative_pickup') {
+    const alternatives = session.alternativePickups || [];
+    const choice = parseInt(message) - 1;
+    if (choice >= 0 && choice < alternatives.length) {
+      const point = alternatives[choice];
+      session.ccmddStep = null;
+      session.confirmedPickup = point;
+      await saveSession(patientId, session);
+      const confirmMsg = (CCMDD_MESSAGES.ccmdd_confirmed[lang] || CCMDD_MESSAGES.ccmdd_confirmed['en'])(point.name);
+      await sendWhatsAppMessage(from, confirmMsg);
+
+      const conditionLabels = (session.ccmddConditions || []).map(c => c.label_en).join(', ');
+      await logTriage({
+        patient_id: patientId,
+        triage_level: 'GREEN',
+        confidence: 100,
+        escalation: false,
+        pathway: 'ccmdd_pickup',
+        facility_name: point.name,
+        location: session.location,
+        symptoms: `chronic_medication_refill: ${conditionLabels}`
+      });
+
+      await logCCMDDCollection({
+        patient_id: patientId,
+        pickup_point_name: point.name,
+        medication_type: conditionLabels,
+        status: 'scheduled',
+        scheduled_date: new Date(),
+        risk_level: session.ccmddRiskLevel || 'LOW'
+      });
+
+      await updateCCMDDProfile(patientId, {
+        last_collection_date: new Date(),
+        consecutive_misses: 0
+      });
+
+      await scheduleCollectionReminder(patientId, from, point, 24);
+      return true;
+    }
+  }
+
+  // Step 6: Handle missed-collection reason responses (from 72h escalation)
+  if (session.ccmddStep === 'missed_reason') {
+    const reasons = {
+      '1': { reason: 'transport_distance', response: 'missed_transport' },
+      '2': { reason: 'work_schedule', response: 'missed_work' },
+      '3': { reason: 'pup_closed', response: 'missed_closed' },
+      '4': { reason: 'no_stock', response: 'missed_no_stock' },
+      '5': { reason: 'side_effects', response: 'missed_side_effects' },
+      '6': { reason: 'other', response: null },
+    };
+
+    const selected = reasons[message];
+    if (selected) {
+      // Log the reason
+      await logCCMDDCollection({
+        patient_id: patientId,
+        status: 'missed',
+        missed_reason: selected.reason,
+        scheduled_date: new Date()
+      });
+
+      // Update consecutive misses
+      const currentMisses = (session.consecutiveMisses || 0) + 1;
+      session.consecutiveMisses = currentMisses;
+      session.ccmddStep = null;
+      await saveSession(patientId, session);
+
+      await updateCCMDDProfile(patientId, {
+        consecutive_misses: currentMisses,
+        last_missed_reason: selected.reason
+      });
+
+      // Send appropriate response
+      if (selected.response) {
+        const responseMsg = CCMDD_MESSAGES[selected.response][lang] || CCMDD_MESSAGES[selected.response]['en'];
+        await sendWhatsAppMessage(from, responseMsg);
+      } else {
+        await sendWhatsAppMessage(from, msg('consent_yes', lang)); // Generic acknowledgement
+      }
+
+      // If transport issue, trigger re-routing
+      if (selected.reason === 'transport_distance') {
+        session.ccmddStep = 'awaiting_location';
+        await saveSession(patientId, session);
+        await sendWhatsAppMessage(from, msg('request_location', lang));
+      }
+
+      // Side effects — critical escalation
+      if (selected.reason === 'side_effects') {
+        await logTriage({
+          patient_id: patientId,
+          triage_level: 'YELLOW',
+          confidence: 100,
+          escalation: true,
+          pathway: 'ccmdd_side_effect_escalation',
+          symptoms: 'Patient stopped medication due to side effects'
+        });
+      }
+
+      return true;
+    }
+  }
+
+  // Step 7: Re-engagement response
+  if (session.ccmddStep === 'reengagement') {
+    if (message === '1') {
+      // Wants help collecting — restart CCMDD flow
+      session.ccmddStep = 'identify_conditions';
+      await saveSession(patientId, session);
+      const condMsg = CCMDD_MESSAGES.condition_check[lang] || CCMDD_MESSAGES.condition_check['en'];
+      await sendWhatsAppMessage(from, condMsg);
+      return true;
+    }
+    if (message === '2') {
+      // Collecting elsewhere — log and close
+      session.ccmddStep = null;
+      await saveSession(patientId, session);
+      await updateCCMDDProfile(patientId, { status: 'collecting_elsewhere' });
+      const ackMsg = lang === 'en'
+        ? '✅ Good to hear you are still collecting your medication. Stay well!'
+        : '✅ Kuhle ukuzwa ukuthi usathatha umuthi wakho. Hlala kahle!';
+      await sendWhatsAppMessage(from, ackMsg);
+      return true;
+    }
+    if (message === '3') {
+      // Needs to speak to someone — escalate
+      session.ccmddStep = null;
+      await saveSession(patientId, session);
+      await logTriage({
+        patient_id: patientId,
+        triage_level: 'YELLOW',
+        confidence: 100,
+        escalation: true,
+        pathway: 'ccmdd_reengagement_escalation',
+        symptoms: 'Defaulted patient requesting human contact'
+      });
+      const escMsg = lang === 'en'
+        ? '👤 A healthcare worker will contact you shortly. If urgent, call your nearest clinic or *10177*.'
+        : '👤 Isisebenzi sezempilo sizokuxhumana nawe maduze. Uma kuphuthuma, shaya umtholampilo oseduze noma *10177*.';
+      await sendWhatsAppMessage(from, escMsg);
+      return true;
+    }
+  }
+
+  return false;
+}
+
+async function routeToCCMDD(patientId, from, session, lang) {
+  const pickupPoints = await getCCMDDPickupPoints(session.location);
+
+  if (pickupPoints.length === 0) {
+    const naMsg = CCMDD_MESSAGES.ccmdd_not_available[lang] || CCMDD_MESSAGES.ccmdd_not_available['en'];
+    await sendWhatsAppMessage(from, naMsg);
+    session.ccmddStep = null;
+    await saveSession(patientId, session);
+    return true;
+  }
+
+  const nearest = pickupPoints[0];
+  session.suggestedPickup = nearest;
+  session.alternativePickups = pickupPoints.slice(1);
+  session.ccmddStep = 'confirm_pickup';
+  await saveSession(patientId, session);
+
+  const routeMsg = (CCMDD_MESSAGES.ccmdd_route[lang] || CCMDD_MESSAGES.ccmdd_route['en'])(nearest.name, nearest.distance);
+  await sendWhatsAppMessage(from, routeMsg);
+  return true;
+}
+
+// ============ COLLECTION REMINDER SCHEDULER ============
+async function scheduleCollectionReminder(patientId, phone, pickupPoint, hoursFromNow) {
+  const reminderTime = new Date(Date.now() + hoursFromNow * 60 * 60 * 1000);
+  try {
+    await supabase.from('ccmdd_collections').upsert({
+      patient_id: patientId,
+      pickup_point_name: pickupPoint.name,
+      next_reminder_at: reminderTime,
+      reminder_count: 0,
+      status: 'scheduled'
+    });
+  } catch (e) {
+    console.error('Failed to schedule reminder:', e);
+  }
+}
+
+// ============ REMINDER AGENT (runs on interval) ============
+async function runCCMDDReminderAgent() {
+  if (!FEATURES.CCMDD_ROUTING) return;
+
+  try {
+    const now = new Date();
+    const { data: dueReminders } = await supabase
+      .from('ccmdd_collections')
+      .select('*')
+      .lte('next_reminder_at', now.toISOString())
+      .in('status', ['scheduled', 'reminded']);
+
+    if (!dueReminders || dueReminders.length === 0) return;
+
+    for (const reminder of dueReminders) {
+      const patientId = reminder.patient_id;
+      const session = await getSession(patientId);
+      const lang = session.language || 'en';
+
+      // Find patient phone from follow_ups table (we have it there)
+      const { data: followUps } = await supabase
+        .from('follow_ups')
+        .select('phone')
+        .eq('patient_id', patientId)
+        .limit(1);
+
+      if (!followUps || followUps.length === 0) continue;
+      const phone = followUps[0].phone;
+
+      const count = reminder.reminder_count || 0;
+      const pointName = reminder.pickup_point_name || 'your pickup point';
+
+      if (count === 0) {
+        // 24h reminder — gentle
+        const reminderMsg = (CCMDD_MESSAGES.reminder_24h[lang] || CCMDD_MESSAGES.reminder_24h['en'])(pointName);
+        await sendWhatsAppMessage(phone, reminderMsg);
+
+        await supabase.from('ccmdd_collections').update({
+          reminder_count: 1,
+          status: 'reminded',
+          next_reminder_at: new Date(Date.now() + 24 * 60 * 60 * 1000) // Next in 24h
+        }).eq('id', reminder.id);
+
+      } else if (count === 1) {
+        // 48h reminder — concerned, ask if there's a problem
+        const reminderMsg = (CCMDD_MESSAGES.reminder_48h[lang] || CCMDD_MESSAGES.reminder_48h['en'])(pointName);
+        await sendWhatsAppMessage(phone, reminderMsg);
+
+        // Set session to await response
+        session.ccmddStep = 'missed_48h_response';
+        await saveSession(patientId, session);
+
+        await supabase.from('ccmdd_collections').update({
+          reminder_count: 2,
+          next_reminder_at: new Date(Date.now() + 24 * 60 * 60 * 1000) // Next in 24h
+        }).eq('id', reminder.id);
+
+      } else if (count >= 2) {
+        // 72h+ escalation — send reason capture, notify healthcare worker
+        const escMsg = CCMDD_MESSAGES.reminder_72h_escalation[lang] || CCMDD_MESSAGES.reminder_72h_escalation['en'];
+        await sendWhatsAppMessage(phone, escMsg);
+
+        // Multimorbidity warning if applicable
+        const conditions = session.ccmddConditions || [];
+        if (conditions.length >= 2) {
+          const condLabels = conditions.map(c => c.label_en).join(', ');
+          const multiMsg = (CCMDD_MESSAGES.multimorbidity_warning[lang] || CCMDD_MESSAGES.multimorbidity_warning['en'])(condLabels);
+          await sendWhatsAppMessage(phone, multiMsg);
+        }
+
+        session.ccmddStep = 'missed_reason';
+        await saveSession(patientId, session);
+
+        await supabase.from('ccmdd_collections').update({
+          reminder_count: count + 1,
+          status: 'missed',
+          next_reminder_at: null // Stop automated reminders, human takes over
+        }).eq('id', reminder.id);
+
+        // Log escalation
+        await logTriage({
+          patient_id: patientId,
+          triage_level: 'YELLOW',
+          confidence: 100,
+          escalation: true,
+          pathway: 'ccmdd_missed_escalation',
+          symptoms: `Missed medication collection x${count + 1} days`
+        });
+      }
+    }
+  } catch (e) {
+    console.error('CCMDD reminder agent error:', e);
+  }
+}
+
+// ============ RE-ENGAGEMENT AGENT (runs weekly) ============
+async function runReengagementAgent() {
+  if (!FEATURES.CCMDD_ROUTING) return;
+
+  try {
+    const defaulted = await getDefaultedPatients(30); // Not collected in 30 days
+
+    for (const patient of defaulted) {
+      const session = await getSession(patient.patient_id);
+      const lang = session.language || 'en';
+
+      // Find phone
+      const { data: followUps } = await supabase
+        .from('follow_ups')
+        .select('phone')
+        .eq('patient_id', patient.patient_id)
+        .limit(1);
+
+      if (!followUps || followUps.length === 0) continue;
+      const phone = followUps[0].phone;
+
+      const reengageMsg = CCMDD_MESSAGES.reengagement[lang] || CCMDD_MESSAGES.reengagement['en'];
+      await sendWhatsAppMessage(phone, reengageMsg);
+
+      session.ccmddStep = 'reengagement';
+      await saveSession(patient.patient_id, session);
+    }
+  } catch (e) {
+    console.error('Re-engagement agent error:', e);
+  }
+}
+
+// Schedule agents
+// Collection reminders: every 30 minutes
+setInterval(runCCMDDReminderAgent, 30 * 60 * 1000);
+// Re-engagement: every 7 days
+setInterval(runReengagementAgent, 7 * 24 * 60 * 60 * 1000);
+
+// ================================================================
+// VIRTUAL CONSULTS MODULE — Telemedicine Scheduling
+// STATUS: Architecture ready. Activate via FEATURES.VIRTUAL_CONSULTS
+// ================================================================
+// When active, this module:
+// 1. Offers virtual consult option for YELLOW triage cases
+// 2. Presents it as an alternative to physical clinic visit
+// 3. Either books via API or connects to a WhatsApp booking number
+// 4. Logs the referral for tracking
+// ================================================================
+
+const VIRTUAL_CONSULT_MESSAGES = {
+  offer: {
+    en: `📱 A virtual consultation may be available for your condition.\n\nYou can speak to a healthcare worker by video call instead of travelling to a clinic.\n\nWould you like to:\n1 — Book a virtual consultation\n2 — No thanks, I'll visit a clinic in person`,
+    zu: `📱 Ukubonisana nge-video kungaba khona ngesimo sakho.\n\nUngakhuluma nesisebenzi sezempilo nge-video call esikhundleni sokuya emtholampilo.\n\nUngathanda:\n1 — Bhukhela ukubonisana nge-video\n2 — Cha ngiyabonga, ngizoya emtholampilo`,
+    xh: `📱 Ukubonisana nge-video kunokufumaneka ngemeko yakho.\n\nUngathetha nesisebenza sezempilo nge-video call endaweni yokuya ekliniki.\n\nUngathanda:\n1 — Bhukisha ukubonisana nge-video\n2 — Hayi enkosi, ndiza kundwendwela ikliniki`,
+    af: `📱 \'n Virtuele konsultasie mag beskikbaar wees vir jou toestand.\n\nJy kan per videogesprek met \'n gesondheidswerker praat in plaas daarvan om na \'n kliniek te reis.\n\nWil jy:\n1 — \'n Virtuele konsultasie bespreek\n2 — Nee dankie, ek besoek liewer die kliniek`,
+  },
+
+  booking_api: {
+    en: '✅ Your virtual consultation has been booked. You will receive a confirmation message with the date, time, and video link.',
+    zu: '✅ Ukubonisana kwakho nge-video kubhukiwe. Uzothola umyalezo wokuqinisekisa onosuku, isikhathi, nelinki ye-video.',
+    xh: '✅ Ukubonisana kwakho nge-video kubhukishiwe. Uya kufumana umyalezo wokuqinisekisa onosuku, ixesha, nelinki yevidiyo.',
+    af: '✅ Jou virtuele konsultasie is bespreek. Jy sal \'n bevestigingsboodskap ontvang met die datum, tyd en videoskakel.',
+  },
+
+  booking_whatsapp: {
+    en: (phone) => `📱 To book your virtual consultation, please message this number on WhatsApp:\n\n*${phone}*\n\nTell them HealthBridgeSA referred you and describe your symptoms.`,
+    zu: (phone) => `📱 Ukubhukhela ukubonisana kwakho nge-video, sicela uthumele umyalezo ku:\n\n*${phone}*\n\nBatshele ukuthi uthunywe yi-HealthBridgeSA futhi uchaze izimpawu zakho.`,
+    xh: (phone) => `📱 Ukubhukisha ukubonisana kwakho nge-video, nceda uthumele umyalezo ku:\n\n*${phone}*\n\nBaxelele ukuba uthunyelwe yi-HealthBridgeSA kwaye uchaze iimpawu zakho.`,
+    af: (phone) => `📱 Om jou virtuele konsultasie te bespreek, stuur asseblief \'n boodskap na hierdie nommer op WhatsApp:\n\n*${phone}*\n\nSê vir hulle HealthBridgeSA het jou verwys en beskryf jou simptome.`,
+  },
+
+  not_available: {
+    en: '📱 Virtual consultations are not yet available in your area. Please visit your nearest clinic.',
+    zu: '📱 Ukubonisana nge-video akukakafinyeleleki endaweni yakho okwamanje. Sicela uvakashele umtholampilo oseduze.',
+    xh: '📱 Ukubonisana nge-video akukafumaneki kwindawo yakho okwangoku. Nceda utyelele ikliniki ekufutshane.',
+    af: '📱 Virtuele konsultasies is nog nie in jou area beskikbaar nie. Besoek asseblief jou naaste kliniek.',
+  }
+};
+
+async function handleVirtualConsult(patientId, from, message, session) {
+  const lang = session.language || 'en';
+
+  if (!FEATURES.VIRTUAL_CONSULTS) return false;
+
+  // Offer virtual consult
+  if (session.virtualConsultStep === 'offered') {
+    if (message === '1') {
+      // Patient wants virtual consult
+      session.virtualConsultStep = null;
+      await saveSession(patientId, session);
+
+      // Option A: Book via API
+      if (FEATURES.VIRTUAL_CONSULT_URL) {
+        try {
+          const bookingResult = await fetch(FEATURES.VIRTUAL_CONSULT_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              patient_id: patientId,
+              language: lang,
+              triage_level: session.lastTriage?.triage_level,
+              symptoms: session.lastSymptoms,
+              timestamp: new Date().toISOString()
+            })
+          });
+
+          if (bookingResult.ok) {
+            const bookMsg = VIRTUAL_CONSULT_MESSAGES.booking_api[lang] || VIRTUAL_CONSULT_MESSAGES.booking_api['en'];
+            await sendWhatsAppMessage(from, bookMsg);
+          } else {
+            throw new Error('Booking API failed');
+          }
+        } catch (e) {
+          // Fallback to WhatsApp booking if API fails
+          if (FEATURES.VIRTUAL_CONSULT_PHONE) {
+            const wpMsg = (VIRTUAL_CONSULT_MESSAGES.booking_whatsapp[lang] || VIRTUAL_CONSULT_MESSAGES.booking_whatsapp['en'])(FEATURES.VIRTUAL_CONSULT_PHONE);
+            await sendWhatsAppMessage(from, wpMsg);
+          } else {
+            const naMsg = VIRTUAL_CONSULT_MESSAGES.not_available[lang] || VIRTUAL_CONSULT_MESSAGES.not_available['en'];
+            await sendWhatsAppMessage(from, naMsg);
+          }
+        }
+      }
+      // Option B: WhatsApp-based booking
+      else if (FEATURES.VIRTUAL_CONSULT_PHONE) {
+        const wpMsg = (VIRTUAL_CONSULT_MESSAGES.booking_whatsapp[lang] || VIRTUAL_CONSULT_MESSAGES.booking_whatsapp['en'])(FEATURES.VIRTUAL_CONSULT_PHONE);
+        await sendWhatsAppMessage(from, wpMsg);
+      }
+      // Option C: Not available yet
+      else {
+        const naMsg = VIRTUAL_CONSULT_MESSAGES.not_available[lang] || VIRTUAL_CONSULT_MESSAGES.not_available['en'];
+        await sendWhatsAppMessage(from, naMsg);
+      }
+
+      await logTriage({
+        patient_id: patientId,
+        triage_level: session.lastTriage?.triage_level || 'YELLOW',
+        confidence: session.lastTriage?.confidence || 100,
+        escalation: false,
+        pathway: 'virtual_consult',
+        facility_name: 'virtual',
+        location: session.location || null,
+        symptoms: session.lastSymptoms
+      });
+
+      await scheduleFollowUp(patientId, from, session.lastTriage?.triage_level || 'YELLOW');
+      return true;
+    }
+
+    if (message === '2') {
+      // Patient prefers in-person — proceed to facility routing
+      session.virtualConsultStep = null;
+      await saveSession(patientId, session);
+      return false;
+    }
+  }
+
+  return false;
+}
+
+// Offer virtual consult for eligible cases (YELLOW triage, not emergency)
+async function offerVirtualConsult(patientId, from, session) {
+  if (!FEATURES.VIRTUAL_CONSULTS) return false;
+
+  // Only offer for YELLOW cases — ORANGE/RED need physical facility
+  if (session.lastTriage?.triage_level !== 'YELLOW') return false;
+
+  const lang = session.language || 'en';
+  const offerMsg = VIRTUAL_CONSULT_MESSAGES.offer[lang] || VIRTUAL_CONSULT_MESSAGES.offer['en'];
+  session.virtualConsultStep = 'offered';
+  await saveSession(patientId, session);
+  await sendWhatsAppMessage(from, offerMsg);
+  return true;
+}
+
+// ================================================================
 // ORCHESTRATOR — MAIN CONVERSATION FLOW
 // ================================================================
 async function orchestrate(patientId, from, message, session) {
@@ -904,6 +1780,19 @@ async function orchestrate(patientId, from, message, session) {
     // Re-show consent
     await sendWhatsAppMessage(from, msg('consent', lang));
     return;
+  }
+
+  // ==================== STEP: CCMDD FLOW (if active) ====================
+  if (session.ccmddStep) {
+    const handled = await handleCCMDD(patientId, from, message, session);
+    if (handled) return;
+  }
+
+  // ==================== STEP: VIRTUAL CONSULT FLOW (if active) ====================
+  if (session.virtualConsultStep) {
+    const handled = await handleVirtualConsult(patientId, from, message, session);
+    if (handled) return;
+    // If not handled (patient chose clinic), fall through to facility routing
   }
 
   // ==================== STEP: FACILITY CONFIRMATION ====================
@@ -982,6 +1871,15 @@ async function orchestrate(patientId, from, message, session) {
     }
   }
 
+  // ==================== STEP: CCMDD CHECK (before triage) ====================
+  if (FEATURES.CCMDD_ROUTING && isChronicMedRequest(message, message)) {
+    const chronicMsg = CCMDD_MESSAGES.chronic_check[lang] || CCMDD_MESSAGES.chronic_check['en'];
+    session.ccmddStep = 'confirm_chronic';
+    await saveSession(patientId, session);
+    await sendWhatsAppMessage(from, chronicMsg);
+    return;
+  }
+
   // ==================== STEP 2: TRIAGE ====================
   let triage = await runTriage(message, lang);
   triage = applyClinicalRules(message, triage);
@@ -1031,6 +1929,12 @@ async function orchestrate(patientId, from, message, session) {
     await scheduleFollowUp(patientId, from, 'GREEN');
     await saveSession(patientId, session);
     return;
+  }
+
+  // ==================== STEP 4.5: OFFER VIRTUAL CONSULT (YELLOW only) ====================
+  if (FEATURES.VIRTUAL_CONSULTS && triage.triage_level === 'YELLOW') {
+    const offered = await offerVirtualConsult(patientId, from, session);
+    if (offered) return; // Wait for patient response
   }
 
   // ==================== STEP 5: FACILITY ROUTING (ORANGE/YELLOW) ====================
