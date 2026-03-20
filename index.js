@@ -1329,55 +1329,105 @@ async function reprocessFailedTriages() {
 setInterval(reprocessFailedTriages, 10 * 60 * 1000);
 
 // ================== RULES ENGINE ==================
+// v2.0 — Fixed after vignette stress test (March 2026)
+// Bugs fixed: (1) "cant breathe" not matching "shortness of breath"
+//             (2) isiXhosa "phefumla" not matching isiZulu "phefumuli"
+//             (3) "bitten by a snake" not matching "snake bite"
+// New overrides: overdose/poisoning, anaphylaxis, major trauma
+// Methodology: keywords expanded to match natural patient language
+
+// Helper: check if text contains ANY of the given terms
+function hasAny(text, terms) {
+  return terms.some(t => text.includes(t));
+}
+
 function applyClinicalRules(text, triage) {
   const lower = text.toLowerCase();
 
+  // ============================================================
   // HARD OVERRIDES — SAFETY FIRST
-  // English terms
-  if (lower.includes('chest pain') && lower.includes('shortness of breath')) {
-    return { triage_level: 'RED', confidence: 100, rule_override: 'cardiac_emergency' };
-  }
-  if (lower.includes('pregnant') && lower.includes('bleeding')) {
-    return { triage_level: 'RED', confidence: 100, rule_override: 'obstetric_emergency' };
-  }
-  if (lower.includes('not breathing') || lower.includes('unconscious')) {
-    return { triage_level: 'RED', confidence: 100, rule_override: 'airway_emergency' };
-  }
-  if (lower.includes('snake bite') || lower.includes('snakebite')) {
-    return { triage_level: 'RED', confidence: 100, rule_override: 'envenomation' };
-  }
-  if (lower.includes('baby') && lower.includes('not breathing')) {
+  // These fire REGARDLESS of AI classification or confidence.
+  // Order: most specific first, then broader patterns.
+  // ============================================================
+
+  // --- NEONATAL: Baby not breathing (check before general airway) ---
+  if (hasAny(lower, ['baby', 'infant', 'newborn', 'ingane', 'usana', 'umntwana', 'baba']) &&
+      hasAny(lower, ['not breathing', 'cant breathe', 'stopped breathing', 'no breath',
+                      'akaphefumuli', 'akaphefumli', 'ayiphefumuli', 'phefumla'])) {
     return { triage_level: 'RED', confidence: 100, rule_override: 'neonatal_emergency' };
   }
 
-  // isiZulu terms
-  if (lower.includes('isifuba') && lower.includes('ukuphefumula')) {
-    return { triage_level: 'RED', confidence: 100, rule_override: 'cardiac_emergency_zu' };
-  }
-  if (lower.includes('khulelwe') && lower.includes('opha')) {
-    return { triage_level: 'RED', confidence: 100, rule_override: 'obstetric_emergency_zu' };
-  }
-  if (lower.includes('akaphefumuli') || lower.includes('uqulekile')) {
-    return { triage_level: 'RED', confidence: 100, rule_override: 'airway_emergency_zu' };
-  }
-  if (lower.includes('inyoka') && lower.includes('luma')) {
-    return { triage_level: 'RED', confidence: 100, rule_override: 'envenomation_zu' };
+  // --- CARDIAC: Chest pain + breathing difficulty ---
+  // BUG FIX #1: patients say "cant breathe" not "shortness of breath"
+  if (hasAny(lower, ['chest pain', 'pain in my chest', 'seer in my bors', 'borspyn',
+                      'isifuba', 'ubuhlungu besifuba', 'sifuba sibuhlungu']) &&
+      hasAny(lower, ['shortness of breath', 'cant breathe', 'can\'t breathe', 'cannot breathe',
+                      'hard to breathe', 'struggling to breathe', 'difficulty breathing',
+                      'breathe properly', 'breathing problem', 'breathing difficult',
+                      'ukuphefumula', 'ukuphefumla', 'phefumula kanzima', 'phefumla kanzima',
+                      'asemhaal', 'nie asemhaal', 'asem'])) {
+    return { triage_level: 'RED', confidence: 100, rule_override: 'cardiac_emergency' };
   }
 
-  // isiXhosa terms
-  if (lower.includes('isifuba') && lower.includes('ukuphefumla')) {
-    return { triage_level: 'RED', confidence: 100, rule_override: 'cardiac_emergency_xh' };
-  }
-  if (lower.includes('khulelwe') && lower.includes('opha')) {
-    return { triage_level: 'RED', confidence: 100, rule_override: 'obstetric_emergency_xh' };
+  // --- OBSTETRIC: Pregnant + bleeding ---
+  if (hasAny(lower, ['pregnant', 'pregnancy', 'khulelwe', 'ukhulelwe', 'ngikhulelwe',
+                      'swanger', 'boimana', 'moimana', 'boima']) &&
+      hasAny(lower, ['bleeding', 'bleed', 'blood', 'opha', 'ngopha', 'ngiyangopha',
+                      'igazi', 'bloei', 'madi'])) {
+    return { triage_level: 'RED', confidence: 100, rule_override: 'obstetric_emergency' };
   }
 
-  // Afrikaans terms
-  if (lower.includes('borspyn') && lower.includes('asem')) {
-    return { triage_level: 'RED', confidence: 100, rule_override: 'cardiac_emergency_af' };
+  // --- AIRWAY: Not breathing / unconscious ---
+  // BUG FIX #2: added isiXhosa variants (phefumla vs phefumuli)
+  if (hasAny(lower, ['not breathing', 'stopped breathing', 'cant breathe', 'can\'t breathe',
+                      'cannot breathe', 'no breath', 'isnt breathing', 'not responsive',
+                      'unconscious', 'passed out', 'collapsed', 'unresponsive',
+                      'akaphefumuli', 'akaphefumli', 'akasenakuphefumla', 'akaphefumla',
+                      'uqulekile', 'akaphenduli', 'ulele phantsi',
+                      'nie asemhaal', 'bewusteloos', 'onbewus'])) {
+    return { triage_level: 'RED', confidence: 100, rule_override: 'airway_emergency' };
   }
-  if (lower.includes('swanger') && lower.includes('bloei')) {
-    return { triage_level: 'RED', confidence: 100, rule_override: 'obstetric_emergency_af' };
+
+  // --- ENVENOMATION: Snake bite ---
+  // BUG FIX #3: "bitten by a snake" doesn't contain "snake bite"
+  if (hasAny(lower, ['snake bite', 'snakebite', 'bitten by a snake', 'bitten by snake',
+                      'snake bit', 'bit by a snake', 'bit by snake',
+                      'inyoka', 'slang gebyt', 'slangbyt',
+                      'inyoka ilumile', 'ulunywe yinyoka'])) {
+    return { triage_level: 'RED', confidence: 100, rule_override: 'envenomation' };
+  }
+
+  // --- NEW: OVERDOSE / POISONING ---
+  // Two-part check: (action words) + (substance words) OR single-phrase matches
+  const hasODAction = hasAny(lower, ['overdose', 'drank', 'swallowed', 'took', 'ate', 'ingested']);
+  const hasODSubstance = hasAny(lower, ['pills', 'tablets', 'poison', 'bleach', 'paraffin',
+                                         'paracetamol', 'medication', 'medicine', 'bottle of',
+                                         'ipilisi', 'ushevu', 'ityhefu', 'gif', 'pille']);
+  const hasODDirect = hasAny(lower, ['overdose', 'poisoned', 'took too many',
+                                      'drank poison', 'drank bleach', 'drank paraffin',
+                                      'gif gedrink', 'pille gedrink']);
+  if (hasODDirect || (hasODAction && hasODSubstance)) {
+    return { triage_level: 'RED', confidence: 100, rule_override: 'overdose_poisoning' };
+  }
+
+  // --- NEW: ANAPHYLAXIS / SEVERE ALLERGIC REACTION ---
+  if (hasAny(lower, ['throat closing', 'throat is closing', 'throat swelling', 'throat swollen',
+                      'cant swallow and cant breathe', 'lips swollen', 'face swollen',
+                      'tongue swollen', 'anaphylax',
+                      'keel is toe', 'lippe is geswel']) &&
+      hasAny(lower, ['cant breathe', 'can\'t breathe', 'not breathing', 'struggling to breathe',
+                      'hard to breathe', 'asemhaal', 'breathe', 'swelling', 'swollen', 'geswel'])) {
+    return { triage_level: 'RED', confidence: 100, rule_override: 'anaphylaxis' };
+  }
+
+  // --- NEW: MAJOR TRAUMA (fall from height / not moving / severe mechanism) ---
+  if (hasAny(lower, ['fell from', 'fallen from', 'fall from', 'jumped from',
+                      'hit by a car', 'hit by car', 'run over', 'vehicle accident',
+                      'car accident', 'motor accident']) &&
+      hasAny(lower, ['not moving', 'cant move', 'can\'t move', 'unconscious', 'unresponsive',
+                      'blood from ear', 'blood from his ear', 'blood from nose',
+                      'not responding', 'akaphenduli', 'bewusteloos'])) {
+    return { triage_level: 'RED', confidence: 100, rule_override: 'major_trauma' };
   }
 
   return triage;
