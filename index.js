@@ -1,5 +1,5 @@
 // ============================================================
-// HealthBridgeSA — PRODUCTION READY v2.1
+// BIZUSIZO — PRODUCTION READY v2.1
 // + Hardcoded 11-language messages
 // + Smart facility routing with patient confirmation
 // + Bug fixes
@@ -32,9 +32,13 @@ const CONFIDENCE_THRESHOLD = 75;
 const FEATURES = {
   CCMDD_ROUTING: false,          // Enable when CCMDD partnership agreements signed
   VIRTUAL_CONSULTS: false,       // Enable when telemedicine provider integrated
-  CCMDD_API_URL: process.env.CCMDD_API_URL || null,       // Future: CCMDD system API endpoint
-  VIRTUAL_CONSULT_URL: process.env.VIRTUAL_CONSULT_URL || null,  // Future: telemedicine booking API
-  VIRTUAL_CONSULT_PHONE: process.env.VIRTUAL_CONSULT_PHONE || null, // Fallback: WhatsApp number for virtual consult booking
+  LAB_RESULTS: true,             // Lab results module — manual entry active by default
+  NHLS_API_INTEGRATION: false,   // Enable when NHLS API/LabTrack integration available
+  CCMDD_API_URL: process.env.CCMDD_API_URL || null,
+  VIRTUAL_CONSULT_URL: process.env.VIRTUAL_CONSULT_URL || null,
+  VIRTUAL_CONSULT_PHONE: process.env.VIRTUAL_CONSULT_PHONE || null,
+  NHLS_API_URL: process.env.NHLS_API_URL || null,        // Future: NHLS LabTrack API endpoint
+  NHLS_API_KEY: process.env.NHLS_API_KEY || null,         // Future: NHLS API credentials
 };
 
 // ================== HELPERS ==================
@@ -122,7 +126,7 @@ const MESSAGES = {
   // ==================== LANGUAGE MENU ====================
   language_menu: {
     // This is always shown in all languages at once
-    _all: `Welcome to HealthBridgeSA 🏥
+    _all: `Welcome to BIZUSIZO 🏥
 
 Choose your language / Khetha ulimi lwakho:
 
@@ -158,7 +162,7 @@ Reply with the number.`
 
   // ==================== CONSENT PROMPT ====================
   consent: {
-    en: `Welcome to HealthBridgeSA.
+    en: `Welcome to BIZUSIZO.
 
 This service:
 • Gives guidance — it does NOT diagnose
@@ -169,7 +173,7 @@ Do you agree?
 1 — Yes, I agree
 2 — No, I decline`,
 
-    zu: `Siyakwamukela ku-HealthBridgeSA.
+    zu: `Siyakwamukela ku-BIZUSIZO.
 
 Le sevisi:
 • Inikezela iseluleko — AYIKUXILONGI
@@ -180,7 +184,7 @@ Uyavuma?
 1 — Yebo, ngiyavuma
 2 — Cha, angivumi`,
 
-    xh: `Wamkelekile ku-HealthBridgeSA.
+    xh: `Wamkelekile ku-BIZUSIZO.
 
 Le sevisi:
 • Inika iingcebiso — AYIXILONGI
@@ -191,7 +195,7 @@ Uyavuma?
 1 — Ewe, ndiyavuma
 2 — Hayi, andivumi`,
 
-    af: `Welkom by HealthBridgeSA.
+    af: `Welkom by BIZUSIZO.
 
 Hierdie diens:
 • Gee leiding — dit diagnoseer NIE
@@ -202,7 +206,7 @@ Stem jy saam?
 1 — Ja, ek stem saam
 2 — Nee, ek stem nie saam nie`,
 
-    nso: `O amogetšwe go HealthBridgeSA.
+    nso: `O amogetšwe go BIZUSIZO.
 
 Tirelo ye:
 • E fa maele — GA E NYAKIŠIŠE bolwetši
@@ -213,7 +217,7 @@ A o dumela?
 1 — Ee, ke a dumela
 2 — Aowa, ga ke dumele`,
 
-    tn: `O amogelwa go HealthBridgeSA.
+    tn: `O amogelwa go BIZUSIZO.
 
 Tirelo e:
 • E fa kgakololo — GA E TLHATLHOBE
@@ -224,7 +228,7 @@ A o dumela?
 1 — Ee, ke a dumela
 2 — Nnyaa, ga ke dumele`,
 
-    st: `O amohelehile ho HealthBridgeSA.
+    st: `O amohelehile ho BIZUSIZO.
 
 Tshebeletso ena:
 • E fana ka tataiso — HA E HLAHLOBE
@@ -235,7 +239,7 @@ Na o dumela?
 1 — E, ke a dumela
 2 — Tjhe, ha ke dumele`,
 
-    ts: `U amukelekile eka HealthBridgeSA.
+    ts: `U amukelekile eka BIZUSIZO.
 
 Vukorhokeri lebyi:
 • Byi nyika switsundzuxo — A BYI KAMBELI
@@ -246,7 +250,7 @@ Xana wa pfumela?
 1 — Ina, ndza pfumela
 2 — Ee-ee, a ndzi pfumeli`,
 
-    ss: `Wemukelekile ku-HealthBridgeSA.
+    ss: `Wemukelekile ku-BIZUSIZO.
 
 Lesevisi:
 • Inika teluleko — AYIHLONGI
@@ -257,7 +261,7 @@ Uyavuma?
 1 — Yebo, ngiyavuma
 2 — Cha, angivumi`,
 
-    ve: `Vho ṱanganedzwa kha HealthBridgeSA.
+    ve: `Vho ṱanganedzwa kha BIZUSIZO.
 
 Tshumelo iyi:
 • I ṋea vhulivhisi — A I ṰOḒISISI VHULWADZE
@@ -268,7 +272,7 @@ Ni a tenda?
 1 — Ee, ndi a tenda
 2 — Hai, a thi tendi`,
 
-    nr: `Wamukelekile ku-HealthBridgeSA.
+    nr: `Wamukelekile ku-BIZUSIZO.
 
 Isevisi le:
 • Inikela isinqophiso — AYIHLONGI
@@ -590,47 +594,47 @@ Uyavuma?
 
   // ==================== FOLLOW-UP ====================
   follow_up: {
-    en: `Hi, you contacted HealthBridgeSA 2 days ago. How are your symptoms?
+    en: `Hi, you contacted BIZUSIZO 2 days ago. How are your symptoms?
 1. Better ✅
 2. The same ➡️
 3. Worse ⚠️`,
-    zu: `Sawubona, usithintile eHealthBridgeSA ezinsukwini ezi-2 ezedlule. Zinjani izimpawu zakho?
+    zu: `Sawubona, usithintile eBIZUSIZO ezinsukwini ezi-2 ezedlule. Zinjani izimpawu zakho?
 1. Zingcono ✅
 2. Ziyafana ➡️
 3. Zimbi kakhulu ⚠️`,
-    xh: `Molo, uqhagamshelane neHealthBridgeSA kwiintsuku ezi-2 ezidlulileyo. Zinjani iimpawu zakho?
+    xh: `Molo, uqhagamshelane neBIZUSIZO kwiintsuku ezi-2 ezidlulileyo. Zinjani iimpawu zakho?
 1. Zibhetele ✅
 2. Ziyafana ➡️
 3. Zimbi ngakumbi ⚠️`,
-    af: `Hallo, jy het 2 dae gelede HealthBridgeSA gekontak. Hoe is jou simptome?
+    af: `Hallo, jy het 2 dae gelede BIZUSIZO gekontak. Hoe is jou simptome?
 1. Beter ✅
 2. Dieselfde ➡️
 3. Erger ⚠️`,
-    nso: `Thobela, o ikgokagantše le HealthBridgeSA matšatši a 2 a go feta. Dika tša gago di bjang?
+    nso: `Thobela, o ikgokagantše le BIZUSIZO matšatši a 2 a go feta. Dika tša gago di bjang?
 1. Di kaone ✅
 2. Di swana ➡️
 3. Di mpefetše ⚠️`,
-    tn: `Dumela, o ikgolagantse le HealthBridgeSA malatsi a 2 a a fetileng. Matshwao a gago a ntse jang?
+    tn: `Dumela, o ikgolagantse le BIZUSIZO malatsi a 2 a a fetileng. Matshwao a gago a ntse jang?
 1. A botoka ✅
 2. A tshwana ➡️
 3. A maswe go feta ⚠️`,
-    st: `Lumela, o ikopantse le HealthBridgeSA matsatsi a 2 a fetileng. Matshwao a hao a jwang?
+    st: `Lumela, o ikopantse le BIZUSIZO matsatsi a 2 a fetileng. Matshwao a hao a jwang?
 1. A betere ✅
 2. A tshwana ➡️
 3. A mpe ho feta ⚠️`,
-    ts: `Xewani, u ti tshikelele na HealthBridgeSA masiku ya 2 ya hundzi. Swikombiso swa wena swi njhani?
+    ts: `Xewani, u ti tshikelele na BIZUSIZO masiku ya 2 ya hundzi. Swikombiso swa wena swi njhani?
 1. Swi antswa ✅
 2. Swi fanana ➡️
 3. Swi tika ku tlula ⚠️`,
-    ss: `Sawubona, usitsintsile eHealthBridgeSA emalangeni la-2 langetulu. Tinjani timphawu takho?
+    ss: `Sawubona, usitsintsile eBIZUSIZO emalangeni la-2 langetulu. Tinjani timphawu takho?
 1. Tincono ✅
 2. Tiyafana ➡️
 3. Timbi kakhulu ⚠️`,
-    ve: `Aa, no kwama HealthBridgeSA maḓuvha a 2 o fhelaho. Zwiga zwaṋu zwi hani?
+    ve: `Aa, no kwama BIZUSIZO maḓuvha a 2 o fhelaho. Zwiga zwaṋu zwi hani?
 1. Zwo khwiṋa ✅
 2. Zwi a fana ➡️
 3. Zwo ṱoḓa u ṱavhanya ⚠️`,
-    nr: `Lotjha, usitjheje ku-HealthBridgeSA emalangeni la-2 langaphambili. Iimpawu zakho zinjani?
+    nr: `Lotjha, usitjheje ku-BIZUSIZO emalangeni la-2 langaphambili. Iimpawu zakho zinjani?
 1. Zincono ✅
 2. Ziyafana ➡️
 3. Zimbi khulu ⚠️`
@@ -1040,10 +1044,10 @@ const CCMDD_MESSAGES = {
 
   // Re-engagement for previously defaulted patients
   reengagement: {
-    en: `Hello from HealthBridgeSA 💊\n\nWe noticed you haven't collected your chronic medication recently. We know life gets busy and collecting can be difficult.\n\nWe want to help you get back on track. Your health matters.\n\nWould you like help finding a convenient pickup point?\n1 — Yes, help me collect my medication\n2 — I am collecting elsewhere now\n3 — I need to speak to someone`,
-    zu: `Sawubona kusuka ku-HealthBridgeSA 💊\n\nSibonile ukuthi awukathathi umuthi wakho wamahlalakhona muva nje. Siyazi ukuthi impilo iba matasa futhi ukuthatha kungaba nzima.\n\nSifuna ukukusiza ubuyele emgudwini. Impilo yakho ibalulekile.\n\nUngathanda usizo lokuthola indawo elula yokuthatha?\n1 — Yebo, ngisize ngithole umuthi\n2 — Sengithatha kwenye indawo\n3 — Ngidinga ukukhuluma nomuntu`,
-    xh: `Molo ukusuka ku-HealthBridgeSA 💊\n\nSiqaphele ukuba awukawathathanga amayeza akho aqhelekileyo kutshanje. Siyazi ukuba ubomi buxakekile kwaye ukuthatha kunokuba nzima.\n\nSifuna ukukunceda ubuyele endleleni. Impilo yakho ibalulekile.\n\nUngathanda uncedo lokufumana indawo elula yokuthatha?\n1 — Ewe, ndincede ndifumane amayeza\n2 — Ndithatha kwenye indawo ngoku\n3 — Ndifuna ukuthetha nomntu`,
-    af: `Hallo van HealthBridgeSA 💊\n\nOns het opgemerk dat jy nie onlangs jou chroniese medikasie afgehaal het nie. Ons weet die lewe raak besig en afhaal kan moeilik wees.\n\nOns wil jou help om weer op koers te kom. Jou gesondheid is belangrik.\n\nWil jy hulp hê om 'n gerieflike afhaal punt te vind?\n1 — Ja, help my om my medikasie te kry\n2 — Ek haal nou elders af\n3 — Ek moet met iemand praat`,
+    en: `Hello from BIZUSIZO 💊\n\nWe noticed you haven't collected your chronic medication recently. We know life gets busy and collecting can be difficult.\n\nWe want to help you get back on track. Your health matters.\n\nWould you like help finding a convenient pickup point?\n1 — Yes, help me collect my medication\n2 — I am collecting elsewhere now\n3 — I need to speak to someone`,
+    zu: `Sawubona kusuka ku-BIZUSIZO 💊\n\nSibonile ukuthi awukathathi umuthi wakho wamahlalakhona muva nje. Siyazi ukuthi impilo iba matasa futhi ukuthatha kungaba nzima.\n\nSifuna ukukusiza ubuyele emgudwini. Impilo yakho ibalulekile.\n\nUngathanda usizo lokuthola indawo elula yokuthatha?\n1 — Yebo, ngisize ngithole umuthi\n2 — Sengithatha kwenye indawo\n3 — Ngidinga ukukhuluma nomuntu`,
+    xh: `Molo ukusuka ku-BIZUSIZO 💊\n\nSiqaphele ukuba awukawathathanga amayeza akho aqhelekileyo kutshanje. Siyazi ukuba ubomi buxakekile kwaye ukuthatha kunokuba nzima.\n\nSifuna ukukunceda ubuyele endleleni. Impilo yakho ibalulekile.\n\nUngathanda uncedo lokufumana indawo elula yokuthatha?\n1 — Ewe, ndincede ndifumane amayeza\n2 — Ndithatha kwenye indawo ngoku\n3 — Ndifuna ukuthetha nomntu`,
+    af: `Hallo van BIZUSIZO 💊\n\nOns het opgemerk dat jy nie onlangs jou chroniese medikasie afgehaal het nie. Ons weet die lewe raak besig en afhaal kan moeilik wees.\n\nOns wil jou help om weer op koers te kom. Jou gesondheid is belangrik.\n\nWil jy hulp hê om 'n gerieflike afhaal punt te vind?\n1 — Ja, help my om my medikasie te kry\n2 — Ek haal nou elders af\n3 — Ek moet met iemand praat`,
   },
 
   // Multimorbidity warning
@@ -1631,10 +1635,10 @@ const VIRTUAL_CONSULT_MESSAGES = {
   },
 
   booking_whatsapp: {
-    en: (phone) => `📱 To book your virtual consultation, please message this number on WhatsApp:\n\n*${phone}*\n\nTell them HealthBridgeSA referred you and describe your symptoms.`,
-    zu: (phone) => `📱 Ukubhukhela ukubonisana kwakho nge-video, sicela uthumele umyalezo ku:\n\n*${phone}*\n\nBatshele ukuthi uthunywe yi-HealthBridgeSA futhi uchaze izimpawu zakho.`,
-    xh: (phone) => `📱 Ukubhukisha ukubonisana kwakho nge-video, nceda uthumele umyalezo ku:\n\n*${phone}*\n\nBaxelele ukuba uthunyelwe yi-HealthBridgeSA kwaye uchaze iimpawu zakho.`,
-    af: (phone) => `📱 Om jou virtuele konsultasie te bespreek, stuur asseblief \'n boodskap na hierdie nommer op WhatsApp:\n\n*${phone}*\n\nSê vir hulle HealthBridgeSA het jou verwys en beskryf jou simptome.`,
+    en: (phone) => `📱 To book your virtual consultation, please message this number on WhatsApp:\n\n*${phone}*\n\nTell them BIZUSIZO referred you and describe your symptoms.`,
+    zu: (phone) => `📱 Ukubhukhela ukubonisana kwakho nge-video, sicela uthumele umyalezo ku:\n\n*${phone}*\n\nBatshele ukuthi uthunywe yi-BIZUSIZO futhi uchaze izimpawu zakho.`,
+    xh: (phone) => `📱 Ukubhukisha ukubonisana kwakho nge-video, nceda uthumele umyalezo ku:\n\n*${phone}*\n\nBaxelele ukuba uthunyelwe yi-BIZUSIZO kwaye uchaze iimpawu zakho.`,
+    af: (phone) => `📱 Om jou virtuele konsultasie te bespreek, stuur asseblief \'n boodskap na hierdie nommer op WhatsApp:\n\n*${phone}*\n\nSê vir hulle BIZUSIZO het jou verwys en beskryf jou simptome.`,
   },
 
   not_available: {
@@ -1742,7 +1746,403 @@ async function offerVirtualConsult(patientId, from, session) {
 }
 
 // ================================================================
-// ORCHESTRATOR — MAIN CONVERSATION FLOW
+// LAB RESULTS MODULE — Healthcare Worker Dashboard + Patient Notifications
+// STATUS: Manual entry ACTIVE. NHLS API integration DORMANT.
+// ================================================================
+// Informed by NMM District data: "Awaiting blood results" was the 4th
+// most common deactivation reason (94 cases out of 1,070 documented).
+//
+// Current flow:
+// 1. Healthcare worker enters lab results via dashboard (POST /api/lab-results)
+// 2. System sends WhatsApp notification to patient in their language
+// 3. Patient can ask about their lab results via WhatsApp (category 8 or keywords)
+//
+// Future flow (when NHLS API available):
+// 1. System polls NHLS LabTrack/TrakCare for patient results
+// 2. When new results detected, notifies healthcare worker on dashboard
+// 3. Worker reviews and approves → automated WhatsApp to patient
+// ================================================================
+
+// Supabase table: lab_results
+// id, patient_id, patient_phone, test_type, test_date, result_status,
+// result_summary, result_detail, entered_by, reviewed_by, reviewed_at,
+// patient_notified, patient_notified_at, nhls_reference, facility,
+// created_at, updated_at
+
+const LAB_MESSAGES = {
+  result_ready: {
+    en: (testType) => `📋 Your *${testType}* results are ready.\n\nPlease visit your clinic to discuss the results with your healthcare provider.\n\nIf you have been referred back to the clinic, this does NOT mean something is wrong — many results are routine check-ups.\n\nQuestions? Reply "results" or call your clinic.`,
+    zu: (testType) => `📋 Imiphumela yakho ye-*${testType}* isilungile.\n\nSicela uvakashele umtholampilo wakho ukuxoxa ngemiphumela nesisebenzi sezempilo.\n\nUma ubuyelwe emtholampilo, lokhu AKUSHO ukuthi kukhona okungalungile — imiphumela eminingi ingeyokuhlolwa okujwayelekile.\n\nImibuzo? Phendula "imiphumela" noma ushayele umtholampilo wakho.`,
+    xh: (testType) => `📋 Iziphumo zakho ze-*${testType}* zilungile.\n\nNceda utyelele ikliniki yakho ukuxoxa ngeziphumo nomsebenzi wezempilo.\n\nUkuba ubuyiselwe ekliniki, oku AKUTHETHI ukuba kukho into engalunganga — iziphumo ezininzi zezokuhlolwa okuqhelekileyo.\n\nImibuzo? Phendula "iziphumo" okanye utsalele ikliniki yakho.`,
+    af: (testType) => `📋 Jou *${testType}* resultate is gereed.\n\nBesoek asseblief jou kliniek om die resultate met jou gesondheidswerker te bespreek.\n\nAs jy terugverwys is na die kliniek, beteken dit NIE iets is fout nie — baie resultate is roetine-ondersoeke.\n\nVrae? Antwoord "resultate" of bel jou kliniek.`,
+  },
+
+  result_action_required: {
+    en: (testType) => `📋 Your *${testType}* results are ready and your healthcare provider would like to see you.\n\nPlease visit your clinic within the next 7 days. This is important for your ongoing care.\n\nIf you cannot get to the clinic, reply "help" and we will assist you.`,
+    zu: (testType) => `📋 Imiphumela yakho ye-*${testType}* isilungile futhi isisebenzi sakho sezempilo sifuna ukukubona.\n\nSicela uvakashele umtholampilo wakho ezinsukwini ezi-7 ezizayo. Lokhu kubalulekile ekunakekelweni kwakho okuqhubekayo.\n\nUma ungakwazi ukufika emtholampilo, phendula "usizo" futhi sizokusiza.`,
+    xh: (testType) => `📋 Iziphumo zakho ze-*${testType}* zilungile kwaye umsebenzi wakho wezempilo ufuna ukukubona.\n\nNceda utyelele ikliniki yakho kwiintsuku ezi-7 ezizayo. Oku kubalulekile kwinkathalelo yakho eqhubekayo.\n\nUkuba awukwazi ukufika ekliniki, phendula "uncedo" kwaye siza kukunceda.`,
+    af: (testType) => `📋 Jou *${testType}* resultate is gereed en jou gesondheidswerker wil jou graag sien.\n\nBesoek asseblief jou kliniek binne die volgende 7 dae. Dit is belangrik vir jou voortgesette sorg.\n\nAs jy nie by die kliniek kan uitkom nie, antwoord "hulp" en ons sal jou help.`,
+  },
+
+  result_normal: {
+    en: (testType) => `✅ Good news! Your *${testType}* results are back and everything looks normal.\n\nKeep taking your medication as prescribed. Your next check-up will be scheduled as usual.\n\nStay well! 💚`,
+    zu: (testType) => `✅ Izindaba ezinhle! Imiphumela yakho ye-*${testType}* ibuyile futhi konke kubukeka kujwayelekile.\n\nQhubeka uthatha umuthi wakho njengoba unikeziwe. Ukuhlolwa kwakho okulandelayo kuzohlelelwa njengokujwayelekile.\n\nHlala kahle! 💚`,
+    xh: (testType) => `✅ Iindaba ezimnandi! Iziphumo zakho ze-*${testType}* zibuyile kwaye yonke into ibonakala iqhelekile.\n\nQhubeka uthatha amayeza akho njengoko unikeziwe. Ukuhlolwa kwakho okulandelayo kuya kucwangciswa njengokuqhelekileyo.\n\nHlala kakuhle! 💚`,
+    af: (testType) => `✅ Goeie nuus! Jou *${testType}* resultate is terug en alles lyk normaal.\n\nHou aan om jou medikasie soos voorgeskryf te neem. Jou volgende ondersoek sal soos gewoonlik geskeduleer word.\n\nBly gesond! 💚`,
+  },
+
+  check_status: {
+    en: 'Let me check your lab results. One moment please...',
+    zu: 'Ake ngibheke imiphumela yakho yasekhemisti. Umzuzwana owodwa...',
+    xh: 'Mandibheke iziphumo zakho zasekhemisti. Umzuzwana omnye nceda...',
+    af: 'Laat ek jou laboratorium resultate nagaan. Een oomblik asseblief...',
+  },
+
+  no_results: {
+    en: 'We do not have any lab results on file for you at the moment. If you are expecting results, please check with your clinic.\n\nResults typically take 3-7 working days depending on the test type.',
+    zu: 'Asinayo imiphumela yasekhemisi ngawe okwamanje. Uma ulindele imiphumela, sicela ubheke nomtholampilo wakho.\n\nImiphumela ngokuvamile ithatha izinsuku ezi-3 kuya kwezi-7 zomsebenzi kuya ngohlobo lokuhlolwa.',
+    xh: 'Asina ziphumo zasekhemisti ngawe okwangoku. Ukuba ulindele iziphumo, nceda uhlole nekliniki yakho.\n\nIziphumo zihlala zithatha iintsuku ezi-3 ukuya kwezi-7 zomsebenzi ngokuxhomekeke kuhlobo lwesivavanyelo.',
+    af: 'Ons het tans geen laboratorium resultate vir jou op lêer nie. As jy resultate verwag, gaan asseblief by jou kliniek na.\n\nResultate neem gewoonlik 3-7 werksdae afhangende van die toets tipe.',
+  },
+
+  pending_results: {
+    en: (testType, testDate) => `Your *${testType}* test from *${testDate}* is still being processed. We will notify you on WhatsApp as soon as results are available.\n\nYou do not need to visit the clinic to check — we will come to you.`,
+    zu: (testType, testDate) => `Ukuhlolwa kwakho kwe-*${testType}* kwe-*${testDate}* kusaqhutshwa. Sizokwazisa ku-WhatsApp uma imiphumela itholakalile.\n\nAwudingi ukuvakashela umtholampilo ukuhlola — sizofinyelela kuwe.`,
+    xh: (testType, testDate) => `Uvavanyo lwakho lwe-*${testType}* lwe-*${testDate}* lusaqhutyelwa. Siza kukwazisa kuWhatsApp xa iziphumo zifumaneka.\n\nAwudingi ukutyelela ikliniki ukuhlola — siza kuza kuwe.`,
+    af: (testType, testDate) => `Jou *${testType}* toets van *${testDate}* word nog verwerk. Ons sal jou op WhatsApp in kennis stel sodra resultate beskikbaar is.\n\nJy hoef nie die kliniek te besoek om na te gaan nie — ons kom na jou toe.`,
+  },
+};
+
+// Common test types for the dashboard dropdown
+const LAB_TEST_TYPES = [
+  'CD4 Count', 'Viral Load', 'Full Blood Count', 'HbA1c (Diabetes)',
+  'Creatinine/eGFR (Kidney)', 'Liver Function', 'Lipid Panel (Cholesterol)',
+  'TB GeneXpert', 'Pap Smear', 'Blood Glucose', 'Urinalysis',
+  'Pregnancy Test', 'STI Screening', 'Other'
+];
+
+// Result categories that determine notification type
+const RESULT_CATEGORIES = {
+  normal: 'result_normal',           // All good — positive reinforcement
+  ready: 'result_ready',            // Ready for discussion — neutral
+  action_required: 'result_action_required'  // Needs clinic visit — urgent but not alarming
+};
+
+// ============ LAB RESULTS DATABASE FUNCTIONS ============
+async function getPatientLabResults(patientId) {
+  try {
+    const { data } = await supabase
+      .from('lab_results')
+      .select('*')
+      .eq('patient_id', patientId)
+      .order('created_at', { ascending: false })
+      .limit(5);
+    return data || [];
+  } catch (e) {
+    return [];
+  }
+}
+
+async function createLabResult(entry) {
+  try {
+    const { data } = await supabase
+      .from('lab_results')
+      .insert(entry)
+      .select()
+      .single();
+    return data;
+  } catch (e) {
+    console.error('Failed to create lab result:', e);
+    return null;
+  }
+}
+
+async function updateLabResult(id, updates) {
+  try {
+    await supabase
+      .from('lab_results')
+      .update({ ...updates, updated_at: new Date() })
+      .eq('id', id);
+  } catch (e) {
+    console.error('Failed to update lab result:', e);
+  }
+}
+
+// ============ NOTIFY PATIENT OF LAB RESULTS ============
+async function notifyPatientOfResults(labResult) {
+  if (!labResult.patient_phone) return;
+
+  // Get patient session for language preference
+  const patientId = labResult.patient_id;
+  const session = await getSession(patientId);
+  const lang = session.language || 'en';
+
+  const testType = labResult.test_type || 'lab test';
+  const category = labResult.result_category || 'ready';
+  const messageKey = RESULT_CATEGORIES[category] || 'result_ready';
+
+  const msgTemplate = LAB_MESSAGES[messageKey][lang] || LAB_MESSAGES[messageKey]['en'];
+  const notification = typeof msgTemplate === 'function' ? msgTemplate(testType) : msgTemplate;
+
+  await sendWhatsAppMessage(labResult.patient_phone, notification);
+
+  // Log notification
+  await updateLabResult(labResult.id, {
+    patient_notified: true,
+    patient_notified_at: new Date()
+  });
+}
+
+// ============ PATIENT WHATSAPP: CHECK LAB RESULTS ============
+function isLabResultsQuery(message) {
+  const lower = (message || '').toLowerCase();
+  const keywords = [
+    'results', 'lab', 'blood test', 'test results', 'my results',
+    'imiphumela', 'ikhemisi',                    // isiZulu
+    'iziphumo', 'ikhemisti',                     // isiXhosa
+    'resultate', 'laboratorium',                  // Afrikaans
+    'cd4', 'viral load', 'blood count',
+    'sugar test', 'kidney test', 'liver test',
+  ];
+  return keywords.some(kw => lower.includes(kw));
+}
+
+async function handleLabResultsQuery(patientId, from, session) {
+  const lang = session.language || 'en';
+
+  // Send "checking" message
+  const checkMsg = LAB_MESSAGES.check_status[lang] || LAB_MESSAGES.check_status['en'];
+  await sendWhatsAppMessage(from, checkMsg);
+
+  const results = await getPatientLabResults(patientId);
+
+  if (results.length === 0) {
+    const noMsg = LAB_MESSAGES.no_results[lang] || LAB_MESSAGES.no_results['en'];
+    await sendWhatsAppMessage(from, noMsg);
+    return;
+  }
+
+  // Show most recent result
+  const latest = results[0];
+
+  if (latest.result_status === 'pending') {
+    const testDate = new Date(latest.test_date).toLocaleDateString('en-ZA');
+    const pendingMsg = (LAB_MESSAGES.pending_results[lang] || LAB_MESSAGES.pending_results['en'])(latest.test_type, testDate);
+    await sendWhatsAppMessage(from, pendingMsg);
+  } else if (latest.result_status === 'ready' && latest.patient_notified) {
+    // Already notified — resend the result notification
+    await notifyPatientOfResults(latest);
+  } else if (latest.result_status === 'ready') {
+    await notifyPatientOfResults(latest);
+  }
+}
+
+// ============ DORMANT: NHLS API INTEGRATION ============
+// When NHLS provides an API or we gain LabTrack integration access,
+// this function will poll for new results and create entries automatically.
+async function pollNHLSResults() {
+  if (!FEATURES.NHLS_API_INTEGRATION || !FEATURES.NHLS_API_URL) return;
+
+  try {
+    // Future: poll NHLS LabTrack/TrakCare API for new results
+    // The expected flow:
+    // 1. Query NHLS API with facility codes and date range
+    // 2. For each new result, match to patient_id via NHLS reference number
+    // 3. Create lab_results entry with status 'pending_review'
+    // 4. Notify healthcare worker on dashboard for review
+    // 5. Once reviewed and approved, notify patient via WhatsApp
+    //
+    // Expected NHLS API response structure (speculative):
+    // {
+    //   nhls_reference: "LAB-2026-XXXXXX",
+    //   patient_identifier: "...",
+    //   test_type: "CD4 Count",
+    //   test_date: "2026-03-20",
+    //   result: { value: 450, unit: "cells/uL", reference_range: "500-1500" },
+    //   status: "final",
+    //   facility: "Benoni Clinic",
+    //   ordering_provider: "Dr. ..."
+    // }
+    //
+    // const response = await fetch(FEATURES.NHLS_API_URL + '/results', {
+    //   headers: { 'Authorization': `Bearer ${FEATURES.NHLS_API_KEY}` }
+    // });
+    // const results = await response.json();
+    // for (const result of results) { ... }
+
+    console.log('NHLS API polling: not yet implemented — awaiting API access');
+  } catch (e) {
+    console.error('NHLS API poll error:', e);
+  }
+}
+
+// Poll NHLS every 15 minutes (when enabled)
+setInterval(pollNHLSResults, 15 * 60 * 1000);
+
+// ================================================================
+// LAB RESULTS DASHBOARD — API ENDPOINTS
+// ================================================================
+// These endpoints power the healthcare worker dashboard for lab results.
+// Protected by dashboard password (same as existing dashboard auth).
+// ================================================================
+
+// Middleware: simple auth check
+function requireDashboardAuth(req, res, next) {
+  const password = req.headers['x-dashboard-password'] || req.query.password;
+  if (password !== process.env.DASHBOARD_PASSWORD) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  next();
+}
+
+// GET /api/lab-results — List results (filterable)
+app.get('/api/lab-results', requireDashboardAuth, async (req, res) => {
+  try {
+    let query = supabase
+      .from('lab_results')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(parseInt(req.query.limit) || 50);
+
+    if (req.query.status) query = query.eq('result_status', req.query.status);
+    if (req.query.facility) query = query.eq('facility', req.query.facility);
+    if (req.query.test_type) query = query.eq('test_type', req.query.test_type);
+    if (req.query.patient_id) query = query.eq('patient_id', req.query.patient_id);
+
+    const { data, error } = await query;
+    if (error) throw error;
+
+    res.json({ results: data, test_types: LAB_TEST_TYPES });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// POST /api/lab-results — Create new lab result (manual entry by healthcare worker)
+app.post('/api/lab-results', requireDashboardAuth, async (req, res) => {
+  try {
+    const { patient_id, patient_phone, test_type, test_date, result_status,
+            result_summary, result_detail, result_category, entered_by,
+            nhls_reference, facility } = req.body;
+
+    if (!patient_id || !test_type) {
+      return res.status(400).json({ error: 'patient_id and test_type are required' });
+    }
+
+    const entry = {
+      patient_id,
+      patient_phone: patient_phone || null,
+      test_type,
+      test_date: test_date || new Date(),
+      result_status: result_status || 'pending',
+      result_summary: result_summary || null,
+      result_detail: result_detail || null,
+      result_category: result_category || 'ready',
+      entered_by: entered_by || 'dashboard',
+      nhls_reference: nhls_reference || null,
+      facility: facility || null,
+      patient_notified: false,
+      created_at: new Date()
+    };
+
+    const result = await createLabResult(entry);
+    if (!result) throw new Error('Failed to create entry');
+
+    res.json({ success: true, result });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// PUT /api/lab-results/:id — Update result (mark as ready, add details)
+app.put('/api/lab-results/:id', requireDashboardAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const updates = req.body;
+
+    await updateLabResult(id, {
+      ...updates,
+      reviewed_at: new Date(),
+      reviewed_by: updates.reviewed_by || 'dashboard'
+    });
+
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// POST /api/lab-results/:id/notify — Send WhatsApp notification to patient
+app.post('/api/lab-results/:id/notify', requireDashboardAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { data: labResult } = await supabase
+      .from('lab_results')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (!labResult) return res.status(404).json({ error: 'Result not found' });
+    if (!labResult.patient_phone) return res.status(400).json({ error: 'No patient phone number' });
+
+    await notifyPatientOfResults(labResult);
+    res.json({ success: true, message: 'Patient notified via WhatsApp' });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// POST /api/lab-results/:id/mark-ready — Mark as ready AND notify patient in one action
+app.post('/api/lab-results/:id/mark-ready', requireDashboardAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { result_category, result_summary, reviewed_by } = req.body;
+
+    await updateLabResult(id, {
+      result_status: 'ready',
+      result_category: result_category || 'ready',
+      result_summary: result_summary || null,
+      reviewed_by: reviewed_by || 'dashboard',
+      reviewed_at: new Date()
+    });
+
+    // Fetch updated record and notify
+    const { data: labResult } = await supabase
+      .from('lab_results')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (labResult && labResult.patient_phone) {
+      await notifyPatientOfResults(labResult);
+      res.json({ success: true, message: 'Marked as ready and patient notified' });
+    } else {
+      res.json({ success: true, message: 'Marked as ready. No phone number — patient not notified.' });
+    }
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /api/lab-results/stats — Dashboard statistics
+app.get('/api/lab-results/stats', requireDashboardAuth, async (req, res) => {
+  try {
+    const { data: all } = await supabase.from('lab_results').select('result_status, patient_notified');
+
+    const stats = {
+      total: all ? all.length : 0,
+      pending: all ? all.filter(r => r.result_status === 'pending').length : 0,
+      ready: all ? all.filter(r => r.result_status === 'ready').length : 0,
+      notified: all ? all.filter(r => r.patient_notified === true).length : 0,
+      not_notified: all ? all.filter(r => r.result_status === 'ready' && !r.patient_notified).length : 0,
+    };
+
+    res.json(stats);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ================================================================
 async function orchestrate(patientId, from, message, session) {
   const lang = session.language || 'en';
@@ -1869,6 +2269,12 @@ async function orchestrate(patientId, from, message, session) {
       await scheduleFollowUp(patientId, from, session.lastTriage?.triage_level);
       return;
     }
+  }
+
+  // ==================== STEP: LAB RESULTS QUERY ====================
+  if (FEATURES.LAB_RESULTS && isLabResultsQuery(message)) {
+    await handleLabResultsQuery(patientId, from, session);
+    return;
   }
 
   // ==================== STEP: CCMDD CHECK (before triage) ====================
@@ -2120,10 +2526,10 @@ app.get('/webhook', (req, res) => {
 
 // ================== HEALTH CHECK ==================
 app.get('/', (req, res) => {
-  res.json({ status: 'ok', version: '2.1', service: 'HealthBridgeSA' });
+  res.json({ status: 'ok', version: '2.1', service: 'BIZUSIZO' });
 });
 
 // ================== START ==================
 app.listen(process.env.PORT || 3000, () => {
-  console.log('🚀 HealthBridgeSA v2.1 Orchestrator LIVE');
+  console.log('🚀 BIZUSIZO v2.1 Orchestrator LIVE');
 });
