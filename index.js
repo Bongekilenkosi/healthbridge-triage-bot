@@ -164,124 +164,201 @@ Reply with the number.`
   consent: {
     en: `Welcome to BIZUSIZO.
 
-This service:
-• Gives guidance — it does NOT diagnose
-• May refer you to a nurse if needed
-• Keeps your information safe under POPIA
+This service helps you understand the urgency of your symptoms and guides you on where to seek care.
 
-Do you agree?
-1 — Yes, I agree
-2 — No, I decline`,
+Important:
+• This service provides health guidance only.
+• It does not diagnose medical conditions.
+• It does not replace a doctor or nurse.
+• We may use automated technology to help assess your symptoms.
+
+Your responses may be securely stored to improve the safety and quality of the service. Your information will be handled according to South African privacy laws (POPIA).
+
+If you have severe symptoms such as chest pain, severe breathing difficulty, or loss of consciousness, please go to the nearest emergency facility or call *10177* immediately.
+
+Do you consent to using this service?
+1 — Yes, I consent
+2 — No, exit`,
 
     zu: `Siyakwamukela ku-BIZUSIZO.
 
-Le sevisi:
-• Inikezela iseluleko — AYIKUXILONGI
-• Ingakudlulisela kunesi uma kudingeka
-• Igcina imininingwane yakho iphephile nge-POPIA
+Le sevisiikusiza uqonde ukuthi izimpawu zakho ziphuthuma kangakanani futhi ikuqondise lapho ungathola khona usizo lwezempilo.
 
-Uyavuma?
+Okubalulekile:
+• Le sevisi inikeza isiqondiso sezempilo kuphela.
+• Ayixilongi izifo.
+• Ayithathi indawo kadokotela noma unesi.
+• Singasebenzisa ubuchwepheshe obuzenzakalelayo ukusiza sihlole izimpawu zakho.
+
+Izimpendulo zakho zingagcinwa ngokuphephile ukuthuthukisa ukuphepha nekhwalithi yesevisi. Imininingwane yakho izophathwa ngokuvumelana nemithetho yobumfihlo yaseNingizimu Afrika (POPIA).
+
+Uma unezimpawu ezinzima njengokubuhlungu kwesifuba, ukukhathazeka okukhulu kokuphefumula, noma ukuquleka, sicela uye esibhedlela esiseduze noma ushaye *10177* ngokushesha.
+
+Uyavuma ukusebenzisa le sevisi?
 1 — Yebo, ngiyavuma
-2 — Cha, angivumi`,
+2 — Cha, phuma`,
 
     xh: `Wamkelekile ku-BIZUSIZO.
 
-Le sevisi:
-• Inika iingcebiso — AYIXILONGI
-• Inokukudlulisela kumongikazi ukuba kuyafuneka
-• Igcina inkcazelo yakho ikhuselekile nge-POPIA
+Le sevisi ikunceda uqonde ukuba iimpawu zakho zingxamiseke kangakanani kwaye ikukhokele apho ungafumana khona unyango.
 
-Uyavuma?
+Okubalulekileyo:
+• Le sevisi inika isikhokelo sezempilo kuphela.
+• Ayixilongi izifo.
+• Ayithathi indawo kagqirha okanye umongikazi.
+• Sinokusebenzisa ubuchwepheshe obuzenzakalelayo ukunceda sihlole iimpawu zakho.
+
+Iimpendulo zakho zinokugcinwa ngokukhuselekileyo ukuphucula ukhuseleko nomgangatho wesevisi. Inkcazelo yakho iya kuphathwa ngokuvumelana nemithetho yabucala yaseMzantsi Afrika (POPIA).
+
+Ukuba uneempawu ezinzima ezinjengentlungu yesifuba, ubunzima obukhulu bokuphefumla, okanye ukuphulukana neziqondo, nceda uye kwisibhedlele esikufutshane okanye utsalele *10177* ngokukhawuleza.
+
+Uyavuma ukusebenzisa le sevisi?
 1 — Ewe, ndiyavuma
-2 — Hayi, andivumi`,
+2 — Hayi, phuma`,
 
     af: `Welkom by BIZUSIZO.
 
-Hierdie diens:
-• Gee leiding — dit diagnoseer NIE
-• Kan jou na 'n verpleegster verwys indien nodig
-• Hou jou inligting veilig onder POPIA
+Hierdie diens help jou om die dringendheid van jou simptome te verstaan en lei jou na waar om sorg te soek.
 
-Stem jy saam?
-1 — Ja, ek stem saam
-2 — Nee, ek stem nie saam nie`,
+Belangrik:
+• Hierdie diens bied slegs gesondheidsleiding.
+• Dit diagnoseer nie mediese toestande nie.
+• Dit vervang nie 'n dokter of verpleegster nie.
+• Ons kan outomatiese tegnologie gebruik om jou simptome te help assesseer.
+
+Jou antwoorde kan veilig gestoor word om die veiligheid en kwaliteit van die diens te verbeter. Jou inligting sal hanteer word volgens Suid-Afrikaanse privaatheidswette (POPIA).
+
+As jy ernstige simptome het soos borspyn, ernstige asemhalingsprobleme, of bewusteloosheid, gaan asseblief na die naaste noodfasiliteit of bel *10177* onmiddellik.
+
+Stem jy in om hierdie diens te gebruik?
+1 — Ja, ek stem in
+2 — Nee, verlaat`,
 
     nso: `O amogetšwe go BIZUSIZO.
 
-Tirelo ye:
-• E fa maele — GA E NYAKIŠIŠE bolwetši
-• E ka go romela go mooki ge go nyakega
-• E boloka tshedimošo ya gago e bolokegile ka POPIA
+Tirelo ye e go thuša go kwešiša gore dika tša gago di šutišwa gakaakang le go go šupa moo o ka hwetšago thušo ya kalafo.
 
-A o dumela?
+Se bohlokwa:
+• Tirelo ye e fa tataiso ya maphelo fela.
+• Ga e nyakišiše malwetši.
+• Ga e tšee legato la ngaka goba mooki.
+• Re ka šomiša theknolotši ya go itiragalela go thuša go lekola dika tša gago.
+
+Dikarabo tša gago di ka bolokwa ka polokego go kaonafatša polokego le boleng bja tirelo. Tshedimošo ya gago e tla swarwa go ya ka melao ya sephiri ya Afrika Borwa (POPIA).
+
+Ge o na le dika tše šoro go swana le bohloko bja sehuba, bothata bjo bogolo bja go hema, goba go lahlegelwa ke temogo, hle eya lefelong la tšhoganetšo la kgauswi goba o leletše *10177* ka pela.
+
+A o dumela go šomiša tirelo ye?
 1 — Ee, ke a dumela
-2 — Aowa, ga ke dumele`,
+2 — Aowa, tšwa`,
 
     tn: `O amogelwa go BIZUSIZO.
 
-Tirelo e:
-• E fa kgakololo — GA E TLHATLHOBE
-• E ka go romela go mooki fa go tlhokega
-• E boloka tshedimosetso ya gago e babalesegile ka POPIA
+Tirelo e e go thusa go tlhaloganya gore matshwao a gago a potlakile go le kae le go go kaela kwa o ka batlelang thuso ya kalafi teng.
 
-A o dumela?
+Se se botlhokwa:
+• Tirelo e e fana ka kaelo ya boitekanelo fela.
+• Ga e tlhatlhobe malwetse.
+• Ga e tsee legato la ngaka kgotsa mooki.
+• Re ka dirisa thekenoloji e e itiragalelang go thusa go sekaseka matshwao a gago.
+
+Dikarabo tsa gago di ka bolokwa ka polokesego go tokafatsa polokesego le boleng jwa tirelo. Tshedimosetso ya gago e tla tsholwa go ya ka melao ya sephiri ya Aforika Borwa (POPIA).
+
+Fa o na le matshwao a a masisi jaaka botlhoko jwa sehuba, bothata jo bo masisi jwa go hema, kgotsa go latlhegelwa ke temogo, tswee-tswee ya lefelong la tshoganyetso le le gaufi kgotsa leletsa *10177* ka bonako.
+
+A o dumela go dirisa tirelo e?
 1 — Ee, ke a dumela
-2 — Nnyaa, ga ke dumele`,
+2 — Nnyaa, tswa`,
 
     st: `O amohelehile ho BIZUSIZO.
 
-Tshebeletso ena:
-• E fana ka tataiso — HA E HLAHLOBE
-• E ka o romela ho mooki haeba ho hlokahala
-• E boloka tlhahisoleseding ya hao e bolokehile ka POPIA
+Tshebeletso ena e o thusa ho utlwisisa hore matshwao a hao a potlakile hakae le ho o tataisa moo o ka batlang thuso ya bongaka.
 
-Na o dumela?
+Se bohlokwa:
+• Tshebeletso ena e fana ka tataiso ya bophelo fela.
+• Ha e hlahlobe mafu.
+• Ha e nke sebaka sa ngaka kapa mooki.
+• Re ka sebedisa theknoloji e iketsahalang ho thusa ho hlahloba matshwao a hao.
+
+Dikarabo tsa hao di ka bolokwa ka polokelo e bolokehileng ho ntlafatsa polokeho le boleng ba tshebeletso. Tlhahisoleseding ya hao e tla tshwarwa ho latela melao ya lekunutu ya Afrika Borwa (POPIA).
+
+Haeba o na le matshwao a boima joaloka bohloko ba sefuba, bothata bo boholo ba ho hema, kapa ho lahlehelwa ke fahleho, ka kopo eya lefapheng la tshohanyetso le haufi kapa o letsetse *10177* hang.
+
+Na o dumela ho sebedisa tshebeletso ena?
 1 — E, ke a dumela
-2 — Tjhe, ha ke dumele`,
+2 — Tjhe, tswa`,
 
     ts: `U amukelekile eka BIZUSIZO.
 
-Vukorhokeri lebyi:
-• Byi nyika switsundzuxo — A BYI KAMBELI
-• Byi nga ku rhumela eka nesi loko swi laveka
-• Byi hlayisa vuxokoxoko bya wena byi hlayisekile hi POPIA
+Vukorhokeri lebyi byi ku pfuna ku twisisa leswaku swikombiso swa wena swi hatlisa ku fikela kwihi naswona byi ku komba laha u nga kumaka pfuno ya vutshunguri.
 
-Xana wa pfumela?
+Swa nkoka:
+• Vukorhokeri lebyi byi nyika vulanguteri bya rihanyo ntsena.
+• A byi kambeli mavabyi.
+• A byi teki ndhawu ya dokodela kumbe nesi.
+• Hi nga tirhisa xitirhisiwa xo tiyendlela ku pfuna ku kambela swikombiso swa wena.
+
+Tinhlamulo ta wena ti nga hlayisiwa hi vuhlayiseki ku antswisa vuhlayiseki na xiyimo xa vukorhokeri. Vuxokoxoko bya wena byi ta swarwa hi ku ya hi milawu ya xihundla ya Afrika Dzonga (POPIA).
+
+Loko u na swikombiso swo tika ku fana na ku vava ka xifuva, ku tika ko kulu ka ku hefemula, kumbe ku lahlekeriwa hi ku tiva, hi kombela u ya eka ndhawu ya swihatla ya kusuhi kumbe u ringela *10177* hi ku hatlisa.
+
+Xana wa pfumela ku tirhisa vukorhokeri lebyi?
 1 — Ina, ndza pfumela
-2 — Ee-ee, a ndzi pfumeli`,
+2 — Ee-ee, huma`,
 
     ss: `Wemukelekile ku-BIZUSIZO.
 
-Lesevisi:
-• Inika teluleko — AYIHLONGI
-• Ingakutfumela kunesi uma kudzingeka
-• Igcina lokutsintana kwakho kuphephile nge-POPIA
+Lesevisi likusita kutsi ucondze kutsi timphawu takho tisheshisa kangakanani futsi likucondzise lapho ungayotfola lusito lwetekwelashwa.
 
-Uyavuma?
+Lokubalulekile:
+• Lesevisi liniketa teluleko yempilo kuphela.
+• Alihlongi tifo.
+• Alitsatsi sikhundla sedokotela noma nesi.
+• Singasebentisa buchwepheshe lobusebenta bodvwana kusita kuhlola timphawu takho.
+
+Timphendvulo takho tingagcinwa ngekuphepha kwentfutfukisa kuphepha nekhwalithi yesevisi. Lokutsintana kwakho kutawusingatswa ngekuvumelana nemtsetfo yekufihla yaseNingizimu ye-Afrika (POPIA).
+
+Uma unetimphawu letinkhulu njengekuva buhlungu esifubeni, kuphefumula nzima, noma kulahlekelwa ngumcondvo, sicela uye endzaweni yekusheshisa leseduze noma ushayele *10177* masinyane.
+
+Uyavuma kusebentisa lesevisi?
 1 — Yebo, ngiyavuma
-2 — Cha, angivumi`,
+2 — Cha, phuma`,
 
     ve: `Vho ṱanganedzwa kha BIZUSIZO.
 
-Tshumelo iyi:
-• I ṋea vhulivhisi — A I ṰOḒISISI VHULWADZE
-• I nga ni rumela kha nese arali zwi tshi ṱoḓea
-• I vhulunga mafhungo aṋu o tsireledzeaho nga POPIA
+Tshumelo iyi i ni thusa u pfesesa uri zwiga zwaṋu zwi ṱoḓa u ṱavhanya hani na u ni sumbedza hune na nga wana thuso ya mutakalo.
 
-Ni a tenda?
+Zwa ndeme:
+• Tshumelo iyi i ṋea vhulivhisi ha mutakalo fhedzi.
+• A i ṱoḓisisi vhulwadze.
+• A i dzhii fhethu ha dokotela kana nese.
+• Ri nga shumisa thekhinolodzhi i ḓi shumaho u thusa u sedza zwiga zwaṋu.
+
+Phindulo dzaṋu dzi nga vhulungwa nga vhutsireledzi u khwinisa vhutsireledzi na khalithi ya tshumelo. Mafhungo aṋu a ḓo farwa u ya nga milayo ya tshiphiri ya Afrika Tshipembe (POPIA).
+
+Arali ni na zwiga zwi vhavhaho zwi ngaho vhuṱungu ha tshifuva, u kundelwa u femba, kana u xela muhumbulo, ri humbela ni ye fhethu ha tshoganetso hu re tsini kana ni founele *10177* nga u ṱavhanya.
+
+Ni a tenda u shumisa tshumelo iyi?
 1 — Ee, ndi a tenda
-2 — Hai, a thi tendi`,
+2 — Hai, bvani`,
 
     nr: `Wamukelekile ku-BIZUSIZO.
 
-Isevisi le:
-• Inikela isinqophiso — AYIHLONGI
-• Ingakuthumela kunesi uma kutlhogeka
-• Igcina imininingwane yakho iphephile nge-POPIA
+Isevisi le ikurhelebha ucondze bona iimpawu zakho ziphuthumisa kangangani begodu ikukhombise lapha ungathola khona usizo lokwelatjhwa.
 
-Uyavuma?
+Okuqakathekileko:
+• Isevisi le inikela isinqophiso sempilo kwaphela.
+• Ayihlongi amalwelwe.
+• Ayitsatsi isikhundla sakadokotela namkha unesi.
+• Singasebenzisa ithekinoloji ezisebenzako ukusiza sihlole iimpawu zakho.
+
+Iimpendulo zakho zingabanjwa ngokuphepha ukukhulisa ukuphepha nekhwalithi yesevisi. Imininingwane yakho izokusingathwa ngokuvumelana nemithetho yefihlo yeSewula Afrika (POPIA).
+
+Uma uneempawu ezikhulu ezinjengokuva buhlungu esifubeni, ukukhathazeka okukhulu kokuphefumula, namkha ukulahlekelwa mumcondvo, sibawa uye endaweni yesiphuthumako eseduze namkha urhingele *10177* khonokho.
+
+Uyavuma ukusebenzisa isevisi le?
 1 — Iye, ngiyavuma
-2 — Awa, angivumi`
+2 — Awa, phuma`
   },
 
   // ==================== CONSENT RESPONSES ====================
@@ -747,10 +824,11 @@ RULES:
 
 // ================== TRIAGE (AI) ==================
 async function runTriage(text, lang) {
-  const res = await anthropic.messages.create({
-    model: 'claude-3-haiku-20240307',
-    max_tokens: 300,
-    system: `You are a clinical triage classifier for South Africa, aligned with the South African Triage Scale (SATS).
+  try {
+    const res = await anthropic.messages.create({
+      model: 'claude-3-haiku-20240307',
+      max_tokens: 300,
+      system: `You are a clinical triage classifier for South Africa, aligned with the South African Triage Scale (SATS).
 
 The input may be in any of South Africa's 11 official languages, including code-switching and township medical terminology (e.g. "sugar" = diabetes, "high blood" = hypertension, "ikhanda" = headache).
 
@@ -760,16 +838,184 @@ Assign a confidence score 0-100.
 SAFETY: When in doubt, classify UP (more urgent), never down.
 
 Return ONLY valid JSON: {"triage_level":"RED|ORANGE|YELLOW|GREEN","confidence":0-100}`,
-    messages: [{ role: 'user', content: text }]
-  });
+      messages: [{ role: 'user', content: text }]
+    });
 
-  try {
-    return JSON.parse(res.content[0].text);
-  } catch (e) {
-    // If AI returns invalid JSON, escalate to human
-    return { triage_level: 'ORANGE', confidence: 30 };
+    try {
+      return JSON.parse(res.content[0].text);
+    } catch (e) {
+      // AI returned invalid JSON — escalate to human
+      return { triage_level: 'ORANGE', confidence: 30 };
+    }
+  } catch (apiError) {
+    // API is down or unreachable — return fallback signal
+    console.error('Anthropic API failure:', apiError.message);
+    return { triage_level: 'API_FAILURE', confidence: 0, api_error: true };
   }
 }
+
+// ================== API FAILURE FALLBACK ==================
+// Governance Section 7.4: When AI is unavailable, fall back to structured menu.
+// Free-text input is logged for later processing when the API recovers.
+
+const API_FALLBACK_MESSAGES = {
+  en: `We're sorry — our symptom assessment system is temporarily unavailable.
+
+To help you right now, please choose from these categories instead:
+
+1. 🫁 Breathing / Chest pain
+2. 🤕 Head injury / Headache
+3. 🤰 Pregnancy related
+4. 🩸 Bleeding / Wound
+5. 🤒 Fever / Flu / Cough
+6. 🤢 Stomach / Vomiting
+7. 👶 Child illness
+8. 💊 Medication / Chronic
+9. 🦴 Bone / Joint / Back pain
+10. 🧠 Mental health
+11. 🤧 Allergy / Rash
+13. 👤 Speak to a human
+
+Your description has been saved and will be reviewed when the system recovers.
+
+⚠️ If this is an emergency, call *10177* now.`,
+
+  zu: `Siyaxolisa — uhlelo lwethu lokwhlola izimpawu alutholakali okwesikhashana.
+
+Ukukusiza manje, sicela ukhethe kulezi zinhlobo:
+
+1. 🫁 Ukuphefumula / Ubuhlungu besifuba
+2. 🤕 Ukulimala kwekhanda / Ikhanda elibuhlungu
+3. 🤰 Okuphathelene nokukhulelwa
+4. 🩸 Ukopha / Inxeba
+5. 🤒 Imfiva / Umkhuhlane / Ukukhwehlela
+6. 🤢 Isisu / Ukuhlanza
+7. 👶 Ukugula kwengane
+8. 💊 Umuthi / Isifo esingamahlalakhona
+9. 🦴 Ithambo / Amalunga / Ubuhlungu bomhlane
+10. 🧠 Impilo yengqondo
+11. 🤧 I-allergy / Ukuvuvukala kwesikhumba
+13. 👤 Khuluma nomuntu
+
+Incazelo yakho igciniwe futhi izobhekwa uma uhlelo seluvulelekile.
+
+⚠️ Uma kuphuthumile, shaya *10177* manje.`,
+
+  xh: `Siyaxolisa — inkqubo yethu yokuhlola iimpawu ayifumaneki okwethutyana.
+
+Ukukunceda ngoku, nceda ukhethe kolu luhlu:
+
+1. 🫁 Ukuphefumla / Intlungu yesifuba
+2. 🤕 Ukonzakala kwentloko / Intloko ebuhlungu
+3. 🤰 Okuphathelene nokukhulelwa
+4. 🩸 Ukopha / Inxeba
+5. 🤒 Ifiva / Umkhuhlane / Ukukhohlela
+6. 🤢 Isisu / Ukugabha
+7. 👶 Ukugula komntwana
+8. 💊 Amayeza / Isifo esinganyangekiyo
+9. 🦴 Ithambo / Amalungu / Umqolo obuhlungu
+10. 🧠 Impilo yengqondo
+11. 🤧 I-aloji / Ukuvuvukala kwesikhumba
+13. 👤 Thetha nomntu
+
+Inkcazo yakho igciniwe kwaye iya kuhlolwa xa inkqubo ibuyile.
+
+⚠️ Ukuba yingxakeko, tsalela *10177* ngoku.`,
+
+  af: `Ons is jammer — ons simptoom-assesseringstelsel is tydelik onbeskikbaar.
+
+Om jou nou te help, kies asseblief uit hierdie kategorieë:
+
+1. 🫁 Asemhaling / Borspyn
+2. 🤕 Kopbesering / Hoofpyn
+3. 🤰 Swangerskap verwant
+4. 🩸 Bloeding / Wond
+5. 🤒 Koors / Griep / Hoes
+6. 🤢 Maag / Braking
+7. 👶 Kindergesiekte
+8. 💊 Medikasie / Chroniese siekte
+9. 🦴 Been / Gewrig / Rugpyn
+10. 🧠 Geestesgesondheid
+11. 🤧 Allergie / Uitslag
+13. 👤 Praat met 'n mens
+
+Jou beskrywing is gestoor en sal hersien word wanneer die stelsel herstel.
+
+⚠️ As dit 'n noodgeval is, bel *10177* nou.`,
+};
+
+// Log free-text input for later reprocessing when API recovers
+async function logFailedFreeText(patientId, text, lang) {
+  try {
+    await supabase.from('triage_logs').insert({
+      patient_id: patientId,
+      triage_level: 'PENDING_REPROCESS',
+      confidence: 0,
+      escalation: false,
+      pathway: 'api_failure_fallback',
+      symptoms: text,
+      location: null,
+      facility_name: null,
+    });
+  } catch (e) {
+    console.error('Failed to log free-text for reprocessing:', e);
+  }
+}
+
+// Reprocess queued free-text entries when API is back
+async function reprocessFailedTriages() {
+  try {
+    const { data: pending } = await supabase
+      .from('triage_logs')
+      .select('*')
+      .eq('triage_level', 'PENDING_REPROCESS')
+      .limit(20);
+
+    if (!pending || pending.length === 0) return;
+
+    // Test if API is available with a simple call
+    try {
+      await anthropic.messages.create({
+        model: 'claude-3-haiku-20240307',
+        max_tokens: 10,
+        messages: [{ role: 'user', content: 'test' }]
+      });
+    } catch (e) {
+      // API still down — try again later
+      return;
+    }
+
+    // API is back — reprocess each pending entry
+    for (const entry of pending) {
+      const triage = await runTriage(entry.symptoms, 'en');
+      if (triage.api_error) break; // API went down again
+
+      const finalTriage = applyClinicalRules(entry.symptoms, triage);
+
+      await supabase
+        .from('triage_logs')
+        .update({
+          triage_level: finalTriage.triage_level,
+          confidence: finalTriage.confidence,
+          escalation: finalTriage.triage_level === 'RED' || finalTriage.confidence < CONFIDENCE_THRESHOLD,
+          pathway: 'reprocessed_from_api_failure',
+        })
+        .eq('id', entry.id);
+
+      // If RED or low confidence, escalate retroactively
+      if (finalTriage.triage_level === 'RED' || finalTriage.confidence < CONFIDENCE_THRESHOLD) {
+        console.log(`REPROCESS ALERT: Patient ${entry.patient_id} had pending triage that resolved to ${finalTriage.triage_level} (confidence: ${finalTriage.confidence}). Manual follow-up may be needed.`);
+      }
+    }
+
+    console.log(`Reprocessed ${pending.length} failed triage entries.`);
+  } catch (e) {
+    console.error('Reprocessing error:', e);
+  }
+}
+
+// Run reprocessing every 10 minutes
+setInterval(reprocessFailedTriages, 10 * 60 * 1000);
 
 // ================== RULES ENGINE ==================
 function applyClinicalRules(text, triage) {
@@ -2271,6 +2517,44 @@ async function orchestrate(patientId, from, message, session) {
     }
   }
 
+  // ==================== STEP: API FALLBACK CATEGORY SELECTION ====================
+  // If patient was shown the fallback menu due to API failure, handle their category choice
+  if (session.awaitingFallbackCategory) {
+    const categoryNum = parseInt(message);
+    if (categoryNum >= 1 && categoryNum <= 11) {
+      // Valid structured category — reset fallback state and show the category menu
+      session.awaitingFallbackCategory = false;
+      await saveSession(patientId, session);
+      // Re-send the full category menu so they can proceed through structured triage
+      await sendWhatsAppMessage(from, msg('category_menu', lang));
+      return;
+    }
+    if (message === '13') {
+      // Speak to human — escalate
+      session.awaitingFallbackCategory = false;
+      await saveSession(patientId, session);
+      await logTriage({
+        patient_id: patientId,
+        triage_level: 'YELLOW',
+        confidence: 100,
+        escalation: true,
+        pathway: 'human_request_during_api_failure',
+        symptoms: session.lastSymptoms || 'human request',
+        location: session.location || null,
+        facility_name: null,
+      });
+      const humanMsg = lang === 'en'
+        ? '👤 A healthcare worker will contact you shortly. If urgent, call *10177*.'
+        : '👤 Isisebenzi sezempilo sizokuxhumana nawe maduze. Uma kuphuthuma, shaya *10177*.';
+      await sendWhatsAppMessage(from, humanMsg);
+      return;
+    }
+    // Invalid input — re-show the fallback menu
+    const fallbackMsg = API_FALLBACK_MESSAGES[lang] || API_FALLBACK_MESSAGES['en'];
+    await sendWhatsAppMessage(from, fallbackMsg);
+    return;
+  }
+
   // ==================== STEP: LAB RESULTS QUERY ====================
   if (FEATURES.LAB_RESULTS && isLabResultsQuery(message)) {
     await handleLabResultsQuery(patientId, from, session);
@@ -2288,6 +2572,44 @@ async function orchestrate(patientId, from, message, session) {
 
   // ==================== STEP 2: TRIAGE ====================
   let triage = await runTriage(message, lang);
+
+  // ==================== STEP 2.5: API FAILURE FALLBACK ====================
+  // Governance Section 7.4: If AI is unavailable, fall back to structured menu
+  if (triage.api_error) {
+    // Log the free-text for reprocessing when API recovers
+    await logFailedFreeText(patientId, message, lang);
+
+    // But FIRST — check if the rules engine catches anything dangerous
+    // The rules engine doesn't need AI and catches critical emergencies
+    const rulesCheck = applyClinicalRules(message, { triage_level: 'GREEN', confidence: 0 });
+    if (rulesCheck.rule_override) {
+      // Rules engine caught an emergency — handle it even without AI
+      await sendWhatsAppMessage(from, msg('triage_red', lang));
+      await logTriage({
+        patient_id: patientId,
+        triage_level: rulesCheck.triage_level,
+        confidence: rulesCheck.confidence,
+        escalation: true,
+        pathway: 'rules_engine_fallback',
+        facility_name: null,
+        location: session.location || null,
+        symptoms: message
+      });
+      await scheduleFollowUp(patientId, from, rulesCheck.triage_level);
+      await saveSession(patientId, session);
+      return;
+    }
+
+    // No emergency detected by rules engine — offer structured menu
+    const fallbackMsg = API_FALLBACK_MESSAGES[lang] || API_FALLBACK_MESSAGES['en'];
+    await sendWhatsAppMessage(from, fallbackMsg);
+
+    // Set session to expect a structured category choice next
+    session.awaitingFallbackCategory = true;
+    await saveSession(patientId, session);
+    return;
+  }
+
   triage = applyClinicalRules(message, triage);
 
   // Store for later logging
@@ -2402,6 +2724,39 @@ async function handleMessage(msgObj) {
     await saveSession(patientId, {});
     await sendWhatsAppMessage(from, MESSAGES.language_menu._all);
     return;
+  }
+
+  // STOP COMMAND — Consent withdrawal (Governance Section 6.5)
+  if (msgObj.type === 'text' && msgObj.text.body.trim().toUpperCase() === 'STOP') {
+    const lang = session.language || 'en';
+    const stopMessages = {
+      en: '🛑 Your session has ended and data processing has stopped.\n\nSafety records may be retained as required by law.\n\nIf you change your mind, send "Hi" to start again.\n\nFor emergencies, call *10177*.',
+      zu: '🛑 Isikhathi sakho siphelile futhi ukusetshenziswa kwedatha kumisiwe.\n\nAmarekhodi okuphepha angagcinwa njengoba kufunwa umthetho.\n\nUma uguqula umqondo, thumela "Hi" ukuqala kabusha.\n\nNgezimo eziphuthumayo, shaya *10177*.',
+      xh: '🛑 Iseshoni yakho iphelile kwaye ukusetyenziswa kwedatha kumisiwe.\n\nIingxelo zokhuseleko zinokugcinwa njengoko kufunwa ngumthetho.\n\nUkuba utshintshe ingqondo, thumela "Hi" ukuqala kwakhona.\n\nKwiimeko ezingxamisekileyo, tsalela *10177*.',
+      af: '🛑 Jou sessie is beëindig en dataverwerking is gestop.\n\nVeiligheidsrekords kan behou word soos deur die wet vereis.\n\nAs jy van plan verander, stuur "Hi" om weer te begin.\n\nVir noodgevalle, bel *10177*.',
+    };
+    await sendWhatsAppMessage(from, stopMessages[lang] || stopMessages['en']);
+
+    // Clear session but log the withdrawal
+    await supabase.from('consent_log').insert({
+      patient_id: patientId,
+      action: 'consent_withdrawn',
+      timestamp: new Date()
+    }).catch(() => {});
+
+    await saveSession(patientId, { consent_withdrawn: true });
+    return;
+  }
+
+  // Block interaction if consent was previously withdrawn (must send "Hi" to re-start)
+  if (session.consent_withdrawn && msgObj.type === 'text') {
+    const text = msgObj.text.body.trim().toLowerCase();
+    if (text === 'hi' || text === 'hello' || text === 'start') {
+      await saveSession(patientId, {});
+      await sendWhatsAppMessage(from, MESSAGES.language_menu._all);
+      return;
+    }
+    return; // Silently ignore all other messages after consent withdrawal
   }
 
   // LOCATION HANDLING
