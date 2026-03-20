@@ -37,8 +37,319 @@ const FEATURES = {
   CCMDD_API_URL: process.env.CCMDD_API_URL || null,
   VIRTUAL_CONSULT_URL: process.env.VIRTUAL_CONSULT_URL || null,
   VIRTUAL_CONSULT_PHONE: process.env.VIRTUAL_CONSULT_PHONE || null,
-  NHLS_API_URL: process.env.NHLS_API_URL || null,        // Future: NHLS LabTrack API endpoint
-  NHLS_API_KEY: process.env.NHLS_API_KEY || null,         // Future: NHLS API credentials
+  NHLS_API_URL: process.env.NHLS_API_URL || null,
+  NHLS_API_KEY: process.env.NHLS_API_KEY || null,
+};
+
+// ================================================================
+// ON-CALL ESCALATION SYSTEM
+// ================================================================
+// Zero-cost rotation model for after-hours RED case coverage.
+// Sheila Plaatjie (RN) and Bongekile Nkosi rotate weekly.
+// Between 06:00-08:00 and 17:00-22:00, RED cases trigger a
+// WhatsApp alert to whoever is on-call. Outside 22:00-06:00,
+// patients get enhanced automated emergency guidance only.
+//
+// Governance reference: Section 2.6 (Escalation Hours of Coverage)
+// ================================================================
+
+const ON_CALL_CONFIG = {
+  // ================================================================
+  // ESCALATION MODE — controls how RED cases are handled
+  // Change this ONE env var to switch between scaling stages:
+  //
+  //   ESCALATION_MODE=founders     (Pilot: Sheila + Bongekile rotation)
+  //   ESCALATION_MODE=call_centre  (Scale: partner clinical call centre)
+  //   ESCALATION_MODE=internal     (Mature: own clinical review team)
+  //   ESCALATION_MODE=hybrid       (Mix: call centre after hours, internal during day)
+  // ================================================================
+  mode: process.env.ESCALATION_MODE || 'founders',
+
+  // --- FOUNDERS MODE (pilot) ---
+  team: {
+    sheila: process.env.ONCALL_PHONE_SHEILA || null,
+    bongekile: process.env.ONCALL_PHONE_BONGEKILE || null,
+  },
+  override: process.env.ONCALL_OVERRIDE || null,
+
+  // --- CALL CENTRE MODE (post-pilot) ---
+  // When you partner with a clinical call centre (ER24, Discovery, Netcare, etc.)
+  // the system forwards the full triage conversation via API or WhatsApp
+  callCentre: {
+    apiUrl: process.env.CALL_CENTRE_API_URL || null,       // REST API endpoint (if partner has one)
+    apiKey: process.env.CALL_CENTRE_API_KEY || null,
+    whatsappNumber: process.env.CALL_CENTRE_WHATSAPP || null, // Fallback: forward via WhatsApp
+    name: process.env.CALL_CENTRE_NAME || 'Clinical Review Centre',
+  },
+
+  // --- INTERNAL TEAM MODE (mature) ---
+  // When you hire your own enrolled nurses for shift coverage
+  // Add their numbers here — system will alert whoever is on the current shift
+  internalTeam: {
+    shift1: process.env.INTERNAL_NURSE_SHIFT1 || null,  // 06:00-14:00
+    shift2: process.env.INTERNAL_NURSE_SHIFT2 || null,  // 14:00-22:00
+    supervisor: process.env.INTERNAL_SUPERVISOR || null,  // Gets all alerts as oversight
+  },
+
+  // Coverage windows (SAST = UTC+2) — apply to all modes
+  staffedStart: 8,
+  staffedEnd: 17,
+  extendedStart: 6,
+  extendedEnd: 22,
+};
+
+function getISOWeek(date) {
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+}
+
+function getOnCallPerson() {
+  // Manual override (for holidays, swaps, etc.)
+  if (ON_CALL_CONFIG.override) {
+    return ON_CALL_CONFIG.override;
+  }
+  // Rotation: even ISO weeks = sheila, odd = bongekile
+  const week = getISOWeek(new Date());
+  return week % 2 === 0 ? 'sheila' : 'bongekile';
+}
+
+function getOnCallPhone() {
+  const person = getOnCallPerson();
+  return ON_CALL_CONFIG.team[person];
+}
+
+function getCoverageLevel() {
+  const now = new Date();
+  // Convert to SAST (UTC+2)
+  const sast = new Date(now.getTime() + (2 * 60 * 60 * 1000));
+  const hour = sast.getUTCHours();
+
+  if (hour >= ON_CALL_CONFIG.staffedStart && hour < ON_CALL_CONFIG.staffedEnd) {
+    return 'STAFFED';       // 08:00-17:00 — full team, 15min response target
+  }
+  if ((hour >= ON_CALL_CONFIG.extendedStart && hour < ON_CALL_CONFIG.staffedStart) ||
+      (hour >= ON_CALL_CONFIG.staffedEnd && hour < ON_CALL_CONFIG.extendedEnd)) {
+    return 'ON_CALL';       // 06:00-08:00, 17:00-22:00 — on-call person alerted
+  }
+  return 'AUTOMATED_ONLY';  // 22:00-06:00 — enhanced automated response, no human alert
+}
+
+// Send alert to on-call person when a RED case or critical escalation occurs
+async function alertOnCallTeam(patientId, from, message, triageLevel, context) {
+  const coverage = getCoverageLevel();
+  const mode = ON_CALL_CONFIG.mode;
+
+  // During staffed hours in founders/internal mode, escalation queue handles it
+  if (coverage === 'STAFFED' && (mode === 'founders' || mode === 'internal')) return;
+
+  const timestamp = new Date().toLocaleString('en-ZA', { timeZone: 'Africa/Johannesburg' });
+  const symptomPreview = message.substring(0, 200) + (message.length > 200 ? '...' : '');
+  const patientIdShort = patientId.substring(0, 12) + '...';
+
+  // ============ FOUNDERS MODE (pilot) ============
+  if (mode === 'founders') {
+    const onCallPerson = getOnCallPerson();
+    const onCallPhone = getOnCallPhone();
+
+    const alertMsg = `🚨 *BIZUSIZO ESCALATION ALERT*
+
+*Level:* ${triageLevel}
+*Coverage:* ${coverage === 'ON_CALL' ? 'After-hours (on-call)' : 'Overnight (automated only)'}
+*On-call:* ${onCallPerson.charAt(0).toUpperCase() + onCallPerson.slice(1)}
+*Time:* ${timestamp}
+
+*Patient symptoms:* ${symptomPreview}
+*Context:* ${context || 'Standard triage escalation'}
+*Patient ID:* ${patientIdShort}
+
+${coverage === 'ON_CALL'
+  ? '⚡ Please review when you can. Patient has received emergency guidance (10177/ER24).'
+  : '💤 Overnight — no action required now. Patient received automated emergency guidance. Flagged for morning review.'}
+
+Reply 0 to acknowledge.`;
+
+    if (onCallPhone) {
+      try { await sendWhatsAppMessage(onCallPhone, alertMsg); } catch (e) { console.error('On-call alert failed:', e); }
+    }
+
+    // Backup alert
+    const backupPerson = onCallPerson === 'sheila' ? 'bongekile' : 'sheila';
+    const backupPhone = ON_CALL_CONFIG.team[backupPerson];
+    if (backupPhone && coverage === 'ON_CALL') {
+      try {
+        await sendWhatsAppMessage(backupPhone, `ℹ️ FYI: RED escalation alert sent to ${onCallPerson}. You are backup this week.`);
+      } catch (e) { /* Non-critical */ }
+    }
+  }
+
+  // ============ CALL CENTRE MODE (post-pilot) ============
+  else if (mode === 'call_centre') {
+    const cc = ON_CALL_CONFIG.callCentre;
+
+    // Try API first (if partner has a REST endpoint)
+    if (cc.apiUrl) {
+      try {
+        await fetch(cc.apiUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${cc.apiKey}` },
+          body: JSON.stringify({
+            source: 'BIZUSIZO',
+            patient_id: patientId,
+            patient_phone: from,
+            triage_level: triageLevel,
+            symptoms: message,
+            language: 'en', // Will be extended to pass actual patient language
+            context: context,
+            timestamp: new Date().toISOString(),
+            coverage_level: coverage,
+          })
+        });
+        console.log(`Escalation forwarded to ${cc.name} via API`);
+      } catch (e) {
+        console.error(`Call centre API failed, falling back to WhatsApp:`, e);
+        // Fall through to WhatsApp fallback below
+        if (cc.whatsappNumber) {
+          const ccMsg = `🚨 *BIZUSIZO ESCALATION — ${cc.name}*\n\n*Level:* ${triageLevel}\n*Time:* ${timestamp}\n*Symptoms:* ${symptomPreview}\n*Patient ID:* ${patientIdShort}\n*Context:* ${context}\n\nPlease review and contact patient if needed.`;
+          try { await sendWhatsAppMessage(cc.whatsappNumber, ccMsg); } catch (e2) { console.error('Call centre WhatsApp fallback also failed:', e2); }
+        }
+      }
+    }
+    // WhatsApp-only call centre (no API)
+    else if (cc.whatsappNumber) {
+      const ccMsg = `🚨 *BIZUSIZO ESCALATION — ${cc.name}*\n\n*Level:* ${triageLevel}\n*Time:* ${timestamp}\n*Symptoms:* ${symptomPreview}\n*Patient ID:* ${patientIdShort}\n*Context:* ${context}\n\nPlease review and contact patient if needed.`;
+      try { await sendWhatsAppMessage(cc.whatsappNumber, ccMsg); } catch (e) { console.error('Call centre WhatsApp failed:', e); }
+    }
+
+    // Always notify Sheila as clinical governance oversight
+    if (ON_CALL_CONFIG.team.sheila) {
+      try {
+        await sendWhatsAppMessage(ON_CALL_CONFIG.team.sheila, `ℹ️ Escalation forwarded to ${cc.name}: ${triageLevel} case at ${timestamp}. Symptoms: ${symptomPreview.substring(0, 80)}...`);
+      } catch (e) { /* Non-critical */ }
+    }
+  }
+
+  // ============ INTERNAL TEAM MODE (mature) ============
+  else if (mode === 'internal') {
+    const now = new Date();
+    const sast = new Date(now.getTime() + (2 * 60 * 60 * 1000));
+    const hour = sast.getUTCHours();
+
+    // Determine which shift nurse to alert
+    let nursePhone = null;
+    let shiftLabel = '';
+    if (hour >= 6 && hour < 14) {
+      nursePhone = ON_CALL_CONFIG.internalTeam.shift1;
+      shiftLabel = 'Shift 1 (06:00-14:00)';
+    } else if (hour >= 14 && hour < 22) {
+      nursePhone = ON_CALL_CONFIG.internalTeam.shift2;
+      shiftLabel = 'Shift 2 (14:00-22:00)';
+    }
+    // 22:00-06:00: no shift nurse, automated only + supervisor notified
+
+    const nurseMsg = `🚨 *BIZUSIZO ESCALATION — ${shiftLabel}*\n\n*Level:* ${triageLevel}\n*Time:* ${timestamp}\n*Symptoms:* ${symptomPreview}\n*Patient ID:* ${patientIdShort}\n*Context:* ${context}\n\n⚡ Please review and respond within 15 minutes.`;
+
+    if (nursePhone) {
+      try { await sendWhatsAppMessage(nursePhone, nurseMsg); } catch (e) { console.error('Shift nurse alert failed:', e); }
+    }
+
+    // Supervisor always gets a copy
+    if (ON_CALL_CONFIG.internalTeam.supervisor) {
+      try {
+        await sendWhatsAppMessage(ON_CALL_CONFIG.internalTeam.supervisor, `ℹ️ Escalation (${shiftLabel || 'overnight'}): ${triageLevel} at ${timestamp}. ${nursePhone ? 'Sent to shift nurse.' : 'No shift nurse — automated only.'}`);
+      } catch (e) { /* Non-critical */ }
+    }
+  }
+
+  // ============ HYBRID MODE ============
+  else if (mode === 'hybrid') {
+    // Staffed hours: internal team handles it
+    if (coverage === 'STAFFED' && ON_CALL_CONFIG.internalTeam.shift1) {
+      // Route to internal shift nurse (same as internal mode)
+      const nursePhone = ON_CALL_CONFIG.internalTeam.shift1;
+      const nurseMsg = `🚨 *BIZUSIZO ESCALATION*\n\n*Level:* ${triageLevel}\n*Time:* ${timestamp}\n*Symptoms:* ${symptomPreview}\n*Patient ID:* ${patientIdShort}\n\n⚡ Please review within 15 minutes.`;
+      if (nursePhone) {
+        try { await sendWhatsAppMessage(nursePhone, nurseMsg); } catch (e) { console.error('Hybrid internal alert failed:', e); }
+      }
+    } else {
+      // After hours: route to call centre
+      const cc = ON_CALL_CONFIG.callCentre;
+      if (cc.whatsappNumber) {
+        const ccMsg = `🚨 *BIZUSIZO AFTER-HOURS ESCALATION*\n\n*Level:* ${triageLevel}\n*Time:* ${timestamp}\n*Symptoms:* ${symptomPreview}\n*Patient ID:* ${patientIdShort}\n*Context:* ${context}\n\nPlease review and contact patient if needed.`;
+        try { await sendWhatsAppMessage(cc.whatsappNumber, ccMsg); } catch (e) { console.error('Hybrid call centre alert failed:', e); }
+      }
+    }
+  }
+
+  // Log escalation metadata regardless of mode
+  try {
+    await supabase.from('triage_logs').update({
+      escalation_coverage: coverage,
+      escalation_mode: mode,
+      escalation_oncall: mode === 'founders' ? getOnCallPerson() : mode,
+      escalation_alerted_at: new Date()
+    }).eq('patient_id', patientId).order('created_at', { ascending: false }).limit(1);
+  } catch (e) { /* Non-critical */ }
+}
+
+// Enhanced after-hours RED message — more specific than the standard one
+const AFTER_HOURS_RED_MESSAGES = {
+  en: `🔴 *EMERGENCY — IMMEDIATE ACTION NEEDED*
+
+Based on your symptoms, you need urgent medical attention.
+
+*Do this NOW:*
+1. Call *10177* for an ambulance
+2. Or call *084 124* (ER24)
+3. Or go directly to the nearest hospital emergency unit
+
+*Do NOT wait.* If someone is with you, ask them to help.
+
+A BIZUSIZO team member has been alerted and will follow up with you. But do not wait for us — call emergency services now.
+
+If you cannot call, ask someone nearby to call for you.`,
+
+  zu: `🔴 *ISIMO ESIPHUTHUMAYO — KUDINGEKA ISENZO NGOKUSHESHA*
+
+Ngokwezimpawu zakho, udinga ukunakekelwa kwezempilo ngokushesha.
+
+*Yenza lokhu MANJE:*
+1. Shaya *10177* ucele i-ambulensi
+2. Noma shaya *084 124* (ER24)
+3. Noma uye ngqo esibhedlela esiseduze esimeni esiphuthumayo
+
+*UNGALINDI.* Uma kukhona umuntu onawe, mcele akusize.
+
+Ilungu leqembu le-BIZUSIZO lazisiwe futhi lizokulindela. Kodwa ungasilindi — shaya izinsizakalo zokuphuthuma manje.
+
+Uma ungakwazi ukushaya, cela umuntu oseduze akushayele.`,
+
+  xh: `🔴 *INGXAKEKO — KUFUNEKA ISENZO NGOKUKHAWULEZA*
+
+Ngokweempawu zakho, ufuna unyango olungxamisekileyo.
+
+*Yenza oku NGOKU:*
+1. Tsalela *10177* ucele iambulensi
+2. Okanye tsalela *084 124* (ER24)
+3. Okanye uye ngqo kwisibhedlele esikufutshane kwicandelo lengxakeko
+
+*MUSA UKULINDA.* Ukuba kukho umntu onawe, mcele akuncede.
+
+Ilungu leqela le-BIZUSIZO lazisiwe kwaye liza kukulandela. Kodwa musa ukusilinda — tsalela iinkonzo zongxamiseko ngoku.`,
+
+  af: `🔴 *NOODGEVAL — ONMIDDELLIKE AKSIE NODIG*
+
+Op grond van jou simptome het jy dringende mediese aandag nodig.
+
+*Doen dit NOU:*
+1. Bel *10177* vir 'n ambulans
+2. Of bel *084 124* (ER24)
+3. Of gaan direk na die naaste hospitaal noodafdeling
+
+*MOENIE WAG NIE.* As iemand by jou is, vra hulle om te help.
+
+'n BIZUSIZO-spanlid is in kennis gestel en sal jou opvolg. Maar moenie vir ons wag nie — bel nooddienste nou.`,
 };
 
 // ================== HELPERS ==================
@@ -2618,18 +2929,34 @@ async function orchestrate(patientId, from, message, session) {
 
   // ==================== STEP 3: RED / LOW CONFIDENCE → ESCALATE ====================
   if (triage.triage_level === 'RED' || triage.confidence < CONFIDENCE_THRESHOLD) {
-    await sendWhatsAppMessage(from, msg('triage_red', lang));
+    const coverage = getCoverageLevel();
+
+    // Send appropriate message based on coverage level
+    if (coverage === 'STAFFED') {
+      // Business hours — standard RED message, team will review within 15 min
+      await sendWhatsAppMessage(from, msg('triage_red', lang));
+    } else {
+      // After hours — enhanced emergency message with more specific instructions
+      const afterHoursMsg = AFTER_HOURS_RED_MESSAGES[lang] || AFTER_HOURS_RED_MESSAGES['en'];
+      await sendWhatsAppMessage(from, afterHoursMsg);
+    }
 
     await logTriage({
       patient_id: patientId,
       triage_level: triage.triage_level,
       confidence: triage.confidence,
-      escalation: triage.confidence < CONFIDENCE_THRESHOLD,
-      pathway: 'ambulance',
+      escalation: true,
+      pathway: coverage === 'STAFFED' ? 'ambulance' : `ambulance_${coverage.toLowerCase()}`,
       facility_name: null,
       location: session.location || null,
       symptoms: message
     });
+
+    // Alert on-call team member (does nothing during STAFFED hours)
+    await alertOnCallTeam(
+      patientId, from, message, triage.triage_level,
+      triage.confidence < CONFIDENCE_THRESHOLD ? 'Low AI confidence' : 'RED triage classification'
+    );
 
     await scheduleFollowUp(patientId, from, triage.triage_level);
     await saveSession(patientId, session);
