@@ -426,7 +426,7 @@ async function markFollowUpDone(id) {
 // HARDCODED MESSAGES — ALL 11 OFFICIAL SA LANGUAGES
 // ================================================================
 // NOTE TO TEAM: These should be reviewed by native speakers.
-// Flag any unnatural phrasing to hello@healthbridgesa.co.za
+// Flag any unnatural phrasing to hello@bizusizo.co.za
 // Priority review: isiZulu, isiXhosa, Sesotho, Sepedi, Setswana
 // ================================================================
 
