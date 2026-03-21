@@ -1,5 +1,5 @@
 -- ============================================================
--- HealthBridgeSA — Supabase Schema Migration
+-- Bizusizo — Supabase Schema Migration
 -- Run this in Supabase SQL Editor (supabase.com → your project → SQL Editor)
 -- ============================================================
 
