@@ -20,6 +20,14 @@ const Anthropic = require('@anthropic-ai/sdk');
 const app = express();
 app.use(express.json());
 
+// Serve governance dashboard as a static file
+app.use('/public', express.static(path.join(__dirname, 'public')));
+
+// Dashboard route — redirects /dashboard to the governance dashboard HTML
+app.get('/dashboard', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'governance-dashboard.html'));
+});
+
 // ================== CONFIG ==================
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -234,20 +242,39 @@ async function lookupStudyCode(studyCode) {
   return data && data.length > 0 ? data[0] : null;
 }
 
+const WHATSAPP_API_VERSION = 'v21.0'; // Keep updated — Meta deprecates old versions
+
 async function sendWhatsAppMessage(to, text) {
-  await fetch(`https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/messages`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      messaging_product: 'whatsapp',
-      to,
-      type: 'text',
-      text: { body: text }
-    })
-  });
+  try {
+    const res = await fetch(`https://graph.facebook.com/${WHATSAPP_API_VERSION}/${process.env.PHONE_NUMBER_ID}/messages`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        messaging_product: 'whatsapp',
+        to,
+        type: 'text',
+        text: { body: text }
+      })
+    });
+
+    if (!res.ok) {
+      const errorBody = await res.text().catch(() => 'no body');
+      console.error(`[WA] Send failed: ${res.status} ${res.statusText} — ${errorBody}`);
+      // Log to governance if available
+      try { governance.systemIntegrity.recordWhatsAppSend(false); } catch (e) {}
+      return false;
+    }
+
+    try { governance.systemIntegrity.recordWhatsAppSend(true); } catch (e) {}
+    return true;
+  } catch (e) {
+    console.error(`[WA] Send error: ${e.message}`);
+    try { governance.systemIntegrity.recordWhatsAppSend(false); } catch (e2) {}
+    return false;
+  }
 }
 
 // ================== DATABASE ==================
@@ -1217,7 +1244,7 @@ const CATEGORY_DESCRIPTIONS = {
 // ================================================================
 async function downloadWhatsAppMedia(mediaId) {
   // Step 1: Get media URL from Meta
-  const urlRes = await fetch(`https://graph.facebook.com/v18.0/${mediaId}`, {
+  const urlRes = await fetch(`https://graph.facebook.com/${WHATSAPP_API_VERSION}/${mediaId}`, {
     headers: { Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}` }
   });
   const urlData = await urlRes.json();
@@ -1287,7 +1314,7 @@ async function translateWithClaude(text, targetLang) {
   };
 
   const res = await anthropic.messages.create({
-    model: 'claude-3-haiku-20240307',
+    model: TRANSLATION_MODEL,
     max_tokens: 400,
     system: `You are a South African language translator specialising in healthcare communication.
 
@@ -1309,9 +1336,16 @@ RULES:
 }
 
 // ================== TRIAGE (AI) ==================
+// Model choice: claude-haiku-4-5-20251001 balances speed, cost, and
+// capability for high-volume triage. Voice transcription uses Sonnet 4
+// where accuracy is more critical. If budget permits, upgrade triage
+// to Sonnet 4 for better multilingual performance.
+const TRIAGE_MODEL = process.env.TRIAGE_MODEL || 'claude-haiku-4-5-20251001';
+const TRANSLATION_MODEL = process.env.TRANSLATION_MODEL || 'claude-haiku-4-5-20251001';
+
 async function runTriage(text, lang) {
   const res = await anthropic.messages.create({
-    model: 'claude-3-haiku-20240307',
+    model: TRIAGE_MODEL,
     max_tokens: 300,
     system: `You are a clinical triage classifier for South Africa, aligned with the South African Triage Scale (SATS).
 
@@ -3188,6 +3222,38 @@ setInterval(() => {
   }
 }, 60 * 1000);
 
+// ================== RATE LIMITING ==================
+// Prevents abuse and runaway API costs from message flooding.
+// Max 10 messages per phone number per 60-second window.
+// Legitimate patients rarely send more than 3-4 messages per minute.
+const rateLimitMap = new Map(); // phone → { count, windowStart }
+const RATE_LIMIT_MAX = 10;
+const RATE_LIMIT_WINDOW_MS = 60 * 1000;
+
+function isRateLimited(phone) {
+  const now = Date.now();
+  const entry = rateLimitMap.get(phone);
+
+  if (!entry || (now - entry.windowStart) > RATE_LIMIT_WINDOW_MS) {
+    rateLimitMap.set(phone, { count: 1, windowStart: now });
+    return false;
+  }
+
+  entry.count++;
+  if (entry.count > RATE_LIMIT_MAX) {
+    return true;
+  }
+  return false;
+}
+
+// Clean rate limit map every 5 minutes
+setInterval(() => {
+  const now = Date.now();
+  for (const [phone, entry] of rateLimitMap) {
+    if (now - entry.windowStart > RATE_LIMIT_WINDOW_MS * 2) rateLimitMap.delete(phone);
+  }
+}, 5 * 60 * 1000);
+
 // ================== MAIN HANDLER ==================
 async function handleMessage(msgObj) {
   // Dedup: skip if we've already processed this message ID
@@ -3201,6 +3267,13 @@ async function handleMessage(msgObj) {
   }
 
   const from = msgObj.from;
+
+  // Rate limiting: prevent message flooding
+  if (isRateLimited(from)) {
+    console.warn(`[RATE_LIMIT] Throttled: ${from} exceeded ${RATE_LIMIT_MAX} msgs/min`);
+    return; // Silently drop — don't send a response (would encourage retries)
+  }
+
   const patientId = hashPhone(from);
   let session = await getSession(patientId);
 
