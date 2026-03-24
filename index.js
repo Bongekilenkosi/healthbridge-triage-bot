@@ -1028,6 +1028,25 @@ Uyavuma?
     ss: '🎤 Voice note itfolakele. Angisebente umlayezo wakho...',
     ve: '🎤 Voice note yo ṱanganedzwa. Kha ndi shumise mulaedza waṋu...',
     nr: '🎤 Voice note itholakele. Angisebenze umlayezo wakho...'
+  },
+
+  // ==================== SYSTEM TIMEOUT / OUTAGE FALLBACK ====================
+  // Sent when the system cannot process a message within 15 seconds
+  // (load shedding, Railway outage, Supabase downtime, etc.)
+  // Advises BOTH calling 10177 AND going to nearest clinic/hospital
+  // because ambulance response in many SA areas is unreliable.
+  system_timeout: {
+    en: '⚠️ We are experiencing technical difficulties and cannot process your message right now.\n\n🚨 *If this is an emergency:*\n• Call *10177* (ambulance) or *084 124* (ER24)\n• Go to your nearest clinic or hospital immediately — do not wait for an ambulance\n\nWe will try to respond as soon as the system is back. We apologise for the inconvenience.',
+    zu: '⚠️ Sinezinkinga zobuchwepheshe futhi asikwazi ukucubungula umyalezo wakho okwamanje.\n\n🚨 *Uma kuphuthumile:*\n• Shaya *10177* (i-ambulensi) noma *084 124* (ER24)\n• Yana emtholampilo noma esibhedlela esiseduze MANJE — ungalindi i-ambulensi\n\nSizozama ukuphendula uma uhlelo selubuyile. Siyaxolisa ngokuphazamiseka.',
+    xh: '⚠️ Sinengxaki yobuchwepheshe kwaye asikwazi ukucubungula umyalezo wakho okwangoku.\n\n🚨 *Ukuba yingxakeko:*\n• Tsalela *10177* (i-ambulensi) okanye *084 124* (ER24)\n• Yiya ekliniki okanye esibhedlele esikufutshane NGOKU — musa ukulinda i-ambulensi\n\nSiza kuzama ukuphendula xa inkqubo ibuyile. Siyaxolisa ngokuphazamisa.',
+    af: '⚠️ Ons ondervind tegniese probleme en kan nie jou boodskap nou verwerk nie.\n\n🚨 *As dit \'n noodgeval is:*\n• Bel *10177* (ambulans) of *084 124* (ER24)\n• Gaan na jou naaste kliniek of hospitaal DADELIK — moenie wag vir \'n ambulans nie\n\nOns sal probeer antwoord sodra die stelsel terug is. Ons vra om verskoning.',
+    nso: '⚠️ Re itemogela mathata a theknolotši gomme re ka se kgone go šoma molaetša wa gago ga bjale.\n\n🚨 *Ge e le tšhoganetšo:*\n• Leletša *10177* (ambulense) goba *084 124* (ER24)\n• Yaa kiliniki goba sepetleleng sa kgauswi BJALE — o se ke wa ema ambulense\n\nRe tla leka go araba ge tshepedišo e bušitšwe. Re kgopela tshwarelo.',
+    tn: '⚠️ Re itemogela mathata a thekenoloji mme re ka se kgone go dira molaetsa wa gago jaanong.\n\n🚨 *Fa e le tshoganyetso:*\n• Leletsa *10177* (ambulense) kgotsa *084 124* (ER24)\n• Ya kliniki kgotsa bookelong jo bo gaufi JAANONG — o se ka wa ema ambulense\n\nRe tla leka go araba fa tshedimosetso e boetse. Re kopa maitshwarelo.',
+    st: '⚠️ Re itemohela mathata a theknoloji mme re ke ke ra sebetsa molaetsa wa hao hona joale.\n\n🚨 *Haeba ke tshohanyetso:*\n• Letsetsa *10177* (ambulense) kapa *084 124* (ER24)\n• Eya kliniki kapa sepetlele se haufi HONA JOALE — o se ke oa ema ambulense\n\nRe tla leka ho araba ha sistimi e boeile. Re kopa tshwarelo.',
+    ts: '⚠️ Hi kumile swiphiqo swa thekinoloji naswona a hi koti ku tirha mahungu ya wena sweswi.\n\n🚨 *Loko ku ri xihatla:*\n• Ringela *10177* (ambulense) kumbe *084 124* (ER24)\n• Famba u ya ekliniki kumbe exibedlhele xa kusuhi SWESWI — u nga yimi ambulense\n\nHi ta ringeta ku hlamula loko sisiteme yi vuyile. Hi kombela ku khomela.',
+    ss: '⚠️ Sinenkinga yebuchwepheshe futsi asikwati kusebenta umlayezo wakho nyalo.\n\n🚨 *Uma kusheshisa:*\n• Shayela *10177* (i-ambulensi) noma *084 124* (ER24)\n• Hamba uye ekliniki noma esibhedlela leseduze NYALO — ungalindzi i-ambulensi\n\nSitawutama kuphendvula uma luhlelo selubuyile. Siyacolisa ngekuphazamisa.',
+    ve: '⚠️ Ri khou ṱangana na thaidzo dza thekhinolodzhi nahone a ri koni u shumisa mulaedza waṋu zwino.\n\n🚨 *Arali i tshoganetso:*\n• Founelani *10177* (ambulense) kana *084 124* (ER24)\n• Iyani kiliniki kana sibadela tshi re tsini ZWINO — ni songo lindela ambulense\n\nRi ḓo lingedza u fhindula musi sisiteme i tshi vhuya. Ri humbela pfarelo.',
+    nr: '⚠️ Sinekinga yebuchwepheshe futhi asikghoni ukusebenza umlayezo wakho nje.\n\n🚨 *Uma kuphuthumako:*\n• Ringela *10177* (i-ambulensi) namkha *084 124* (ER24)\n• Iya ekliniki namkha esibhedlela esiseduze NJE — ungalindeli i-ambulensi\n\nSizakuzama ukuphendula uma uhlelo selubuyile. Siyacolisa ngokuphazamisa.'
   }
 
 };
@@ -3120,7 +3139,56 @@ app.post('/webhook', async (req, res) => {
   try {
     const msgObj = req.body.entry?.[0]?.changes?.[0]?.value?.messages?.[0];
     if (!msgObj) return;
-    await handleMessage(msgObj);
+
+    const from = msgObj.from;
+    const patientId = hashPhone(from);
+
+    // ==================== LOAD SHEDDING / OUTAGE SAFETY NET ====================
+    // If the system can't process the message within 15 seconds (due to
+    // load shedding, API timeout, DB outage, etc.), send an emergency
+    // fallback message so the patient is never left with silence.
+    // Advises calling 10177 AND travelling to nearest clinic (ambulances
+    // are unreliable in many SA areas).
+    const TIMEOUT_MS = 15000;
+    let responded = false;
+
+    const timeoutPromise = new Promise((resolve) => {
+      setTimeout(async () => {
+        if (!responded) {
+          try {
+            // Try to get patient language from session; fall back to English
+            let lang = 'en';
+            try {
+              const session = await getSession(patientId);
+              lang = session.language || 'en';
+            } catch (e) { /* DB might be down too — use English */ }
+
+            const timeoutMsg = msg('system_timeout', lang);
+            await sendWhatsAppMessage(from, timeoutMsg);
+
+            // Log the timeout for governance monitoring
+            try {
+              governance.systemIntegrity.recordInferenceError('message_processing_timeout_15s');
+            } catch (e) { /* governance might be down too */ }
+          } catch (e) {
+            console.error('[TIMEOUT] Failed to send fallback message:', e.message);
+          }
+        }
+        resolve();
+      }, TIMEOUT_MS);
+    });
+
+    const messagePromise = handleMessage(msgObj).then(() => {
+      responded = true;
+    });
+
+    // Race: either message processing completes, or timeout fires
+    await Promise.race([messagePromise, timeoutPromise]);
+
+    // Let the message processing finish in the background if timeout fired first
+    if (!responded) {
+      messagePromise.then(() => { responded = true; }).catch(() => {});
+    }
   } catch (err) {
     console.error('Error handling message:', err);
   }
