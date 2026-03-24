@@ -3625,6 +3625,14 @@ async function handleMessage(msgObj) {
   const patientId = hashPhone(from);
   let session = await getSession(patientId);
 
+  // HARD RESET — typing "00" wipes entire session (full re-onboarding)
+  // Use for testing or when patient wants to start completely fresh
+  if (msgObj.type === 'text' && msgObj.text.body.trim() === '00') {
+    await saveSession(patientId, {});
+    await sendWhatsAppMessage(from, MESSAGES.language_menu._all);
+    return;
+  }
+
   // RESET COMMAND — soft reset
   // Preserves: language, chronic conditions, study code, study participation
   // Clears: current triage state, facility routing, pending steps
