@@ -1141,6 +1141,24 @@ Uyavuma?
     nr: '🎤 Voice note itholakele. Angisebenze umlayezo wakho...'
   },
 
+  // ==================== THINKING INDICATOR ====================
+  // Sent immediately when symptoms are received, before the AI processes.
+  // Gives the patient feedback that the system is working — prevents
+  // the "is this thing on?" feeling during the 2-5 second AI call.
+  thinking: {
+    en: '🔍 Assessing your symptoms...',
+    zu: '🔍 Sihlola izimpawu zakho...',
+    xh: '🔍 Sihlola iimpawu zakho...',
+    af: '🔍 Ons assesseer jou simptome...',
+    nso: '🔍 Re lekola dika tša gago...',
+    tn: '🔍 Re sekaseka matshwao a gago...',
+    st: '🔍 Re hlahloba matshwao a hao...',
+    ts: '🔍 Hi kambela swikombiso swa wena...',
+    ss: '🔍 Sihlola timphawu takho...',
+    ve: '🔍 Ri khou sedzulusa zwiga zwaṋu...',
+    nr: '🔍 Sihlola iimpawu zakho...'
+  },
+
   // ==================== SYSTEM TIMEOUT / OUTAGE FALLBACK ====================
   // Sent when the system cannot process a message within 15 seconds
   // (load shedding, Railway outage, Supabase downtime, etc.)
@@ -2968,6 +2986,10 @@ async function orchestrate(patientId, from, message, session) {
   // ==================== STEP 2: TRIAGE (GOVERNANCE-INTEGRATED) ====================
   // Pillar 1: Failsafe mode (deterministic RED classifier) if API is down
   // Pillar 2: Risk factor upgrades + confidence threshold enforcement
+
+  // Send thinking indicator so patient knows we're processing
+  await sendWhatsAppMessage(from, msg('thinking', lang));
+
   const govResult = await governance.runTriageWithGovernance(
     message, lang, session, runTriage, applyClinicalRules
   );
