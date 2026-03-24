@@ -983,6 +983,51 @@ Uyavuma?
     ss: (code) => `🔢 Ikhodi yakho yekucwaninga itsi: *${code}*\n\nSicela ukhombise lekhodi kumcwaningi nawufika ekliniki. Isisita sihlanganise i-triage yakho ye-BIZUSIZO nekuvakashela kwakho ekliniki.\n\nUngabhala "code" nanoma nini kubona ikhodi yakho futsi.`,
     ve: (code) => `🔢 Khoudu yaṋu ya ṱhoḓisiso ndi: *${code}*\n\nRi humbela ni sumbedze khoudu iyi kha muṱoḓisisi musi ni tshi swika kiliniki. I ri thusa u ṱanganya triage yaṋu ya BIZUSIZO na u dalela haṋu kiliniki.\n\nNi nga ṅwala "code" tshifhinga tshiṅwe na tshiṅwe u vhona khoudu yaṋu hafhu.`,
     nr: (code) => `🔢 Ikhodi yakho yerhubhululo ithi: *${code}*\n\nSibawa ukhombise lekhodi kumrhubhululi nawufika ekliniki. Isisiza sihlanganise i-triage yakho ye-BIZUSIZO nekuvakatjhela kwakho ekliniki.\n\nUngatlola "code" nanini ukubona ikhodi yakho godu.`
+  },
+
+  // ==================== CATEGORY FOLLOW-UP ====================
+  category_detail_prompt: {
+    en: (category) => `You selected: *${category}*\n\nPlease describe your symptoms in your own words. For example: when did it start, how bad is it, and anything else you think is important.\n\nYou can type or send a voice note 🎤`,
+    zu: (category) => `Ukhethe: *${category}*\n\nSicela uchaze izimpawu zakho ngamazwi akho. Isibonelo: zaqala nini, zimbi kangakanani, nanoma yini enye ebalulekile.\n\nUngabhala noma uthumele ivoice note 🎤`,
+    xh: (category) => `Ukhethe: *${category}*\n\nNceda uchaze iimpawu zakho ngamazwi akho. Umzekelo: ziqale nini, zimbi kangakanani, naye nantoni na ebalulekile.\n\nUngabhala okanye uthumele ivoice note 🎤`,
+    af: (category) => `Jy het gekies: *${category}*\n\nBeskryf asseblief jou simptome in jou eie woorde. Byvoorbeeld: wanneer het dit begin, hoe erg is dit, en enigiets anders wat belangrik is.\n\nJy kan tik of 'n stemnota stuur 🎤`,
+    nso: (category) => `O kgethile: *${category}*\n\nHle hlaloša dika tša gago ka mantšu a gago. Mohlala: di thomile neng, di mpe gakaakang, le sengwe se bohlokwa.\n\nO ka ngwala goba wa romela voice note 🎤`,
+    tn: (category) => `O tlhophile: *${category}*\n\nTswee-tswee tlhalosa matshwao a gago ka mafoko a gago. Sekai: a simolotse leng, a maswe go le kana kang, le sengwe se botlhokwa.\n\nO ka kwala kgotsa wa romela voice note 🎤`,
+    st: (category) => `O kgethile: *${category}*\n\nKa kopo hlalosa matshwao a hao ka mantswe a hao. Mohlala: a qalile neng, a mpe hakaakang, le se seng se bohlokwa.\n\nO ka ngola kapa wa romela voice note 🎤`,
+    ts: (category) => `U hlawule: *${category}*\n\nHi kombela u hlamusela swikombiso swa wena hi marito ya wena. Xikombiso: swi sungule rini, swi bihile ku fikela kwihi, na swin'wana swa nkoka.\n\nU nga tsala kumbe u rhumela voice note 🎤`,
+    ss: (category) => `Ukhetse: *${category}*\n\nSicela uchaze timphawu takho ngamagama akho. Sibonelo: tichale nini, timbi kangakanani, nalokunye lokubalulekile.\n\nUngabhala noma utfumele voice note 🎤`,
+    ve: (category) => `No nanga: *${category}*\n\nRi humbela ni ṱalutshedze zwiga zwaṋu nga maipfi aṋu. Tsumbo: zwo thoma lini, zwi vhavha hani, na zwiṅwe zwa ndeme.\n\nNi nga ṅwala kana na rumela voice note 🎤`,
+    nr: (category) => `Ukhethe: *${category}*\n\nSibawa uchaze iimpawu zakho ngamagama wakho. Isibonelo: zithome nini, zimbi kangangani, nalokhunye okuqakathekileko.\n\nUngatlola namkha uthumele voice note 🎤`
+  },
+
+  // ==================== VOICE NOTE PROMPT ====================
+  voice_note_prompt: {
+    en: '🎤 You can send a voice note describing your symptoms. Speak clearly and tell us:\n\n• What is wrong\n• When it started\n• How bad it is\n\nWe will listen to your message and help you.',
+    zu: '🎤 Ungathuma ivoice note uchaze izimpawu zakho. Khuluma ngokucacile usitshele:\n\n• Kwenzakalani\n• Kuqale nini\n• Kumbi kangakanani\n\nSizolalela umyalezo wakho sikusize.',
+    xh: '🎤 Ungathumela ivoice note uchaze iimpawu zakho. Thetha ngokucacileyo usixelele:\n\n• Kwenzeka ntoni\n• Kuqale nini\n• Kumbi kangakanani\n\nSiya kuwumamela umyalezo wakho sikuncede.',
+    af: '🎤 Jy kan \'n stemnota stuur wat jou simptome beskryf. Praat duidelik en vertel ons:\n\n• Wat is fout\n• Wanneer het dit begin\n• Hoe erg is dit\n\nOns sal na jou boodskap luister en jou help.',
+    nso: '🎤 O ka romela voice note o hlaloša dika tša gago. Bolela gabotse o re botše:\n\n• Go direga eng\n• Go thomile neng\n• Go mpe gakaakang\n\nRe tla theetša molaetša wa gago re go thuše.',
+    tn: '🎤 O ka romela voice note o tlhalosa matshwao a gago. Bua sentle o re bolelele:\n\n• Go diragala eng\n• Go simolotse leng\n• Go maswe go le kana kang\n\nRe tla reetsa molaetsa wa gago re go thuse.',
+    st: '🎤 O ka romela voice note o hlalosa matshwao a hao. Bua hantle o re bolelle:\n\n• Ho etsahalang\n• Ho qalile neng\n• Ho mpe hakaakang\n\nRe tla mamela molaetsa wa hao re o thuse.',
+    ts: '🎤 U nga rhumela voice note u hlamusela swikombiso swa wena. Vulavula kahle u hi byela:\n\n• Ku humelela yini\n• Ku sungule rini\n• Ku bihile ku fikela kwihi\n\nHi ta yingisela mahungu ya wena hi ku pfuna.',
+    ss: '🎤 Ungathuma voice note uchaza timphawu takho. Khuluma kahle usitjele:\n\n• Kwentekani\n• Kuchale nini\n• Kumbi kangakanani\n\nSitalilalela umyalezo wakho sikusite.',
+    ve: '🎤 Ni nga rumela voice note ni tshi ṱalutshedza zwiga zwaṋu. Ambelani zwavhuḓi ni ri vhudze:\n\n• Hu khou itea mini\n• Zwo thoma lini\n• Zwi vhavha hani\n\nRi ḓo thetshelesa mulaedza waṋu ri ni thuse.',
+    nr: '🎤 Ungathumela voice note uchaza iimpawu zakho. Khuluma kuhle usitjele:\n\n• Kwenzekani\n• Kuthome nini\n• Kumbi kangangani\n\nSizakulalela umlayezo wakho sikusize.'
+  },
+
+  // ==================== VOICE NOTE RECEIVED ====================
+  voice_note_received: {
+    en: '🎤 Voice note received. Let me process your message...',
+    zu: '🎤 Ivoice note itholakele. Ake ngicubungule umyalezo wakho...',
+    xh: '🎤 Ivoice note ifunyenwe. Mandiqwalasele umyalezo wakho...',
+    af: '🎤 Stemnota ontvang. Laat ek jou boodskap verwerk...',
+    nso: '🎤 Voice note e amogetšwe. Eka ke šome molaetša wa gago...',
+    tn: '🎤 Voice note e amogetšwe. A ke dire molaetsa wa gago...',
+    st: '🎤 Voice note e amohelehile. Ha ke sebetse molaetsa wa hao...',
+    ts: '🎤 Voice note yi amukelekile. A ndzi tirhe mahungu ya wena...',
+    ss: '🎤 Voice note itfolakele. Angisebente umlayezo wakho...',
+    ve: '🎤 Voice note yo ṱanganedzwa. Kha ndi shumise mulaedza waṋu...',
+    nr: '🎤 Voice note itholakele. Angisebenze umlayezo wakho...'
   }
 
 };
@@ -991,6 +1036,87 @@ Uyavuma?
 // LANGUAGE HELPERS
 // ================================================================
 const LANG_MAP = { '1':'en','2':'zu','3':'xh','4':'af','5':'nso','6':'tn','7':'st','8':'ts','9':'ss','10':'ve','11':'nr' };
+
+// ================================================================
+// CATEGORY DESCRIPTIONS — maps menu numbers to clinical context
+// ================================================================
+// When a patient picks a category, this context is prepended to their
+// symptom detail so the AI has meaningful information to triage.
+const CATEGORY_DESCRIPTIONS = {
+  '1': 'Breathing problems / Chest pain',
+  '2': 'Head injury / Headache',
+  '3': 'Pregnancy related complaint',
+  '4': 'Bleeding / Wound',
+  '5': 'Fever / Flu / Cough',
+  '6': 'Stomach problems / Vomiting',
+  '7': 'Child illness (paediatric)',
+  '8': 'Medication / Chronic condition',
+  '9': 'Bone / Joint / Back pain',
+  '10': 'Mental health concern',
+  '11': 'Allergy / Rash / Skin problem',
+  '12': 'Other',
+  '13': 'Speak to a human / send voice note',
+};
+
+// ================================================================
+// VOICE NOTE TRANSCRIPTION
+// ================================================================
+// WhatsApp voice notes arrive as audio messages with a media ID.
+// We download the audio, send it to Claude for transcription,
+// and use the transcribed text for triage.
+// This is critical for SA context where many patients prefer
+// speaking over typing, especially in African languages.
+// ================================================================
+async function downloadWhatsAppMedia(mediaId) {
+  // Step 1: Get media URL from Meta
+  const urlRes = await fetch(`https://graph.facebook.com/v18.0/${mediaId}`, {
+    headers: { Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}` }
+  });
+  const urlData = await urlRes.json();
+  if (!urlData.url) return null;
+
+  // Step 2: Download the actual audio file
+  const audioRes = await fetch(urlData.url, {
+    headers: { Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}` }
+  });
+  const buffer = await audioRes.buffer();
+  return buffer;
+}
+
+async function transcribeVoiceNote(audioBuffer, lang) {
+  const langNames = {
+    en:'English', zu:'isiZulu', xh:'isiXhosa', af:'Afrikaans',
+    nso:'Sepedi', tn:'Setswana', st:'Sesotho', ts:'Xitsonga',
+    ss:'siSwati', ve:'Tshivenda', nr:'isiNdebele'
+  };
+
+  const base64Audio = audioBuffer.toString('base64');
+
+  try {
+    const res = await anthropic.messages.create({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 500,
+      system: `You are a medical transcription assistant for South Africa. Transcribe the patient's voice message accurately, preserving their exact words including any code-switching between languages. The patient likely speaks ${langNames[lang] || 'a South African language'}. Output ONLY the transcription — no commentary, no translation, no formatting. If you cannot understand the audio, respond with: TRANSCRIPTION_FAILED`,
+      messages: [{
+        role: 'user',
+        content: [{
+          type: 'document',
+          source: { type: 'base64', media_type: 'audio/ogg', data: base64Audio }
+        }, {
+          type: 'text',
+          text: 'Transcribe this voice message from a patient describing their health symptoms.'
+        }]
+      }]
+    });
+
+    const transcription = res.content[0].text.trim();
+    if (transcription === 'TRANSCRIPTION_FAILED') return null;
+    return transcription;
+  } catch (e) {
+    console.error('[VOICE] Transcription failed:', e.message);
+    return null;
+  }
+}
 
 function msg(key, lang, ...args) {
   const msgSet = MESSAGES[key];
@@ -2658,6 +2784,57 @@ async function orchestrate(patientId, from, message, session) {
     return;
   }
 
+  // ==================== STEP: CATEGORY SELECTION → ASK FOR DETAIL ====================
+  // When a patient picks a category (1-13), we DON'T send "1" to the AI.
+  // Instead we ask them to describe their symptoms, giving the AI real
+  // clinical information to work with.
+  if (CATEGORY_DESCRIPTIONS[message] && !session.awaitingSymptomDetail) {
+    // Category 13: Voice note / speak to human
+    if (message === '13') {
+      await sendWhatsAppMessage(from, msg('voice_note_prompt', lang));
+      session.awaitingSymptomDetail = true;
+      session.selectedCategory = '13';
+      await saveSession(patientId, session);
+      return;
+    }
+
+    // Category 12: "Other — type your symptoms" — go straight to detail
+    if (message === '12') {
+      const detailMsg = msg('category_detail_prompt', lang, 'Other');
+      await sendWhatsAppMessage(from, detailMsg);
+      session.awaitingSymptomDetail = true;
+      session.selectedCategory = '12';
+      await saveSession(patientId, session);
+      return;
+    }
+
+    // Categories 1-11: Show what they selected and ask for detail
+    const categoryName = CATEGORY_DESCRIPTIONS[message];
+    await sendWhatsAppMessage(from, msg('category_detail_prompt', lang, categoryName));
+    session.awaitingSymptomDetail = true;
+    session.selectedCategory = message;
+    await saveSession(patientId, session);
+    return;
+  }
+
+  // ==================== STEP: SYMPTOM DETAIL RECEIVED → ENRICH & TRIAGE ====================
+  // Patient has described their symptoms after picking a category.
+  // Prepend the category context so the AI gets: "Category: Breathing/Chest pain. Patient says: my chest is tight since yesterday"
+  if (session.awaitingSymptomDetail) {
+    const categoryContext = CATEGORY_DESCRIPTIONS[session.selectedCategory] || '';
+    const enrichedMessage = categoryContext
+      ? `Category: ${categoryContext}. Patient says: ${message}`
+      : message;
+
+    session.awaitingSymptomDetail = false;
+    session.selectedCategory = null;
+    await saveSession(patientId, session);
+
+    // Feed the enriched text into triage (fall through to STEP 2 below)
+    // We reassign message for the triage step
+    message = enrichedMessage;
+  }
+
   // ==================== STEP 2: TRIAGE (GOVERNANCE-INTEGRATED) ====================
   // Pillar 1: Failsafe mode (deterministic RED classifier) if API is down
   // Pillar 2: Risk factor upgrades + confidence threshold enforcement
@@ -2817,6 +2994,55 @@ async function handleMessage(msgObj) {
     }
 
     await sendWhatsAppMessage(from, '📍 ' + (lang === 'en' ? 'Location received.' : 'Location received.'));
+    return;
+  }
+
+  // ==================== VOICE NOTE HANDLING ====================
+  // WhatsApp voice notes (audio messages) are transcribed by Claude
+  // and treated as symptom descriptions. Critical for SA patients
+  // who prefer speaking over typing.
+  if (msgObj.type === 'audio') {
+    const lang = session.language || 'en';
+    const mediaId = msgObj.audio?.id;
+
+    if (!mediaId) return;
+
+    await sendWhatsAppMessage(from, msg('voice_note_received', lang));
+
+    try {
+      const audioBuffer = await downloadWhatsAppMedia(mediaId);
+      if (!audioBuffer) {
+        await sendWhatsAppMessage(from, lang === 'en'
+          ? 'Sorry, I could not process your voice note. Please try typing your symptoms instead.'
+          : 'Siyaxolisa, asikwazanga ukucubungula ivoice note yakho. Sicela uzame ukubhala izimpawu zakho.');
+        return;
+      }
+
+      const transcription = await transcribeVoiceNote(audioBuffer, lang);
+      if (!transcription) {
+        await sendWhatsAppMessage(from, lang === 'en'
+          ? 'Sorry, I could not understand your voice note. Please try again or type your symptoms.'
+          : 'Siyaxolisa, asizwanga ivoice note yakho. Sicela uzame futhi noma ubhale izimpawu zakho.');
+        return;
+      }
+
+      // Feed the transcription into the normal orchestration flow
+      // If patient was in category detail step, prepend category context
+      if (session.awaitingSymptomDetail && session.selectedCategory) {
+        const categoryContext = CATEGORY_DESCRIPTIONS[session.selectedCategory] || '';
+        const enrichedText = `Category: ${categoryContext}. Patient says: ${transcription}`;
+        session.awaitingSymptomDetail = false;
+        await saveSession(patientId, session);
+        await orchestrate(patientId, from, enrichedText, session);
+      } else {
+        await orchestrate(patientId, from, transcription, session);
+      }
+    } catch (e) {
+      console.error('[VOICE] Error handling voice note:', e.message);
+      await sendWhatsAppMessage(from, lang === 'en'
+        ? 'Sorry, something went wrong processing your voice note. Please type your symptoms instead.'
+        : 'Kukhona okungahambanga kahle. Sicela ubhale izimpawu zakho.');
+    }
     return;
   }
 
