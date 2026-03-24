@@ -61,6 +61,68 @@ function hashPhone(phone) {
   return crypto.createHash('sha256').update(phone).digest('hex').slice(0, 16);
 }
 
+// ================== STUDY CODE GENERATOR ==================
+// Generates a short, memorable code like "BZ-4827" that links
+// the patient's BIZUSIZO session to clinic register data.
+// The code is shown to the patient on WhatsApp after onboarding.
+// The research assistant records it alongside the nurse triage.
+// This bridges digital (hashed patient_id) and paper (clinic register).
+async function generateStudyCode(patientId) {
+  // Check if patient already has a code
+  const { data: existing } = await supabase
+    .from('study_codes')
+    .select('study_code')
+    .eq('patient_id', patientId)
+    .limit(1);
+
+  if (existing && existing.length > 0) {
+    return existing[0].study_code;
+  }
+
+  // Generate a unique code: BZ-XXXX (4 digits, checked for uniqueness)
+  let code;
+  let attempts = 0;
+  while (attempts < 10) {
+    const num = Math.floor(1000 + Math.random() * 9000); // 1000-9999
+    code = `BZ-${num}`;
+
+    const { data: clash } = await supabase
+      .from('study_codes')
+      .select('id')
+      .eq('study_code', code)
+      .limit(1);
+
+    if (!clash || clash.length === 0) break;
+    attempts++;
+  }
+
+  // If 4-digit space exhausted (unlikely with <9000 patients), extend to 5 digits
+  if (attempts >= 10) {
+    const num = Math.floor(10000 + Math.random() * 90000);
+    code = `BZ-${num}`;
+  }
+
+  // Store the mapping
+  await supabase.from('study_codes').insert({
+    patient_id: patientId,
+    study_code: code,
+    created_at: new Date()
+  });
+
+  return code;
+}
+
+// Lookup patient by study code (used by research assistants via API)
+async function lookupStudyCode(studyCode) {
+  const { data } = await supabase
+    .from('study_codes')
+    .select('*')
+    .eq('study_code', studyCode.toUpperCase().trim())
+    .limit(1);
+
+  return data && data.length > 0 ? data[0] : null;
+}
+
 async function sendWhatsAppMessage(to, text) {
   await fetch(`https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/messages`, {
     method: 'POST',
@@ -848,6 +910,79 @@ Uyavuma?
     ss: '✅ Siyabonga. Loku kusisita sikunikete teluleko lencono.',
     ve: '✅ Ri a livhuwa. Izwi ḽi ri thusa u ni ṋea vhulivhisi ha khwine.',
     nr: '✅ Siyathokoza. Lokhu kusisiza sikunikele isinqophiso esingcono.'
+  },
+
+  // ==================== STUDY PARTICIPATION ====================
+  study_participation: {
+    en: `Are you taking part in the BIZUSIZO research study at a clinic?
+
+1 \u2014 Yes, I am a study participant
+2 \u2014 No, I am just using BIZUSIZO for myself`,
+
+    zu: `Ingabe uyahlanganyela ocwaningweni lwe-BIZUSIZO emtholampilo?
+
+1 \u2014 Yebo, ngingumhlanganyeli wocwaningo
+2 \u2014 Cha, ngisebenzisa i-BIZUSIZO nje`,
+
+    xh: `Ingaba uthatha inxaxheba kuphando lwe-BIZUSIZO ekliniki?
+
+1 \u2014 Ewe, ndingumthathi-nxaxheba wophando
+2 \u2014 Hayi, ndisebenzisa i-BIZUSIZO nje`,
+
+    af: `Neem jy deel aan die BIZUSIZO-navorsingstudie by 'n kliniek?
+
+1 \u2014 Ja, ek is 'n studiedeelnemer
+2 \u2014 Nee, ek gebruik BIZUSIZO net vir myself`,
+
+    nso: `A o tšea karolo ka dinyakišišong tša BIZUSIZO kiliniki?
+
+1 \u2014 Ee, ke motšeakarolo wa dinyakišišo
+2 \u2014 Aowa, ke šomiša BIZUSIZO fela`,
+
+    tn: `A o tsaya karolo mo patlisisong ya BIZUSIZO kwa kliniki?
+
+1 \u2014 Ee, ke motsayakarolo wa patlisiso
+2 \u2014 Nnyaa, ke dirisa BIZUSIZO fela`,
+
+    st: `Na o nka karolo dipatlisisong tsa BIZUSIZO kliniki?
+
+1 \u2014 E, ke monkakarolo wa dipatlisiso
+2 \u2014 Tjhe, ke sebedisa BIZUSIZO feela`,
+
+    ts: `Xana u teka xiave eka ndzavisiso wa BIZUSIZO ekliniki?
+
+1 \u2014 Ina, ndzi muteki-xiave wa ndzavisiso
+2 \u2014 Ee-ee, ndzi tirhisa BIZUSIZO ntsena`,
+
+    ss: `Uyahlanganyela yini kulucwaningo lwe-BIZUSIZO ekliniki?
+
+1 \u2014 Yebo, ngingumhlanganyeli welucwaningo
+2 \u2014 Cha, ngisebentisa i-BIZUSIZO nje`,
+
+    ve: `Naa ni khou shela mulenzhe kha \u1e71hoḓisiso ya BIZUSIZO kiliniki?
+
+1 \u2014 Ee, ndi mushelamulenzhe wa \u1e71hoḓisiso
+2 \u2014 Hai, ndi khou shumisa BIZUSIZO fhedzi`,
+
+    nr: `Uyahlanganyela na kurhubhululo lwe-BIZUSIZO ekliniki?
+
+1 \u2014 Iye, ngingumhlanganyeli werhubhululo
+2 \u2014 Awa, ngisebenzisa i-BIZUSIZO kwaphela`
+  },
+
+  // ==================== STUDY CODE ====================
+  study_code: {
+    en: (code) => `🔢 Your study code is: *${code}*\n\nPlease show this code to the research assistant when you arrive at the clinic. It helps us link your BIZUSIZO triage to your clinic visit.\n\nYou can also type "code" at any time to see your code again.`,
+    zu: (code) => `🔢 Ikhodi yakho yocwaningo ithi: *${code}*\n\nSicela ukhombise le khodi kumcwaningi uma ufika emtholampilo. Isisiza sixhumanise i-triage yakho ye-BIZUSIZO nokuvakatshela kwakho emtholampilo.\n\nUngabhala "code" noma nini ukubona ikhodi yakho futhi.`,
+    xh: (code) => `🔢 Ikhowudi yakho yophando ithi: *${code}*\n\nNceda ubonise le khowudi kumphandi xa ufika ekliniki. Isinceda sidibanise i-triage yakho ye-BIZUSIZO notyelelo lwakho ekliniki.\n\nUngabhala "code" nanini na ukubona ikhowudi yakho kwakhona.`,
+    af: (code) => `🔢 Jou studiekode is: *${code}*\n\nWys asseblief hierdie kode aan die navorsingsassistent wanneer jy by die kliniek aankom. Dit help ons om jou BIZUSIZO-triage aan jou kliniekbesoek te koppel.\n\nJy kan ook enige tyd "code" tik om jou kode weer te sien.`,
+    nso: (code) => `🔢 Khoutu ya gago ya dinyakišišo ke: *${code}*\n\nHle bontšha khoutu ye go monyakišiši ge o fihla kiliniki. E re thuša go hokaganya triage ya gago ya BIZUSIZO le go etela ga gago kiliniki.\n\nO ka ngwala "code" nako efe goba efe go bona khoutu ya gago gape.`,
+    tn: (code) => `🔢 Khoutu ya gago ya patlisiso ke: *${code}*\n\nTswee-tswee bontsha khoutu e go mmatlisisi fa o goroga kliniki. E re thusa go golaganya triage ya gago ya BIZUSIZO le go etela ga gago kliniki.\n\nO ka kwala "code" nako nngwe le nngwe go bona khoutu ya gago gape.`,
+    st: (code) => `🔢 Khoutu ya hao ya dipatlisiso ke: *${code}*\n\nKa kopo bontsha khoutu ena ho mofuputsi ha o fihla kliniki. E re thusa ho hokahanya triage ya hao ya BIZUSIZO le ketelo ya hao kliniki.\n\nO ka ngola "code" nako efe kapa efe ho bona khoutu ya hao hape.`,
+    ts: (code) => `🔢 Khodi ya wena ya ndzavisiso i ri: *${code}*\n\nHi kombela u kombisa khodi leyi eka mulavisisi loko u fika ekliniki. Yi hi pfuna ku hlanganisa triage ya wena ya BIZUSIZO na ku endzela ka wena ekliniki.\n\nU nga tsala "code" nkarhi wun'wana na wun'wana ku vona khodi ya wena nakambe.`,
+    ss: (code) => `🔢 Ikhodi yakho yekucwaninga itsi: *${code}*\n\nSicela ukhombise lekhodi kumcwaningi nawufika ekliniki. Isisita sihlanganise i-triage yakho ye-BIZUSIZO nekuvakashela kwakho ekliniki.\n\nUngabhala "code" nanoma nini kubona ikhodi yakho futsi.`,
+    ve: (code) => `🔢 Khoudu yaṋu ya ṱhoḓisiso ndi: *${code}*\n\nRi humbela ni sumbedze khoudu iyi kha muṱoḓisisi musi ni tshi swika kiliniki. I ri thusa u ṱanganya triage yaṋu ya BIZUSIZO na u dalela haṋu kiliniki.\n\nNi nga ṅwala "code" tshifhinga tshiṅwe na tshiṅwe u vhona khoudu yaṋu hafhu.`,
+    nr: (code) => `🔢 Ikhodi yakho yerhubhululo ithi: *${code}*\n\nSibawa ukhombise lekhodi kumrhubhululi nawufika ekliniki. Isisiza sihlanganise i-triage yakho ye-BIZUSIZO nekuvakatjhela kwakho ekliniki.\n\nUngatlola "code" nanini ukubona ikhodi yakho godu.`
   }
 
 };
@@ -2340,34 +2475,60 @@ async function orchestrate(patientId, from, message, session) {
   // ==================== STEP 1.5: CHRONIC CONDITION SCREENING ====================
   // Runs once after consent, before any triage. Captures chronic conditions
   // for ALL patients so the governance risk upgrade (Pillar 2) works universally.
-  // Stored in session.chronicConditions — used by ClinicalPerformanceMonitor
-  // for multimorbidity risk factor detection.
+  // This is a CLINICAL feature, not a research feature — benefits all users.
   if (session.consent && !session.chronicScreeningDone) {
     // Parse response: "0" = none, "1,3" = HIV + diabetes, "1 2" = HIV + hypertension
     if (message === '0') {
-      // No chronic conditions
       session.chronicConditions = [];
       session.chronicScreeningDone = true;
       await saveSession(patientId, session);
       await sendWhatsAppMessage(from, msg('chronic_screening_saved', lang));
-      await sendWhatsAppMessage(from, msg('category_menu', lang));
+      // Ask about study participation (not everyone is a study participant)
+      await sendWhatsAppMessage(from, msg('study_participation', lang));
       return;
     }
 
     const choices = message.replace(/[, ]+/g, ',').split(',').filter(c => CONDITION_MAP[c.trim()]);
     if (choices.length > 0) {
       session.chronicConditions = choices.map(c => CONDITION_MAP[c.trim()]);
-      // Also populate ccmddConditions so the CCMDD module and risk scoring work
       session.ccmddConditions = session.chronicConditions;
       session.chronicScreeningDone = true;
       await saveSession(patientId, session);
       await sendWhatsAppMessage(from, msg('chronic_screening_saved', lang));
-      await sendWhatsAppMessage(from, msg('category_menu', lang));
+      // Ask about study participation
+      await sendWhatsAppMessage(from, msg('study_participation', lang));
       return;
     }
 
     // Invalid input — re-show screening
     await sendWhatsAppMessage(from, msg('chronic_screening', lang));
+    return;
+  }
+
+  // ==================== STEP 1.6: STUDY PARTICIPATION CHECK ====================
+  // Separates research participants from regular BIZUSIZO users.
+  // Study participants get a BZ-XXXX code for concordance matching.
+  // Regular users skip straight to triage — no study code, no research data.
+  if (session.chronicScreeningDone && session.isStudyParticipant === undefined) {
+    if (message === '1') {
+      // Study participant — generate study code
+      session.isStudyParticipant = true;
+      const studyCode = await generateStudyCode(patientId);
+      session.studyCode = studyCode;
+      await saveSession(patientId, session);
+      await sendWhatsAppMessage(from, msg('study_code', lang, studyCode));
+      await sendWhatsAppMessage(from, msg('category_menu', lang));
+      return;
+    }
+    if (message === '2') {
+      // Regular user — skip study code, go straight to triage
+      session.isStudyParticipant = false;
+      await saveSession(patientId, session);
+      await sendWhatsAppMessage(from, msg('category_menu', lang));
+      return;
+    }
+    // Invalid input — re-show
+    await sendWhatsAppMessage(from, msg('study_participation', lang));
     return;
   }
 
@@ -2458,6 +2619,28 @@ async function orchestrate(patientId, from, message, session) {
       await scheduleFollowUp(patientId, from, session.lastTriage?.triage_level);
       return;
     }
+  }
+
+  // ==================== STEP: STUDY CODE RETRIEVAL ====================
+  if (message === 'code' || message === 'ikhodi' || message === 'kode' || message === 'khoutu' || message === 'khodi') {
+    if (session.isStudyParticipant) {
+      if (session.studyCode) {
+        await sendWhatsAppMessage(from, msg('study_code', lang, session.studyCode));
+      } else {
+        // Study participant without a code — generate one
+        const studyCode = await generateStudyCode(patientId);
+        session.studyCode = studyCode;
+        await saveSession(patientId, session);
+        await sendWhatsAppMessage(from, msg('study_code', lang, studyCode));
+      }
+    } else {
+      // Not a study participant — let them know
+      const notStudyMsg = lang === 'en'
+        ? 'Study codes are only for patients taking part in the BIZUSIZO research study at participating clinics. You can continue using BIZUSIZO normally.'
+        : 'Study codes are only for research study participants.';
+      await sendWhatsAppMessage(from, notStudyMsg);
+    }
+    return;
   }
 
   // ==================== STEP: LAB RESULTS QUERY ====================
@@ -2733,6 +2916,64 @@ app.get('/', (req, res) => {
     service: 'BIZUSIZO',
     governance: governance.systemIntegrity.isFailsafeActive() ? 'FAILSAFE' : 'NOMINAL',
   });
+});
+
+// ================================================================
+// STUDY CODE — API ENDPOINTS (for research assistants)
+// ================================================================
+
+// GET /api/study-codes/lookup/:code — Look up patient by study code
+app.get('/api/study-codes/lookup/:code', requireDashboardAuth, async (req, res) => {
+  try {
+    const result = await lookupStudyCode(req.params.code);
+    if (!result) return res.status(404).json({ error: 'Study code not found' });
+
+    // Get the patient's session for additional context
+    const session = await getSession(result.patient_id);
+
+    res.json({
+      study_code: result.study_code,
+      patient_id: result.patient_id,
+      created_at: result.created_at,
+      language: session.language || 'en',
+      chronic_conditions: (session.chronicConditions || []).map(c => c.label_en),
+      has_location: !!session.location,
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /api/study-codes — List all study codes (paginated)
+app.get('/api/study-codes', requireDashboardAuth, async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('study_codes')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(parseInt(req.query.limit) || 100);
+
+    if (error) throw error;
+    res.json({ codes: data, total: data ? data.length : 0 });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /api/study-codes/patient/:patientId — Get study code for a patient
+app.get('/api/study-codes/patient/:patientId', requireDashboardAuth, async (req, res) => {
+  try {
+    const { data } = await supabase
+      .from('study_codes')
+      .select('*')
+      .eq('patient_id', req.params.patientId)
+      .limit(1);
+
+    if (!data || data.length === 0) return res.status(404).json({ error: 'No study code for this patient' });
+    res.json(data[0]);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // ================================================================
