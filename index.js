@@ -335,17 +335,17 @@ Reply with the number.`
 
   // ==================== LANGUAGE CONFIRMED ====================
   language_set: {
-    en: '✅ Language set to *English*.',
-    zu: '✅ Ulimi lusetelwe ku-*isiZulu*.',
-    xh: '✅ Ulwimi lusetelwe kwisi-*Xhosa*.',
-    af: '✅ Taal is gestel na *Afrikaans*.',
-    nso: '✅ Polelo e beakantšwe go *Sepedi*.',
-    tn: '✅ Puo e beilwe go *Setswana*.',
-    st: '✅ Puo e behilwe ho *Sesotho*.',
-    ts: '✅ Ririmi ri vekiwile eka *Xitsonga*.',
-    ss: '✅ Lulwimi lubekwe ku-*siSwati*.',
-    ve: '✅ Luambo lwo sedzwa kha *Tshivenda*.',
-    nr: '✅ Ilimi libekwe ku-*isiNdebele*.'
+    en: '✅ Language set to *English*.\nType "language" anytime to change.',
+    zu: '✅ Ulimi lusetelwe ku-*isiZulu*.\nBhala "ulimi" noma nini ukushintsha.',
+    xh: '✅ Ulwimi lusetelwe kwisi-*Xhosa*.\nBhala "ulwimi" nanini na ukutshintsha.',
+    af: '✅ Taal is gestel na *Afrikaans*.\nTik "taal" enige tyd om te verander.',
+    nso: '✅ Polelo e beakantšwe go *Sepedi*.\nNgwala "polelo" nako efe go fetola.',
+    tn: '✅ Puo e beilwe go *Setswana*.\nKwala "puo" nako nngwe go fetola.',
+    st: '✅ Puo e behilwe ho *Sesotho*.\nNgola "puo" nako efe ho fetola.',
+    ts: '✅ Ririmi ri vekiwile eka *Xitsonga*.\nTsala "ririmi" nkarhi wun\'wana ku cinca.',
+    ss: '✅ Lulwimi lubekwe ku-*siSwati*.\nBhala "lulwimi" nanoma nini kushintja.',
+    ve: '✅ Luambo lwo sedzwa kha *Tshivenda*.\nṄwalani "luambo" tshifhinga tshiṅwe u shanduka.',
+    nr: '✅ Ilimi libekwe ku-*isiNdebele*.\nTlola "ilimi" nanini ukutjhentjha.'
   },
 
   // ==================== CONSENT PROMPT ====================
@@ -2895,6 +2895,47 @@ async function orchestrate(patientId, from, message, session) {
     }
   }
 
+  // ==================== STEP: LANGUAGE CHANGE ====================
+  // Patient can type "language" (or equivalents) at any time to change their language.
+  // This preserves their entire profile — only the language preference changes.
+  const LANGUAGE_KEYWORDS = [
+    'language', 'lang',
+    'ulimi',           // isiZulu
+    'ulwimi',          // isiXhosa
+    'taal',            // Afrikaans
+    'polelo', 'puo',   // Sepedi / Setswana
+    'puo',             // Sesotho
+    'ririmi',          // Xitsonga
+    'lulwimi',         // siSwati
+    'luambo',          // Tshivenda
+    'ilimi',           // isiNdebele
+  ];
+
+  if (LANGUAGE_KEYWORDS.includes(message)) {
+    session.pendingLanguageChange = true;
+    await saveSession(patientId, session);
+    await sendWhatsAppMessage(from, MESSAGES.language_menu._all);
+    return;
+  }
+
+  // Handle language selection after "language" command
+  if (session.pendingLanguageChange) {
+    if (LANG_MAP[message]) {
+      session.language = LANG_MAP[message];
+      session.pendingLanguageChange = false;
+      await saveSession(patientId, session);
+      await sendWhatsAppMessage(from, msg('language_set', session.language));
+      // If they have a complete profile, show the category menu in the new language
+      if (session.consent && session.chronicScreeningDone && session.isStudyParticipant !== undefined) {
+        await sendWhatsAppMessage(from, msg('category_menu', session.language));
+      }
+      return;
+    }
+    // Invalid selection — re-show menu
+    await sendWhatsAppMessage(from, MESSAGES.language_menu._all);
+    return;
+  }
+
   // ==================== STEP: STUDY CODE RETRIEVAL ====================
   if (message === 'code' || message === 'ikhodi' || message === 'kode' || message === 'khoutu' || message === 'khodi') {
     if (session.isStudyParticipant) {
@@ -2937,7 +2978,7 @@ async function orchestrate(patientId, from, message, session) {
   // Instead we ask them to describe their symptoms, giving the AI real
   // clinical information to work with.
   if (CATEGORY_DESCRIPTIONS[message] && !session.awaitingSymptomDetail) {
-    // Category 13: Voice note / speak to human
+    // Category 13: Voice note / speak to human — offer voice note first
     if (message === '13') {
       await sendWhatsAppMessage(from, msg('voice_note_prompt', lang));
       session.awaitingSymptomDetail = true;
@@ -2966,9 +3007,39 @@ async function orchestrate(patientId, from, message, session) {
   }
 
   // ==================== STEP: SYMPTOM DETAIL RECEIVED → ENRICH & TRIAGE ====================
-  // Patient has described their symptoms after picking a category.
-  // Prepend the category context so the AI gets: "Category: Breathing/Chest pain. Patient says: my chest is tight since yesterday"
   if (session.awaitingSymptomDetail) {
+    // Category 13 special handling: patient chose "speak to a human"
+    // If they send text (not a voice note), treat it as a human escalation request.
+    // Voice notes from cat 13 are handled in the audio handler above (they get transcribed + triaged).
+    if (session.selectedCategory === '13') {
+      session.awaitingSymptomDetail = false;
+      session.selectedCategory = null;
+      await saveSession(patientId, session);
+
+      // Log the escalation
+      await logTriage({
+        patient_id: patientId,
+        triage_level: 'YELLOW',
+        confidence: 100,
+        escalation: true,
+        pathway: 'human_escalation_requested',
+        facility_name: null,
+        location: session.location || null,
+        symptoms: `Patient requested human contact. Message: ${message}`
+      });
+
+      const humanMsg = {
+        en: `👤 Thank you for your message. A healthcare worker will review your case.\n\nIf this is an emergency, please call *10177* or go to your nearest clinic or hospital immediately — do not wait.\n\nYou can also visit your nearest clinic during operating hours for in-person assistance.`,
+        zu: `👤 Siyabonga ngomyalezo wakho. Isisebenzi sezempilo sizobheka udaba lwakho.\n\nUma kuphuthumile, sicela ushaye *10177* noma uye emtholampilo noma esibhedlela esiseduze MANJE — ungalindi.\n\nUngavakashela umtholampilo oseduze ngamahora okusebenza.`,
+        xh: `👤 Enkosi ngomyalezo wakho. Umsebenzi wezempilo uza kuhlola udaba lwakho.\n\nUkuba yingxakeko, nceda utsalele *10177* okanye uye ekliniki okanye esibhedlele esikufutshane NGOKU — musa ukulinda.\n\nUngatyelela ikliniki yakho ekufutshane ngamaxesha okusebenza.`,
+        af: `👤 Dankie vir jou boodskap. 'n Gesondheidswerker sal jou saak hersien.\n\nAs dit 'n noodgeval is, bel asseblief *10177* of gaan na jou naaste kliniek of hospitaal DADELIK — moenie wag nie.\n\nJy kan ook jou naaste kliniek besoek tydens werksure.`,
+      };
+      await sendWhatsAppMessage(from, humanMsg[lang] || humanMsg['en']);
+      await scheduleFollowUp(patientId, from, 'YELLOW');
+      return;
+    }
+
+    // Categories 1-12: Prepend category context and triage
     const categoryContext = CATEGORY_DESCRIPTIONS[session.selectedCategory] || '';
     const enrichedMessage = categoryContext
       ? `Category: ${categoryContext}. Patient says: ${message}`
@@ -2978,8 +3049,6 @@ async function orchestrate(patientId, from, message, session) {
     session.selectedCategory = null;
     await saveSession(patientId, session);
 
-    // Feed the enriched text into triage (fall through to STEP 2 below)
-    // We reassign message for the triage step
     message = enrichedMessage;
   }
 
@@ -3104,16 +3173,78 @@ async function orchestrate(patientId, from, message, session) {
   await sendWhatsAppMessage(from, msg('facility_suggest', lang, nearest.name, nearest.distance));
 }
 
+// ================== MESSAGE DEDUP ==================
+// WhatsApp sometimes delivers the same message twice (network retries).
+// Without dedup, the system would triage twice and send duplicate results.
+// We track recent message IDs in memory with a 5-minute TTL.
+const recentMessageIds = new Map(); // messageId → timestamp
+const DEDUP_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+// Clean old entries every minute
+setInterval(() => {
+  const now = Date.now();
+  for (const [id, timestamp] of recentMessageIds) {
+    if (now - timestamp > DEDUP_TTL_MS) recentMessageIds.delete(id);
+  }
+}, 60 * 1000);
+
 // ================== MAIN HANDLER ==================
 async function handleMessage(msgObj) {
+  // Dedup: skip if we've already processed this message ID
+  const messageId = msgObj.id;
+  if (messageId) {
+    if (recentMessageIds.has(messageId)) {
+      console.log(`[DEDUP] Skipping duplicate message: ${messageId}`);
+      return;
+    }
+    recentMessageIds.set(messageId, Date.now());
+  }
+
   const from = msgObj.from;
   const patientId = hashPhone(from);
   let session = await getSession(patientId);
 
-  // RESET COMMAND
+  // RESET COMMAND — soft reset
+  // Preserves: language, chronic conditions, study code, study participation
+  // Clears: current triage state, facility routing, pending steps
+  // This means returning patients don't have to redo onboarding
   if (msgObj.type === 'text' && msgObj.text.body.trim() === '0') {
-    await saveSession(patientId, {});
-    await sendWhatsAppMessage(from, MESSAGES.language_menu._all);
+    const preserved = {
+      language: session.language,
+      consent: session.consent,
+      chronicConditions: session.chronicConditions,
+      ccmddConditions: session.ccmddConditions,
+      chronicScreeningDone: session.chronicScreeningDone,
+      isStudyParticipant: session.isStudyParticipant,
+      studyCode: session.studyCode,
+      location: session.location,
+      patientAge: session.patientAge,
+    };
+    await saveSession(patientId, preserved);
+
+    const lang = preserved.language || 'en';
+
+    // If they have a full profile, skip straight to category menu
+    if (preserved.language && preserved.consent && preserved.chronicScreeningDone && preserved.isStudyParticipant !== undefined) {
+      const resetMsg = {
+        en: '🔄 Conversation reset. How can we help you today?',
+        zu: '🔄 Ingxoxo iqalwe kabusha. Singakusiza ngani namuhla?',
+        xh: '🔄 Incoko iqalwe ngokutsha. Singakunceda ngantoni namhlanje?',
+        af: '🔄 Gesprek herstel. Hoe kan ons jou vandag help?',
+        nso: '🔄 Poledišano e thomilwe gape. Re ka go thuša ka eng lehono?',
+        tn: '🔄 Puisano e simolotšwe gape. Re ka go thusa ka eng gompieno?',
+        st: '🔄 Puisano e qalilwe bocha. Re ka o thusa ka eng kajeno?',
+        ts: '🔄 Nkani yi sungurile nakambe. Hi nga ku pfuna hi yini namuntlha?',
+        ss: '🔄 Ingcoco icalwe kabusha. Singakusita ngani lamuhla?',
+        ve: '🔄 Nyambedzano yo thoma hafhu. Ri nga ni thusa nga mini ṋamusi?',
+        nr: '🔄 Ingcoco iqalwe kabutjha. Singakusiza ngani namhlanje?',
+      };
+      await sendWhatsAppMessage(from, resetMsg[lang] || resetMsg['en']);
+      await sendWhatsAppMessage(from, msg('category_menu', lang));
+    } else {
+      // Incomplete profile — show language menu to restart onboarding
+      await sendWhatsAppMessage(from, MESSAGES.language_menu._all);
+    }
     return;
   }
 
