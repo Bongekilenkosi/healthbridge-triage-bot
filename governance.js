@@ -29,9 +29,10 @@
 // ================================================================
 
 class SystemIntegrityMonitor {
-  constructor(supabase, alertCallback) {
+  constructor(supabase, alertCallback, queueEvent) {
     this.supabase = supabase;
     this.alertCallback = alertCallback; // function(alert) — sends to engineering team
+    this.queueEvent = queueEvent;       // function(event) — local file queue when DB is down
 
     // Rolling window counters (reset every WINDOW_MINUTES)
     this.WINDOW_MINUTES = 15;
@@ -86,31 +87,45 @@ class SystemIntegrityMonitor {
     const w = this.window;
     if (w.totalRequests === 0) return;
 
+    const metricData = {
+      total_requests: w.totalRequests,
+      api_calls: w.apiCalls,
+      api_failures: w.apiFailures,
+      api_timeouts: w.apiTimeouts,
+      inference_errors: w.inferenceErrors,
+      missing_features: w.missingFeatures,
+      whatsapp_sent: w.whatsappSent,
+      whatsapp_failed: w.whatsappFailed,
+      supabase_queries: w.supabaseQueries,
+      supabase_failures: w.supabaseFailures,
+      triage_requests: w.triageRequests,
+      triage_fallbacks: w.triageFallbacks,
+      failsafe_active: this.failsafeMode,
+      error_rate: w.apiCalls > 0 ? w.apiFailures / w.apiCalls : 0,
+    };
+
     try {
       await this.supabase.from('governance_metrics').insert({
         metric_type: 'system_integrity_window',
         window_start: w.startedAt,
         window_end: new Date(),
-        data: {
-          total_requests: w.totalRequests,
-          api_calls: w.apiCalls,
-          api_failures: w.apiFailures,
-          api_timeouts: w.apiTimeouts,
-          inference_errors: w.inferenceErrors,
-          missing_features: w.missingFeatures,
-          whatsapp_sent: w.whatsappSent,
-          whatsapp_failed: w.whatsappFailed,
-          supabase_queries: w.supabaseQueries,
-          supabase_failures: w.supabaseFailures,
-          triage_requests: w.triageRequests,
-          triage_fallbacks: w.triageFallbacks,
-          failsafe_active: this.failsafeMode,
-          error_rate: w.apiCalls > 0 ? w.apiFailures / w.apiCalls : 0,
-        },
+        data: metricData,
         created_at: new Date()
       });
     } catch (e) {
-      console.error('[GOV] Failed to flush integrity window:', e.message);
+      console.error('[GOV] Failed to flush integrity window to DB:', e.message);
+      // Queue locally for later flush
+      if (this.queueEvent) {
+        this.queueEvent({
+          type: 'system_integrity_window',
+          table: 'governance_metrics',
+          data: {
+            metric_type: 'system_integrity_window',
+            metric_data: metricData,
+            original_timestamp: new Date().toISOString(),
+          }
+        });
+      }
     }
   }
 
@@ -252,7 +267,21 @@ class SystemIntegrityMonitor {
         this.alertCallback(alert);
       }
     } catch (e) {
-      console.error('[GOV] Failed to log alert:', e.message);
+      console.error('[GOV] Failed to log alert to DB:', e.message);
+      // Queue locally for later flush when connectivity returns
+      if (this.queueEvent) {
+        this.queueEvent({
+          type: `gov_alert_${type}`,
+          table: 'governance_alerts',
+          data: {
+            alert_type: type,
+            severity,
+            pillar: 'system_integrity',
+            message,
+            original_timestamp: new Date().toISOString(),
+          }
+        });
+      }
     }
   }
 
@@ -447,9 +476,10 @@ function deterministicRedClassifier(text) {
 // ================================================================
 
 class ClinicalPerformanceMonitor {
-  constructor(supabase, alertCallback) {
+  constructor(supabase, alertCallback, queueEvent) {
     this.supabase = supabase;
     this.alertCallback = alertCallback;
+    this.queueEvent = queueEvent;
 
     // Thresholds
     this.CONFIDENCE_THRESHOLD = 75;
@@ -713,21 +743,34 @@ class ClinicalPerformanceMonitor {
         byLevel[r.final_level] = (byLevel[r.final_level] || 0) + 1;
       }
 
+      const metricData = {
+        batch_size: total,
+        distribution: byLevel,
+        avg_confidence: Math.round(avgConfidence * 10) / 10,
+        low_confidence_count: lowConfidence,
+        low_confidence_rate: (lowConfidence / total * 100).toFixed(1) + '%',
+        risk_upgrade_count: riskUpgrades,
+        risk_upgrade_rate: (riskUpgrades / total * 100).toFixed(1) + '%',
+      };
+
       await this.supabase.from('governance_metrics').insert({
         metric_type: 'clinical_performance_batch',
-        data: {
-          batch_size: total,
-          distribution: byLevel,
-          avg_confidence: Math.round(avgConfidence * 10) / 10,
-          low_confidence_count: lowConfidence,
-          low_confidence_rate: (lowConfidence / total * 100).toFixed(1) + '%',
-          risk_upgrade_count: riskUpgrades,
-          risk_upgrade_rate: (riskUpgrades / total * 100).toFixed(1) + '%',
-        },
+        data: metricData,
         created_at: new Date()
       });
     } catch (e) {
-      console.error('[GOV] Failed to flush performance buffer:', e.message);
+      console.error('[GOV] Failed to flush performance buffer to DB:', e.message);
+      if (this.queueEvent) {
+        this.queueEvent({
+          type: 'clinical_performance_batch',
+          table: 'governance_metrics',
+          data: {
+            metric_type: 'clinical_performance_batch',
+            metric_data: { batch_size: snapshot.length },
+            original_timestamp: new Date().toISOString(),
+          }
+        });
+      }
     }
   }
 
@@ -750,7 +793,21 @@ class ClinicalPerformanceMonitor {
         this.alertCallback(alert);
       }
     } catch (e) {
-      console.error('[GOV] Failed to log clinical alert:', e.message);
+      console.error('[GOV] Failed to log clinical alert to DB:', e.message);
+      if (this.queueEvent) {
+        this.queueEvent({
+          type: `clinical_alert_${issue.type}`,
+          table: 'governance_alerts',
+          data: {
+            alert_type: issue.type,
+            severity: issue.severity,
+            pillar: 'clinical_performance',
+            message: issue.detail,
+            assigned_to: 'clinical_governance_lead',
+            original_timestamp: new Date().toISOString(),
+          }
+        });
+      }
     }
   }
 }
@@ -1310,8 +1367,13 @@ class GovernanceOrchestrator {
       console.log(`[GOV ALERT] [${alert.severity}] [${alert.pillar}] ${alert.message}`);
     });
 
-    this.systemIntegrity = new SystemIntegrityMonitor(supabase, alertCallback);
-    this.clinicalPerformance = new ClinicalPerformanceMonitor(supabase, alertCallback);
+    // Local event queue: when Supabase is unreachable, events are written
+    // to a local file and flushed when connectivity returns.
+    // Pass queueEvent from index.js so governance can use it.
+    this.queueEvent = config.queueEvent || null;
+
+    this.systemIntegrity = new SystemIntegrityMonitor(supabase, alertCallback, this.queueEvent);
+    this.clinicalPerformance = new ClinicalPerformanceMonitor(supabase, alertCallback, this.queueEvent);
     this.strategicLifecycle = new StrategicLifecycleMonitor(supabase, alertCallback);
     this.incidentManager = new IncidentManager(supabase, alertCallback);
     this.supabase = supabase;
