@@ -23,9 +23,211 @@ app.use(express.json());
 // Serve governance dashboard as a static file
 app.use('/public', express.static(path.join(__dirname, 'public')));
 
-// Dashboard route — redirects /dashboard to the governance dashboard HTML
+// ================================================================
+// GOVERNANCE DASHBOARD — Inline HTML (no external file dependency)
+// Vanilla JS — no React, no Babel, no CDN. Maximum reliability.
+// ================================================================
 app.get('/dashboard', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'governance-dashboard.html'));
+  res.setHeader('Content-Type', 'text/html');
+  res.send(`<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BIZUSIZO Governance Dashboard</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0a0e17;color:#e2e8f0;font-family:-apple-system,sans-serif;padding:20px}
+.header{display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;padding-bottom:16px;border-bottom:1px solid #1e293b}
+.header h1{font-size:20px;color:#e2e8f0}
+.header .status{padding:4px 12px;border-radius:99px;font-size:12px;font-weight:600}
+.nominal{background:rgba(16,185,129,.15);color:#10b981;border:1px solid rgba(16,185,129,.3)}
+.degraded{background:rgba(234,179,8,.15);color:#eab308;border:1px solid rgba(234,179,8,.3)}
+.critical{background:rgba(239,68,68,.15);color:#ef4444;border:1px solid rgba(239,68,68,.3)}
+.tabs{display:flex;gap:8px;margin-bottom:24px}
+.tab{padding:8px 16px;border-radius:6px;border:1px solid #1e293b;background:#111827;color:#64748b;cursor:pointer;font-size:13px}
+.tab.active{background:#1e293b;color:#e2e8f0;border-color:#3b82f6}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-bottom:24px}
+.card{background:#111827;border:1px solid #1e293b;border-radius:10px;padding:16px}
+.card .label{font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:.05em}
+.card .value{font-size:28px;font-weight:700;margin-top:4px}
+.card .sub{font-size:12px;color:#64748b;margin-top:4px}
+.pillar-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;margin-bottom:24px}
+.pillar{background:#111827;border:1px solid #1e293b;border-radius:10px;padding:16px;border-left:3px solid}
+.pillar h3{font-size:14px;margin-bottom:8px}
+.pillar .detail{font-size:12px;color:#64748b;line-height:1.6}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;padding:8px 12px;background:#111827;color:#64748b;font-size:11px;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid #1e293b}
+td{padding:8px 12px;border-bottom:1px solid #1e293b}
+.badge{display:inline-block;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:600}
+.badge-critical{color:#ef4444;border:1px solid rgba(239,68,68,.3)}
+.badge-high{color:#f97316;border:1px solid rgba(249,115,22,.3)}
+.badge-medium{color:#eab308;border:1px solid rgba(234,179,8,.3)}
+.badge-low{color:#22c55e;border:1px solid rgba(34,197,94,.3)}
+.empty{text-align:center;padding:40px;color:#475569}
+.login{position:fixed;inset:0;background:#0a0e17;display:flex;align-items:center;justify-content:center;z-index:99}
+.login-box{background:#111827;border:1px solid #1e293b;border-radius:10px;padding:32px;width:320px;text-align:center}
+.login-box h2{margin-bottom:16px;font-size:18px}
+.login-box input{width:100%;padding:10px;border-radius:6px;border:1px solid #1e293b;background:#0d1321;color:#e2e8f0;margin-bottom:12px;font-size:14px}
+.login-box button{width:100%;padding:10px;border-radius:6px;border:none;background:#3b82f6;color:white;font-size:14px;cursor:pointer}
+.login-box button:hover{background:#2563eb}
+.refresh-info{font-size:11px;color:#475569;text-align:right;margin-bottom:8px}
+</style>
+</head>
+<body>
+
+<div id="login" class="login">
+  <div class="login-box">
+    <h2>BIZUSIZO Governance</h2>
+    <p style="color:#64748b;font-size:13px;margin-bottom:16px">Enter dashboard password</p>
+    <input type="password" id="pwd" placeholder="Password" onkeyup="if(event.key==='Enter')doLogin()">
+    <button onclick="doLogin()">Sign in</button>
+    <p id="login-err" style="color:#ef4444;font-size:12px;margin-top:8px"></p>
+  </div>
+</div>
+
+<div id="app" style="display:none">
+  <div class="header">
+    <h1>BIZUSIZO Governance Dashboard</h1>
+    <div>
+      <span id="sys-status" class="status nominal">LOADING...</span>
+      <span style="color:#475569;font-size:11px;margin-left:12px" id="last-refresh"></span>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <div class="tab active" onclick="showTab('overview',this)">Overview</div>
+    <div class="tab" onclick="showTab('alerts',this)">Alerts</div>
+    <div class="tab" onclick="showTab('incidents',this)">Incidents</div>
+    <div class="tab" onclick="showTab('metrics',this)">Metrics</div>
+  </div>
+
+  <div id="tab-overview">
+    <div class="grid" id="stat-cards"></div>
+    <h3 style="margin-bottom:12px;font-size:14px;color:#64748b">Four-Pillar Status</h3>
+    <div class="pillar-grid" id="pillars"></div>
+  </div>
+
+  <div id="tab-alerts" style="display:none">
+    <div class="card"><table><thead><tr><th>Time</th><th>Severity</th><th>Pillar</th><th>Message</th></tr></thead><tbody id="alerts-body"></tbody></table></div>
+  </div>
+
+  <div id="tab-incidents" style="display:none">
+    <div class="card"><table><thead><tr><th>Time</th><th>Level</th><th>Description</th><th>Status</th></tr></thead><tbody id="incidents-body"></tbody></table></div>
+  </div>
+
+  <div id="tab-metrics" style="display:none">
+    <div class="card"><table><thead><tr><th>Time</th><th>Type</th><th>Requests</th><th>Errors</th><th>Error Rate</th></tr></thead><tbody id="metrics-body"></tbody></table></div>
+  </div>
+
+  <div style="margin-top:32px;padding-top:16px;border-top:1px solid #1e293b;font-size:10px;color:#475569;display:flex;justify-content:space-between">
+    <span>BIZUSIZO Governance Framework v1.0 · Stanford-adapted four-pillar monitoring</span>
+    <span>Auto-refresh every 30s</span>
+  </div>
+</div>
+
+<script>
+let PWD='';
+const API='';
+
+async function api(path){
+  try{
+    const r=await fetch(API+path,{headers:{'x-dashboard-password':PWD}});
+    if(!r.ok)throw new Error(r.status);
+    return await r.json();
+  }catch(e){console.error(path,e);return null;}
+}
+
+function doLogin(){
+  PWD=document.getElementById('pwd').value;
+  api('/api/governance/status').then(d=>{
+    if(d){document.getElementById('login').style.display='none';document.getElementById('app').style.display='block';refresh();}
+    else{document.getElementById('login-err').textContent='Invalid password or server error';}
+  });
+}
+
+function showTab(name,el){
+  document.querySelectorAll('[id^=tab-]').forEach(t=>t.style.display='none');
+  document.getElementById('tab-'+name).style.display='block';
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  el.classList.add('active');
+}
+
+function badge(sev){
+  const s=(sev||'').toUpperCase();
+  const cls=s==='CRITICAL'?'badge-critical':s==='HIGH'?'badge-high':s==='MEDIUM'?'badge-medium':'badge-low';
+  return '<span class="badge '+cls+'">'+s+'</span>';
+}
+
+function timeAgo(d){
+  if(!d)return '-';
+  const s=Math.floor((Date.now()-new Date(d))/1000);
+  if(s<60)return s+'s ago';if(s<3600)return Math.floor(s/60)+'m ago';
+  if(s<86400)return Math.floor(s/3600)+'h ago';return Math.floor(s/86400)+'d ago';
+}
+
+async function refresh(){
+  const status=await api('/api/governance/status');
+  if(!status)return;
+
+  document.getElementById('last-refresh').textContent='Updated '+new Date().toLocaleTimeString();
+
+  // System status badge
+  const el=document.getElementById('sys-status');
+  const si=status.system_integrity||{};
+  if(si.failsafe_active){el.textContent='FAILSAFE';el.className='status critical';}
+  else{el.textContent='NOMINAL';el.className='status nominal';}
+
+  // Stat cards
+  const w=si.current_window||{};
+  document.getElementById('stat-cards').innerHTML=[
+    {label:'Total Requests',value:w.total_requests||0,sub:'Current 15-min window'},
+    {label:'AI Triage Calls',value:w.api_calls||0,sub:'Failures: '+(w.api_failures||0)},
+    {label:'Error Rate',value:w.api_calls>0?((w.api_failures/w.api_calls)*100).toFixed(1)+'%':'0%',sub:'Threshold: 20%'},
+    {label:'WhatsApp Sent',value:w.whatsapp_sent||0,sub:'Failed: '+(w.whatsapp_failed||0)},
+    {label:'Failsafe Mode',value:si.failsafe_active?'ACTIVE':'Inactive',sub:'Consecutive failures: '+(si.consecutive_api_failures||0)},
+    {label:'Triage Fallbacks',value:w.triage_fallbacks||0,sub:'Deterministic classifier'},
+  ].map(c=>'<div class="card"><div class="label">'+c.label+'</div><div class="value">'+c.value+'</div><div class="sub">'+c.sub+'</div></div>').join('');
+
+  // Pillars
+  const cp=status.clinical_performance||{};
+  const sl=status.strategic_lifecycle||{};
+  document.getElementById('pillars').innerHTML=[
+    {name:'System Integrity',color:'#06b6d4',details:'API failures: '+(w.api_failures||0)+' · Timeouts: '+(w.api_timeouts||0)+' · Failsafe: '+(si.failsafe_active?'ACTIVE':'Off')},
+    {name:'Clinical Performance',color:'#8b5cf6',details:'Buffer size: '+(cp.buffer_size||0)+' · Confidence threshold: '+(cp.confidence_threshold||75)+'%'},
+    {name:'Strategic Lifecycle',color:'#f59e0b',details:'Next review: '+(sl.next_90_day_review||'Not scheduled')+' · Annual: '+(sl.next_annual_review||'Not scheduled')},
+    {name:'Incident Management',color:'#ef4444',details:'Open incidents tracked via governance_incidents table'},
+  ].map(p=>'<div class="pillar" style="border-left-color:'+p.color+'"><h3 style="color:'+p.color+'">'+p.name+'</h3><div class="detail">'+p.details+'</div></div>').join('');
+
+  // Alerts
+  const alerts=await api('/api/governance/alerts?limit=50');
+  const ab=document.getElementById('alerts-body');
+  if(alerts&&alerts.length>0){
+    ab.innerHTML=alerts.map(a=>'<tr><td>'+timeAgo(a.created_at)+'</td><td>'+badge(a.severity)+'</td><td>'+(a.pillar||'-')+'</td><td>'+(a.message||'-')+'</td></tr>').join('');
+  }else{ab.innerHTML='<tr><td colspan="4" class="empty">No alerts — system operating normally</td></tr>';}
+
+  // Incidents
+  const incidents=await api('/api/governance/incidents?limit=50');
+  const ib=document.getElementById('incidents-body');
+  if(incidents&&incidents.length>0){
+    ib.innerHTML=incidents.map(i=>'<tr><td>'+timeAgo(i.created_at)+'</td><td>'+badge('L'+(i.severity_level||'?'))+'</td><td>'+(i.description||'-')+'</td><td>'+(i.status||'-')+'</td></tr>').join('');
+  }else{ib.innerHTML='<tr><td colspan="4" class="empty">No incidents reported</td></tr>';}
+
+  // Metrics
+  const metrics=await api('/api/governance/metrics?limit=20');
+  const mb=document.getElementById('metrics-body');
+  if(metrics&&metrics.length>0){
+    mb.innerHTML=metrics.map(m=>{
+      const d=m.data||{};
+      return '<tr><td>'+timeAgo(m.created_at)+'</td><td>'+(m.metric_type||'-')+'</td><td>'+(d.total_requests||d.batch_size||'-')+'</td><td>'+(d.api_failures||d.low_confidence_count||'-')+'</td><td>'+(d.error_rate!==undefined?(d.error_rate*100).toFixed(1)+'%':(d.low_confidence_rate||'-'))+'</td></tr>';
+    }).join('');
+  }else{mb.innerHTML='<tr><td colspan="5" class="empty">No metrics recorded yet</td></tr>';}
+}
+
+setInterval(refresh,30000);
+</script>
+</body>
+</html>`);
 });
 
 // ================== CONFIG ==================
@@ -390,18 +592,18 @@ Do you agree?
 
     zu: `Siyakwamukela ku-BIZUSIZO.
 
-Le service:
-• Inikeza iseluleko — AYIKUXILONGI
-• Ingakudlulisela ku-nurse uma kudingeka
+Le sevisi:
+• Inikezela iseluleko — AYIKUXILONGI
+• Ingakudlulisela kunesi uma kudingeka
 • Igcina imininingwane yakho iphephile nge-POPIA
 
 Uyavuma?
 1 — Yebo, ngiyavuma
 2 — Cha, angivumi`,
 
-    xh: `Wamukelekile ku-BIZUSIZO.
+    xh: `Wamkelekile ku-BIZUSIZO.
 
-Le service:
+Le sevisi:
 • Inika iingcebiso — AYIXILONGI
 • Inokukudlulisela kumongikazi ukuba kuyafuneka
 • Igcina inkcazelo yakho ikhuselekile nge-POPIA
@@ -468,9 +670,9 @@ Xana wa pfumela?
     ss: `Wemukelekile ku-BIZUSIZO.
 
 Lesevisi:
-• Ikunika teluleko — AYIKUCILONGI
+• Inika teluleko — AYIHLONGI
 • Ingakutfumela kunesi uma kudzingeka
-• Igcina imininingwane yaakho iphephile nge-POPIA
+• Igcina lokutsintana kwakho kuphephile nge-POPIA
 
 Uyavuma?
 1 — Yebo, ngiyavuma
@@ -502,28 +704,28 @@ Uyavuma?
   // ==================== CONSENT RESPONSES ====================
   consent_yes: {
     en: '✅ Consent received. Please describe your symptoms or choose a category.',
-    zu: '✅ Imvume itholakele. Sicela uchaze izimpawu zakho noma ukhethe uhlu.',
+    zu: '✅ Imvume itholakele. Sicela uchaze izimpawu zakho noma ukhethe uhlobo.',
     xh: '✅ Imvume ifunyenwe. Nceda uchaze iimpawu zakho okanye ukhethe udidi.',
     af: '✅ Toestemming ontvang. Beskryf asseblief jou simptome of kies \'n kategorie.',
     nso: '✅ Tumelelo e amogetšwe. Hle hlaloša dika tša gago goba kgetha mohuta.',
     tn: '✅ Tumelelo e amogetšwe. Tswee-tswee tlhalosa matshwao a gago kgotsa tlhopha mofuta.',
     st: '✅ Tumello e amohelehile. Ka kopo hlalosa matshwao a hao kapa khetha mofuta.',
     ts: '✅ Mpfumelelo wu amukelekile. Tlhela u hlamusela swikombiso swa wena kumbe u hlawula muxaka.',
-    ss: '✅ Imvumo itfolakele. Sicela uchaze timphawu takho noma ukhetse luhlu.',
+    ss: '✅ Imvumo itfolakele. Sicela uchaze timphawu takho noma ukhetse luhlobo.',
     ve: '✅ Thendelano yo ṱanganedzwa. Ri humbela ni ṱalutshedze zwiga zwaṋu kana ni khethe lushaka.',
     nr: '✅ Imvumo itholakele. Sibawa uchaze iimpawu zakho namkha ukhethe umhlobo.'
   },
 
   consent_no: {
     en: '❌ You have declined. Your session has ended. If you change your mind, send "Hi" again.',
-    zu: '❌ Wenqabile. Isikhathi sakho siphelile. Uma ushintsha umqondo, thumela "Hi" futhi.',
-    xh: '❌ Walile. I-session yakho iphelile. Ukuba utshintshe ingqondo, thumela "Hi" kwakhona.',
+    zu: '❌ Wenqabile. Isikhathi sakho siphelile. Uma uguqula umqondo, thumela "Hi" futhi.',
+    xh: '❌ Walile. Iseshoni yakho iphelile. Ukuba utshintshe ingqondo, thumela "Hi" kwakhona.',
     af: '❌ Jy het geweier. Jou sessie is beëindig. As jy van plan verander, stuur weer "Hi".',
     nso: '❌ O ganne. Sešene ya gago e fedile. Ge o ka fetola mogopolo, romela "Hi" gape.',
     tn: '❌ O ganne. Seshene ya gago e fedile. Fa o fetola mogopolo, romela "Hi" gape.',
     st: '❌ O hanile. Seshene ya hao e fedile. Haeba o fetola monahano, romela "Hi" hape.',
     ts: '❌ U arile. Sesheni ya wena yi herile. Loko u cinca mianakanyo, rhumela "Hi" nakambe.',
-    ss: '❌ Walile. Iseshini yakho iphelile. Nawugucula umcondvo, tfumela "Hi" futsi.',
+    ss: '❌ Walile. Seshini yakho iphelile. Nawugucula umcondvo, tfumela "Hi" futsi.',
     ve: '❌ No hana. Sesheni yaṋu yo fhela. Arali na shanduka muhumbulo, rumelani "Hi" hafhu.',
     nr: '❌ Walile. Iseshini yakho iphelile. Nawutjhentjha umkhumbulo, thumela "Hi" godu.'
   },
@@ -557,7 +759,7 @@ Uyavuma?
 7. 👶 Ukugula kwengane
 8. 💊 Umuthi / Isifo esingamahlalakhona
 9. 🦴 Ithambo / Amalunga / Ubuhlungu bomhlane
-10. 🧠 Impilo yengqondo-Mental Health
+10. 🧠 Impilo yengqondo
 11. 🤧 I-allergy / Ukuvuvukala kwesikhumba
 12. ✏️ Okunye — bhala izimpawu zakho
 13. 👤 Khuluma nomuntu`,
@@ -660,17 +862,17 @@ Uyavuma?
 
     ss: `Yini inkinga yakho lenkhulu lamuhla?
 
-1. 🫁 Kuphefumula / Buhlungu esifubeni
-2. 🤕 Kulimala enhloko / Inhloko lebuhlungu
+1. 🫁 Kuphefumula / Kuva buhlungu esifubeni
+2. 🤕 Kulimala kwenhloko / Inhloko lebuhlungu
 3. 🤰 Lokuphatselene nekukhulelwa
-4. 🩸 Kopha / Silondza
+4. 🩸 Kopha / Intsandza
 5. 🤒 Imfiva / Umkhuhlane / Kukhwehlela
 6. 🤢 Sisu / Kuhlanta
 7. 👶 Kugula kwemntfwana
 8. 💊 Umutsi / Sifo lesingapheli
-9. 🦴 Litsambo / Buhlungu emhlane
-10. 🧠 Imphilo yengcondvo- Mental Illness
-11. 🤧 I-aleji / Kudumba kwesikhunba
+9. 🦴 Litsambo / Kuva buhlungu kwemhlane
+10. 🧠 Imphilo yengcondvo
+11. 🤧 I-aletshe / Kudumba kwesikhunba
 12. ✏️ Lokunye — bhala timphawu takho
 13. 👤 Khuluma nemuntfu`,
 
@@ -710,14 +912,14 @@ Uyavuma?
   // ==================== TRIAGE RESULTS ====================
   triage_red: {
     en: '🔴 *EMERGENCY*\n\nCall *10177* for an ambulance NOW.\nIf private: ER24 *084 124*.\n\n⚠️ *Do NOT wait for the ambulance* — go to your nearest hospital emergency unit immediately. Ask someone to drive you or take a taxi.',
-    zu: '🔴 *ISIMO ESIPHUTHUMAYO*\n\nShaya *10177* ucele i-ambulensi MANJE.\nUma usebenzisa ezimfihlo: ER24 *084 124*.\n\n⚠️ *UNGALINDI i-ambulensi* — yana esibhedlela esiseduze nawe ngokushesha. Cela umuntu akushayelele noma uthathe itekisi.',
+    zu: '🔴 *ISIMO ESIPHUTHUMAYO*\n\nShaya *10177* ucele i-ambulensi MANJE.\nUma usebenzisa ezimfihlo: ER24 *084 124*.\n\n⚠️ *UNGALINDI i-ambulensi* — yana esibhedlela esiseduze nawe ngokushesha. Cela umuntu akushayele noma uthathe itekisi.',
     xh: '🔴 *INGXAKEKO ENGXAMISEKILEYO*\n\nTsalela *10177* ucele i-ambulensi NGOKU.\nYabucala: ER24 *084 124*.\n\n⚠️ *MUSA UKULINDA i-ambulensi* — yiya esibhedlele esikufutshane nawe ngokukhawuleza. Cela umntu akuqhubele okanye uthathe iteksi.',
     af: '🔴 *NOODGEVAL*\n\nBel *10177* vir \'n ambulans NOU.\nPrivaat: ER24 *084 124*.\n\n⚠️ *MOENIE WAG vir die ambulans nie* — gaan na jou naaste hospitaal noodafdeling dadelik. Vra iemand om jou te ry of neem \'n taxi.',
     nso: '🔴 *TŠHOGANETŠO*\n\nLeletša *10177* go kgopela ambulense BJALE.\nPraebete: ER24 *084 124*.\n\n⚠️ *O SE KE WA EMA ambulense* — yaa sepetleleng sa kgauswi ka pela. Kgopela motho go go išetša goba o tšee thekisi.',
     tn: '🔴 *TSHOGANYETSO*\n\nLeletsa *10177* go kopa ambulense JAANONG.\nPraebete: ER24 *084 124*.\n\n⚠️ *O SE KA WA EMA ambulense* — ya bookelong jo bo gaufi ka bonako. Kopa motho go go isa kgotsa o tseye thekisi.',
     st: '🔴 *TSHOHANYETSO*\n\nLetsetsa *10177* ho kopa ambulense HONA JOALE.\nPraebete: ER24 *084 124*.\n\n⚠️ *O SE KE OA EMA ambulense* — eya sepetlele se haufi kapele. Kopa motho ho o isa kapa o nke thekisi.',
     ts: '🔴 *XIHATLA*\n\nRingela *10177* ku kombela ambulense SWESWI.\nPrayivhete: ER24 *084 124*.\n\n⚠️ *U NGA YIMI ambulense* — famba u ya exibedlhele xa kusuhi hi ku hatlisa. Kombela munhu ku ku yisa kumbe u teka thekisi.',
-    ss: '🔴 *Kuyaphutfuma*\n\nShayela *10177* ucele i-ambulensi NYALO.\nUma u-private: ER24 *084 124*.\n\n⚠️ *UNGALINDZI i-ambulensi* — hamba uye esibhedlela lesisedvute masinyane. Cela umuntfu akuhambise noma utsatse litekisi.',
+    ss: '🔴 *LOKUSHESHISAKO*\n\nShayela *10177* ucele i-ambulensi NYALO.\nYangasese: ER24 *084 124*.\n\n⚠️ *UNGALINDZI i-ambulensi* — hamba uye esibhedlela leseduze masinyane. Cela umuntfu akushayele noma utfatse lithekisi.',
     ve: '🔴 *TSHOGANETSO*\n\nFounelani *10177* u humbela ambulense ZWINO.\nPuraivete: ER24 *084 124*.\n\n⚠️ *NI SONGO LINDELA ambulense* — iyani sibadela tshi re tsini nga u ṱavhanya. Humbelani muthu u ni fhira kana ni dzhie thekisi.',
     nr: '🔴 *ISIMO ESIPHUTHUMAKO*\n\nRingela *10177* ubawa i-ambulensi NJE.\nYefihlo: ER24 *084 124*.\n\n⚠️ *UNGALINDELI i-ambulensi* — iya esibhedlela esiseduze ngokurhaba. Bawa umuntu akuse namkha uthathe ithekisi.'
   },
@@ -885,7 +1087,7 @@ Uyavuma?
 
   follow_up_worse: {
     en: '⚠️ Your symptoms may be worsening. A nurse has been notified and will review your case. If it is an emergency, call *10177* now.',
-    zu: '⚠️ Izimpawu zakho zingase zibe zimbi. Unesi wazisiwe futhi uzobheka udaba lwakho. Uma kuphuthumile, shayela *10177* manje.',
+    zu: '⚠️ Izimpawu zakho zingase zibe zimbi. Unesi wazisiwe futhi uzobheka udaba lwakho. Uma kuphuthumile, shaya *10177* manje.',
     xh: '⚠️ Iimpawu zakho zisenokuba zimbi. Umongikazi wazisiwe kwaye uza kuhlola udaba lwakho. Ukuba yingxakeko, tsalela *10177* ngoku.',
     af: '⚠️ Jou simptome mag vererger. \'n Verpleegster is in kennis gestel. As dit \'n noodgeval is, bel *10177* nou.',
     nso: '⚠️ Dika tša gago di ka mpefala. Mooki o tsebišitšwe. Ge e le tšhoganetšo, leletša *10177* bjale.',
@@ -900,14 +1102,14 @@ Uyavuma?
   // ==================== LOCATION REQUEST ====================
   request_location: {
     en: '📍 Please share your location so we can find the nearest facility.\n\nTap the 📎 (attachment) button → Location → Send your current location.',
-    zu: '📍 Sicela uthumele indawo yakho ukuze sithole indawo yokulapha eseduze.\n\nCindezela inkinobho ye-📎 → Indawo → Thumela indawo okuyo yamanje.',
+    zu: '📍 Sicela uthumele indawo yakho ukuze sithole indawo yokulapha eseduze.\n\nCindezela inkinobho ye-📎 → Indawo → Thumela indawo yakho yamanje.',
     xh: '📍 Nceda wabelane ngendawo yakho ukuze sifumane indawo yokugula ekufutshane.\n\nCofa iqhosha le-📎 → Indawo → Thumela indawo yakho yangoku.',
     af: '📍 Deel asseblief jou ligging sodat ons die naaste fasiliteit kan vind.\n\nTik die 📎 knoppie → Ligging → Stuur jou huidige ligging.',
     nso: '📍 Hle abelana lefelo la gago gore re hwetše lefelo la kalafo la kgauswi.\n\nTobetša konopo ya 📎 → Lefelo → Romela lefelo la gago la bjale.',
     tn: '📍 Tswee-tswee abelana lefelo la gago gore re bone lefelo la kalafi le le gaufi.\n\nTobetsa konopo ya 📎 → Lefelo → Romela lefelo la gago la jaanong.',
     st: '📍 Ka kopo arolelana sebaka sa hao hore re fumane lefelo la bophelo bo botle le haufi.\n\nTobetsa konopo ya 📎 → Sebaka → Romela sebaka sa hao sa hajwale.',
     ts: '📍 Hi kombela u avelana ndhawu ya wena leswaku hi kuma ndhawu yo kufumela ya kusuhi.\n\nSindzisa bhatani ya 📎 → Ndhawu → Rhumela ndhawu ya wena ya sweswi.',
-    ss: '📍 Sicela wabelane ngendzawo yakho sitewutfola indzawo yelatjhwa lesesedvuze.\n\nCindzetela inkinobho ye-📎 → Indzawo → Tfumela indzawo lokuyo manje.',
+    ss: '📍 Sicela wabelane ngendzawo yakho sitewutfola indzawo yelatjhwa lesesedvuze.\n\nCindzetela inkinobho ye-📎 → Indzawo → Tfumela indzawo yakho yamanje.',
     ve: '📍 Ri humbela ni kovhele fhethu haṋu uri ri wane fhethu ha u alafhiwa hu re tsini.\n\nDindani bhatani ya 📎 → Fhethu → Rumelani fhethu haṋu ha zwino.',
     nr: '📍 Sibawa wabelane nendawo yakho bona sithole indawo yokulatjhwa eseduze.\n\nCindezela inkinobho ye-📎 → Indawo → Thumela indawo yakho yanje.'
   },
@@ -1111,14 +1313,14 @@ Uyavuma?
   // ==================== STUDY CODE ====================
   study_code: {
     en: (code) => `🔢 Your study code is: *${code}*\n\nPlease show this code to the research assistant when you arrive at the clinic. It helps us link your BIZUSIZO triage to your clinic visit.\n\nYou can also type "code" at any time to see your code again.`,
-    zu: (code) => `🔢 Ikhodi yakho yocwaningo ithi: *${code}*\n\nSicela ukhombise le khodi kumcwaningi uma ufika emtholampilo. Isisiza sixhumanise i-triage yakho ye-BIZUSIZO nokuvakashela kwakho emtholampilo.\n\nUngabhala "code" noma nini ukuphinda ubone ikhodi yakho futhi.`,
+    zu: (code) => `🔢 Ikhodi yakho yocwaningo ithi: *${code}*\n\nSicela ukhombise le khodi kumcwaningi uma ufika emtholampilo. Isisiza sixhumanise i-triage yakho ye-BIZUSIZO nokuvakatshela kwakho emtholampilo.\n\nUngabhala "code" noma nini ukubona ikhodi yakho futhi.`,
     xh: (code) => `🔢 Ikhowudi yakho yophando ithi: *${code}*\n\nNceda ubonise le khowudi kumphandi xa ufika ekliniki. Isinceda sidibanise i-triage yakho ye-BIZUSIZO notyelelo lwakho ekliniki.\n\nUngabhala "code" nanini na ukubona ikhowudi yakho kwakhona.`,
     af: (code) => `🔢 Jou studiekode is: *${code}*\n\nWys asseblief hierdie kode aan die navorsingsassistent wanneer jy by die kliniek aankom. Dit help ons om jou BIZUSIZO-triage aan jou kliniekbesoek te koppel.\n\nJy kan ook enige tyd "code" tik om jou kode weer te sien.`,
     nso: (code) => `🔢 Khoutu ya gago ya dinyakišišo ke: *${code}*\n\nHle bontšha khoutu ye go monyakišiši ge o fihla kiliniki. E re thuša go hokaganya triage ya gago ya BIZUSIZO le go etela ga gago kiliniki.\n\nO ka ngwala "code" nako efe goba efe go bona khoutu ya gago gape.`,
     tn: (code) => `🔢 Khoutu ya gago ya patlisiso ke: *${code}*\n\nTswee-tswee bontsha khoutu e go mmatlisisi fa o goroga kliniki. E re thusa go golaganya triage ya gago ya BIZUSIZO le go etela ga gago kliniki.\n\nO ka kwala "code" nako nngwe le nngwe go bona khoutu ya gago gape.`,
     st: (code) => `🔢 Khoutu ya hao ya dipatlisiso ke: *${code}*\n\nKa kopo bontsha khoutu ena ho mofuputsi ha o fihla kliniki. E re thusa ho hokahanya triage ya hao ya BIZUSIZO le ketelo ya hao kliniki.\n\nO ka ngola "code" nako efe kapa efe ho bona khoutu ya hao hape.`,
     ts: (code) => `🔢 Khodi ya wena ya ndzavisiso i ri: *${code}*\n\nHi kombela u kombisa khodi leyi eka mulavisisi loko u fika ekliniki. Yi hi pfuna ku hlanganisa triage ya wena ya BIZUSIZO na ku endzela ka wena ekliniki.\n\nU nga tsala "code" nkarhi wun'wana na wun'wana ku vona khodi ya wena nakambe.`,
-    ss: (code) => `🔢 Ikhodi yakho yekucwaninga itsi: *${code}*\n\nSicela ukhombise lekhodi kumcwaningi nawufika ekliniki. Isisita sihlanganise i-triage yakho ye-BIZUSIZO nekuvakashela kwakho ekliniki.\n\nUngabhala "code" nanoma nini kuphindze ubone ikhodi yakho futsi.`,
+    ss: (code) => `🔢 Ikhodi yakho yekucwaninga itsi: *${code}*\n\nSicela ukhombise lekhodi kumcwaningi nawufika ekliniki. Isisita sihlanganise i-triage yakho ye-BIZUSIZO nekuvakashela kwakho ekliniki.\n\nUngabhala "code" nanoma nini kubona ikhodi yakho futsi.`,
     ve: (code) => `🔢 Khoudu yaṋu ya ṱhoḓisiso ndi: *${code}*\n\nRi humbela ni sumbedze khoudu iyi kha muṱoḓisisi musi ni tshi swika kiliniki. I ri thusa u ṱanganya triage yaṋu ya BIZUSIZO na u dalela haṋu kiliniki.\n\nNi nga ṅwala "code" tshifhinga tshiṅwe na tshiṅwe u vhona khoudu yaṋu hafhu.`,
     nr: (code) => `🔢 Ikhodi yakho yerhubhululo ithi: *${code}*\n\nSibawa ukhombise lekhodi kumrhubhululi nawufika ekliniki. Isisiza sihlanganise i-triage yakho ye-BIZUSIZO nekuvakatjhela kwakho ekliniki.\n\nUngatlola "code" nanini ukubona ikhodi yakho godu.`
   },
@@ -1133,7 +1335,7 @@ Uyavuma?
     tn: (category) => `O tlhophile: *${category}*\n\nTswee-tswee tlhalosa matshwao a gago ka mafoko a gago. Sekai: a simolotse leng, a maswe go le kana kang, le sengwe se botlhokwa.\n\nO ka kwala kgotsa wa romela voice note 🎤`,
     st: (category) => `O kgethile: *${category}*\n\nKa kopo hlalosa matshwao a hao ka mantswe a hao. Mohlala: a qalile neng, a mpe hakaakang, le se seng se bohlokwa.\n\nO ka ngola kapa wa romela voice note 🎤`,
     ts: (category) => `U hlawule: *${category}*\n\nHi kombela u hlamusela swikombiso swa wena hi marito ya wena. Xikombiso: swi sungule rini, swi bihile ku fikela kwihi, na swin'wana swa nkoka.\n\nU nga tsala kumbe u rhumela voice note 🎤`,
-    ss: (category) => `Ukhetse: *${category}*\n\nSicela uchaze timphawu takho ngemavi akho. Sibonelo: ticale nini, timbi kangakanani, nalokunye lokubalulekile.\n\nUngabhala noma utfumele i-voice note 🎤`,
+    ss: (category) => `Ukhetse: *${category}*\n\nSicela uchaze timphawu takho ngamagama akho. Sibonelo: tichale nini, timbi kangakanani, nalokunye lokubalulekile.\n\nUngabhala noma utfumele voice note 🎤`,
     ve: (category) => `No nanga: *${category}*\n\nRi humbela ni ṱalutshedze zwiga zwaṋu nga maipfi aṋu. Tsumbo: zwo thoma lini, zwi vhavha hani, na zwiṅwe zwa ndeme.\n\nNi nga ṅwala kana na rumela voice note 🎤`,
     nr: (category) => `Ukhethe: *${category}*\n\nSibawa uchaze iimpawu zakho ngamagama wakho. Isibonelo: zithome nini, zimbi kangangani, nalokhunye okuqakathekileko.\n\nUngatlola namkha uthumele voice note 🎤`
   },
@@ -1141,14 +1343,14 @@ Uyavuma?
   // ==================== VOICE NOTE PROMPT ====================
   voice_note_prompt: {
     en: '🎤 You can send a voice note describing your symptoms. Speak clearly and tell us:\n\n• What is wrong\n• When it started\n• How bad it is\n\nWe will listen to your message and help you.',
-    zu: '🎤 Ungathumela ivoice note uchaze izimpawu zakho. Khuluma ngokucacile usitshele:\n\n• Kwenzakalani\n• Kuqale nini\n• Kumbi kangakanani\n\nSizolalela umyalezo wakho sikusize.',
+    zu: '🎤 Ungathuma ivoice note uchaze izimpawu zakho. Khuluma ngokucacile usitshele:\n\n• Kwenzakalani\n• Kuqale nini\n• Kumbi kangakanani\n\nSizolalela umyalezo wakho sikusize.',
     xh: '🎤 Ungathumela ivoice note uchaze iimpawu zakho. Thetha ngokucacileyo usixelele:\n\n• Kwenzeka ntoni\n• Kuqale nini\n• Kumbi kangakanani\n\nSiya kuwumamela umyalezo wakho sikuncede.',
     af: '🎤 Jy kan \'n stemnota stuur wat jou simptome beskryf. Praat duidelik en vertel ons:\n\n• Wat is fout\n• Wanneer het dit begin\n• Hoe erg is dit\n\nOns sal na jou boodskap luister en jou help.',
     nso: '🎤 O ka romela voice note o hlaloša dika tša gago. Bolela gabotse o re botše:\n\n• Go direga eng\n• Go thomile neng\n• Go mpe gakaakang\n\nRe tla theetša molaetša wa gago re go thuše.',
     tn: '🎤 O ka romela voice note o tlhalosa matshwao a gago. Bua sentle o re bolelele:\n\n• Go diragala eng\n• Go simolotse leng\n• Go maswe go le kana kang\n\nRe tla reetsa molaetsa wa gago re go thuse.',
     st: '🎤 O ka romela voice note o hlalosa matshwao a hao. Bua hantle o re bolelle:\n\n• Ho etsahalang\n• Ho qalile neng\n• Ho mpe hakaakang\n\nRe tla mamela molaetsa wa hao re o thuse.',
     ts: '🎤 U nga rhumela voice note u hlamusela swikombiso swa wena. Vulavula kahle u hi byela:\n\n• Ku humelela yini\n• Ku sungule rini\n• Ku bihile ku fikela kwihi\n\nHi ta yingisela mahungu ya wena hi ku pfuna.',
-    ss: '🎤 Ungatfumela i-voice note uchaze timphawu takho. Khuluma kahle usitjele:\n\n• Kwentekani\n• Kucale nini\n• Kumbi kangakanani\n\nSitawulalela umyaleto wakho sikusite.',
+    ss: '🎤 Ungathuma voice note uchaza timphawu takho. Khuluma kahle usitjele:\n\n• Kwentekani\n• Kuchale nini\n• Kumbi kangakanani\n\nSitalilalela umyalezo wakho sikusite.',
     ve: '🎤 Ni nga rumela voice note ni tshi ṱalutshedza zwiga zwaṋu. Ambelani zwavhuḓi ni ri vhudze:\n\n• Hu khou itea mini\n• Zwo thoma lini\n• Zwi vhavha hani\n\nRi ḓo thetshelesa mulaedza waṋu ri ni thuse.',
     nr: '🎤 Ungathumela voice note uchaza iimpawu zakho. Khuluma kuhle usitjele:\n\n• Kwenzekani\n• Kuthome nini\n• Kumbi kangangani\n\nSizakulalela umlayezo wakho sikusize.'
   },
@@ -1190,14 +1392,14 @@ Uyavuma?
   // Sent after triage results so the patient knows how to navigate
   tips: {
     en: '\n💡 *Tips:*\nType *0* — new consultation\nType *language* — change language\nType *code* — show your study code',
-    zu: '\n💡 *Amathiphu:*\nBhala *0* — ukuxoxa okusha\nBhala *ulimi* — shintsha ulimi\nBhala *code* — ukubona ikhodi yakho',
+    zu: '\n💡 *Amathiphu:*\nBhala *0* — ukuxoxa okusha\nBhala *ulimi* — shintsha ulimi\nBhala *code* — khombisa ikhodi yakho',
     xh: '\n💡 *Amathiphu:*\nBhala *0* — incoko entsha\nBhala *ulwimi* — tshintsha ulwimi\nBhala *code* — bonisa ikhowudi yakho',
     af: '\n💡 *Wenke:*\nTik *0* — nuwe konsultasie\nTik *taal* — verander taal\nTik *code* — wys jou studiekode',
     nso: '\n💡 *Maele:*\nNgwala *0* — poledišano ye mpsha\nNgwala *polelo* — fetola polelo\nNgwala *code* — bontšha khoutu ya gago',
     tn: '\n💡 *Maele:*\nKwala *0* — puisano e ntšhwa\nKwala *puo* — fetola puo\nKwala *code* — bontsha khoutu ya gago',
     st: '\n💡 *Maele:*\nNgola *0* — puisano e ncha\nNgola *puo* — fetola puo\nNgola *code* — bontsha khoutu ya hao',
     ts: '\n💡 *Switsundzuxo:*\nTsala *0* — nkani leyintshwa\nTsala *ririmi* — cinca ririmi\nTsala *code* — kombisa khodi ya wena',
-    ss: '\n💡 *Ema-thiphu:*\nBhala *0* — ingcoco lensha\nBhala *lulwimi* — shintja lulwimi\nBhala *code* — kbona ikhodi yakho',
+    ss: '\n💡 *Ema-thiphu:*\nBhala *0* — ingcoco lensha\nBhala *lulwimi* — shintja lulwimi\nBhala *code* — khombisa ikhodi yakho',
     ve: '\n💡 *Nyeletshedzo:*\nṄwalani *0* — nyambedzano ntswa\nṄwalani *luambo* — shandukani luambo\nṄwalani *code* — sumbedzani khoudu yaṋu',
     nr: '\n💡 *Amathiphu:*\nTlola *0* — ingcoco etja\nTlola *ilimi* — tjhentjha ilimi\nTlola *code* — khombisa ikhodi yakho'
   },
@@ -1209,14 +1411,14 @@ Uyavuma?
   // because ambulance response in many SA areas is unreliable.
   system_timeout: {
     en: '⚠️ We are experiencing technical difficulties and cannot process your message right now.\n\n🚨 *If this is an emergency:*\n• Call *10177* (ambulance) or *084 124* (ER24)\n• Go to your nearest clinic or hospital immediately — do not wait for an ambulance\n\nWe will try to respond as soon as the system is back. We apologise for the inconvenience.',
-    zu: '⚠️ Sinezinkinga zobuchwepheshe futhi asikwazi ukucubungula umyalezo wakho okwamanje.\n\n🚨 *Uma kuphuthuma:*\n• Shaya *10177* (i-ambulensi) noma *084 124* (ER24)\n• Yana emtholampilo noma esibhedlela esiseduze MANJE — ungalindi i-ambulensi\n\nSizozama ukuphendula uma uhlelo selubuyile. Siyaxolisa ngokuphazamiseka.',
+    zu: '⚠️ Sinezinkinga zobuchwepheshe futhi asikwazi ukucubungula umyalezo wakho okwamanje.\n\n🚨 *Uma kuphuthumile:*\n• Shaya *10177* (i-ambulensi) noma *084 124* (ER24)\n• Yana emtholampilo noma esibhedlela esiseduze MANJE — ungalindi i-ambulensi\n\nSizozama ukuphendula uma uhlelo selubuyile. Siyaxolisa ngokuphazamiseka.',
     xh: '⚠️ Sinengxaki yobuchwepheshe kwaye asikwazi ukucubungula umyalezo wakho okwangoku.\n\n🚨 *Ukuba yingxakeko:*\n• Tsalela *10177* (i-ambulensi) okanye *084 124* (ER24)\n• Yiya ekliniki okanye esibhedlele esikufutshane NGOKU — musa ukulinda i-ambulensi\n\nSiza kuzama ukuphendula xa inkqubo ibuyile. Siyaxolisa ngokuphazamisa.',
     af: '⚠️ Ons ondervind tegniese probleme en kan nie jou boodskap nou verwerk nie.\n\n🚨 *As dit \'n noodgeval is:*\n• Bel *10177* (ambulans) of *084 124* (ER24)\n• Gaan na jou naaste kliniek of hospitaal DADELIK — moenie wag vir \'n ambulans nie\n\nOns sal probeer antwoord sodra die stelsel terug is. Ons vra om verskoning.',
     nso: '⚠️ Re itemogela mathata a theknolotši gomme re ka se kgone go šoma molaetša wa gago ga bjale.\n\n🚨 *Ge e le tšhoganetšo:*\n• Leletša *10177* (ambulense) goba *084 124* (ER24)\n• Yaa kiliniki goba sepetleleng sa kgauswi BJALE — o se ke wa ema ambulense\n\nRe tla leka go araba ge tshepedišo e bušitšwe. Re kgopela tshwarelo.',
     tn: '⚠️ Re itemogela mathata a thekenoloji mme re ka se kgone go dira molaetsa wa gago jaanong.\n\n🚨 *Fa e le tshoganyetso:*\n• Leletsa *10177* (ambulense) kgotsa *084 124* (ER24)\n• Ya kliniki kgotsa bookelong jo bo gaufi JAANONG — o se ka wa ema ambulense\n\nRe tla leka go araba fa tshedimosetso e boetse. Re kopa maitshwarelo.',
     st: '⚠️ Re itemohela mathata a theknoloji mme re ke ke ra sebetsa molaetsa wa hao hona joale.\n\n🚨 *Haeba ke tshohanyetso:*\n• Letsetsa *10177* (ambulense) kapa *084 124* (ER24)\n• Eya kliniki kapa sepetlele se haufi HONA JOALE — o se ke oa ema ambulense\n\nRe tla leka ho araba ha sistimi e boeile. Re kopa tshwarelo.',
     ts: '⚠️ Hi kumile swiphiqo swa thekinoloji naswona a hi koti ku tirha mahungu ya wena sweswi.\n\n🚨 *Loko ku ri xihatla:*\n• Ringela *10177* (ambulense) kumbe *084 124* (ER24)\n• Famba u ya ekliniki kumbe exibedlhele xa kusuhi SWESWI — u nga yimi ambulense\n\nHi ta ringeta ku hlamula loko sisiteme yi vuyile. Hi kombela ku khomela.',
-    ss: '⚠️ Sinenkinga yebuchwepheshe futsi asikwati kunakekela umlayeto wakho nyalo.\n\n🚨 *Uma kushesha:*\n• Shayela *10177* (i-ambulensi) noma *084 124* (ER24)\n• Hamba uye ekliniki noma esibhedlela lesedzute NYALO — ungalindzi i-ambulensi\n\nSitawutama kuphendvula uma luhlelo selubuyile. Siyacolisa ngekukuphazamisa.',
+    ss: '⚠️ Sinenkinga yebuchwepheshe futsi asikwati kusebenta umlayezo wakho nyalo.\n\n🚨 *Uma kusheshisa:*\n• Shayela *10177* (i-ambulensi) noma *084 124* (ER24)\n• Hamba uye ekliniki noma esibhedlela leseduze NYALO — ungalindzi i-ambulensi\n\nSitawutama kuphendvula uma luhlelo selubuyile. Siyacolisa ngekuphazamisa.',
     ve: '⚠️ Ri khou ṱangana na thaidzo dza thekhinolodzhi nahone a ri koni u shumisa mulaedza waṋu zwino.\n\n🚨 *Arali i tshoganetso:*\n• Founelani *10177* (ambulense) kana *084 124* (ER24)\n• Iyani kiliniki kana sibadela tshi re tsini ZWINO — ni songo lindela ambulense\n\nRi ḓo lingedza u fhindula musi sisiteme i tshi vhuya. Ri humbela pfarelo.',
     nr: '⚠️ Sinekinga yebuchwepheshe futhi asikghoni ukusebenza umlayezo wakho nje.\n\n🚨 *Uma kuphuthumako:*\n• Ringela *10177* (i-ambulensi) namkha *084 124* (ER24)\n• Iya ekliniki namkha esibhedlela esiseduze NJE — ungalindeli i-ambulensi\n\nSizakuzama ukuphendula uma uhlelo selubuyile. Siyacolisa ngokuphazamisa.'
   }
