@@ -1,7 +1,8 @@
 // ============================================================
-// BIZUSIZO — PRODUCTION READY v2.1
+// BIZUSIZO — PRODUCTION READY v2.2
 // + Hardcoded 11-language messages
 // + Smart facility routing with patient confirmation
+// + Four-Pillar Governance Framework (Stanford-adapted)
 // + Bug fixes
 // Railway + Meta WhatsApp + Supabase + Anthropic
 // March 2026
@@ -20,12 +21,26 @@ app.use(express.json());
 // ================== CONFIG ==================
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
+// ================== GOVERNANCE FRAMEWORK ==================
+const { GovernanceOrchestrator, deterministicRedClassifier } = require('./governance');
+
+
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
 const CONFIDENCE_THRESHOLD = 75;
+
+// ================== GOVERNANCE ORCHESTRATOR INIT ==================
+const governance = new GovernanceOrchestrator(supabase, {
+  alertCallback: (alert) => {
+    // TODO: Replace with Slack webhook, email, or PagerDuty integration
+    console.log(`[GOV ALERT] [${alert.severity}] [${alert.pillar}] ${alert.message}`);
+    // Future: send to engineering Slack channel for CRITICAL alerts
+    // Future: email clinical_governance_lead for HIGH clinical alerts
+  }
+});
 
 // ================== FEATURE FLAGS ==================
 // Set these to true when partnerships/integrations are ready
@@ -37,319 +52,8 @@ const FEATURES = {
   CCMDD_API_URL: process.env.CCMDD_API_URL || null,
   VIRTUAL_CONSULT_URL: process.env.VIRTUAL_CONSULT_URL || null,
   VIRTUAL_CONSULT_PHONE: process.env.VIRTUAL_CONSULT_PHONE || null,
-  NHLS_API_URL: process.env.NHLS_API_URL || null,
-  NHLS_API_KEY: process.env.NHLS_API_KEY || null,
-};
-
-// ================================================================
-// ON-CALL ESCALATION SYSTEM
-// ================================================================
-// Zero-cost rotation model for after-hours RED case coverage.
-// Sheila Plaatjie (RN) and Bongekile Nkosi rotate weekly.
-// Between 06:00-08:00 and 17:00-22:00, RED cases trigger a
-// WhatsApp alert to whoever is on-call. Outside 22:00-06:00,
-// patients get enhanced automated emergency guidance only.
-//
-// Governance reference: Section 2.6 (Escalation Hours of Coverage)
-// ================================================================
-
-const ON_CALL_CONFIG = {
-  // ================================================================
-  // ESCALATION MODE — controls how RED cases are handled
-  // Change this ONE env var to switch between scaling stages:
-  //
-  //   ESCALATION_MODE=founders     (Pilot: Sheila + Bongekile rotation)
-  //   ESCALATION_MODE=call_centre  (Scale: partner clinical call centre)
-  //   ESCALATION_MODE=internal     (Mature: own clinical review team)
-  //   ESCALATION_MODE=hybrid       (Mix: call centre after hours, internal during day)
-  // ================================================================
-  mode: process.env.ESCALATION_MODE || 'founders',
-
-  // --- FOUNDERS MODE (pilot) ---
-  team: {
-    sheila: process.env.ONCALL_PHONE_SHEILA || null,
-    bongekile: process.env.ONCALL_PHONE_BONGEKILE || null,
-  },
-  override: process.env.ONCALL_OVERRIDE || null,
-
-  // --- CALL CENTRE MODE (post-pilot) ---
-  // When you partner with a clinical call centre (ER24, Discovery, Netcare, etc.)
-  // the system forwards the full triage conversation via API or WhatsApp
-  callCentre: {
-    apiUrl: process.env.CALL_CENTRE_API_URL || null,       // REST API endpoint (if partner has one)
-    apiKey: process.env.CALL_CENTRE_API_KEY || null,
-    whatsappNumber: process.env.CALL_CENTRE_WHATSAPP || null, // Fallback: forward via WhatsApp
-    name: process.env.CALL_CENTRE_NAME || 'Clinical Review Centre',
-  },
-
-  // --- INTERNAL TEAM MODE (mature) ---
-  // When you hire your own enrolled nurses for shift coverage
-  // Add their numbers here — system will alert whoever is on the current shift
-  internalTeam: {
-    shift1: process.env.INTERNAL_NURSE_SHIFT1 || null,  // 06:00-14:00
-    shift2: process.env.INTERNAL_NURSE_SHIFT2 || null,  // 14:00-22:00
-    supervisor: process.env.INTERNAL_SUPERVISOR || null,  // Gets all alerts as oversight
-  },
-
-  // Coverage windows (SAST = UTC+2) — apply to all modes
-  staffedStart: 8,
-  staffedEnd: 17,
-  extendedStart: 6,
-  extendedEnd: 22,
-};
-
-function getISOWeek(date) {
-  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
-  d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
-  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-  return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
-}
-
-function getOnCallPerson() {
-  // Manual override (for holidays, swaps, etc.)
-  if (ON_CALL_CONFIG.override) {
-    return ON_CALL_CONFIG.override;
-  }
-  // Rotation: even ISO weeks = sheila, odd = bongekile
-  const week = getISOWeek(new Date());
-  return week % 2 === 0 ? 'sheila' : 'bongekile';
-}
-
-function getOnCallPhone() {
-  const person = getOnCallPerson();
-  return ON_CALL_CONFIG.team[person];
-}
-
-function getCoverageLevel() {
-  const now = new Date();
-  // Convert to SAST (UTC+2)
-  const sast = new Date(now.getTime() + (2 * 60 * 60 * 1000));
-  const hour = sast.getUTCHours();
-
-  if (hour >= ON_CALL_CONFIG.staffedStart && hour < ON_CALL_CONFIG.staffedEnd) {
-    return 'STAFFED';       // 08:00-17:00 — full team, 15min response target
-  }
-  if ((hour >= ON_CALL_CONFIG.extendedStart && hour < ON_CALL_CONFIG.staffedStart) ||
-      (hour >= ON_CALL_CONFIG.staffedEnd && hour < ON_CALL_CONFIG.extendedEnd)) {
-    return 'ON_CALL';       // 06:00-08:00, 17:00-22:00 — on-call person alerted
-  }
-  return 'AUTOMATED_ONLY';  // 22:00-06:00 — enhanced automated response, no human alert
-}
-
-// Send alert to on-call person when a RED case or critical escalation occurs
-async function alertOnCallTeam(patientId, from, message, triageLevel, context) {
-  const coverage = getCoverageLevel();
-  const mode = ON_CALL_CONFIG.mode;
-
-  // During staffed hours in founders/internal mode, escalation queue handles it
-  if (coverage === 'STAFFED' && (mode === 'founders' || mode === 'internal')) return;
-
-  const timestamp = new Date().toLocaleString('en-ZA', { timeZone: 'Africa/Johannesburg' });
-  const symptomPreview = message.substring(0, 200) + (message.length > 200 ? '...' : '');
-  const patientIdShort = patientId.substring(0, 12) + '...';
-
-  // ============ FOUNDERS MODE (pilot) ============
-  if (mode === 'founders') {
-    const onCallPerson = getOnCallPerson();
-    const onCallPhone = getOnCallPhone();
-
-    const alertMsg = `🚨 *BIZUSIZO ESCALATION ALERT*
-
-*Level:* ${triageLevel}
-*Coverage:* ${coverage === 'ON_CALL' ? 'After-hours (on-call)' : 'Overnight (automated only)'}
-*On-call:* ${onCallPerson.charAt(0).toUpperCase() + onCallPerson.slice(1)}
-*Time:* ${timestamp}
-
-*Patient symptoms:* ${symptomPreview}
-*Context:* ${context || 'Standard triage escalation'}
-*Patient ID:* ${patientIdShort}
-
-${coverage === 'ON_CALL'
-  ? '⚡ Please review when you can. Patient has received emergency guidance (10177/ER24).'
-  : '💤 Overnight — no action required now. Patient received automated emergency guidance. Flagged for morning review.'}
-
-Reply 0 to acknowledge.`;
-
-    if (onCallPhone) {
-      try { await sendWhatsAppMessage(onCallPhone, alertMsg); } catch (e) { console.error('On-call alert failed:', e); }
-    }
-
-    // Backup alert
-    const backupPerson = onCallPerson === 'sheila' ? 'bongekile' : 'sheila';
-    const backupPhone = ON_CALL_CONFIG.team[backupPerson];
-    if (backupPhone && coverage === 'ON_CALL') {
-      try {
-        await sendWhatsAppMessage(backupPhone, `ℹ️ FYI: RED escalation alert sent to ${onCallPerson}. You are backup this week.`);
-      } catch (e) { /* Non-critical */ }
-    }
-  }
-
-  // ============ CALL CENTRE MODE (post-pilot) ============
-  else if (mode === 'call_centre') {
-    const cc = ON_CALL_CONFIG.callCentre;
-
-    // Try API first (if partner has a REST endpoint)
-    if (cc.apiUrl) {
-      try {
-        await fetch(cc.apiUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${cc.apiKey}` },
-          body: JSON.stringify({
-            source: 'BIZUSIZO',
-            patient_id: patientId,
-            patient_phone: from,
-            triage_level: triageLevel,
-            symptoms: message,
-            language: 'en', // Will be extended to pass actual patient language
-            context: context,
-            timestamp: new Date().toISOString(),
-            coverage_level: coverage,
-          })
-        });
-        console.log(`Escalation forwarded to ${cc.name} via API`);
-      } catch (e) {
-        console.error(`Call centre API failed, falling back to WhatsApp:`, e);
-        // Fall through to WhatsApp fallback below
-        if (cc.whatsappNumber) {
-          const ccMsg = `🚨 *BIZUSIZO ESCALATION — ${cc.name}*\n\n*Level:* ${triageLevel}\n*Time:* ${timestamp}\n*Symptoms:* ${symptomPreview}\n*Patient ID:* ${patientIdShort}\n*Context:* ${context}\n\nPlease review and contact patient if needed.`;
-          try { await sendWhatsAppMessage(cc.whatsappNumber, ccMsg); } catch (e2) { console.error('Call centre WhatsApp fallback also failed:', e2); }
-        }
-      }
-    }
-    // WhatsApp-only call centre (no API)
-    else if (cc.whatsappNumber) {
-      const ccMsg = `🚨 *BIZUSIZO ESCALATION — ${cc.name}*\n\n*Level:* ${triageLevel}\n*Time:* ${timestamp}\n*Symptoms:* ${symptomPreview}\n*Patient ID:* ${patientIdShort}\n*Context:* ${context}\n\nPlease review and contact patient if needed.`;
-      try { await sendWhatsAppMessage(cc.whatsappNumber, ccMsg); } catch (e) { console.error('Call centre WhatsApp failed:', e); }
-    }
-
-    // Always notify Sheila as clinical governance oversight
-    if (ON_CALL_CONFIG.team.sheila) {
-      try {
-        await sendWhatsAppMessage(ON_CALL_CONFIG.team.sheila, `ℹ️ Escalation forwarded to ${cc.name}: ${triageLevel} case at ${timestamp}. Symptoms: ${symptomPreview.substring(0, 80)}...`);
-      } catch (e) { /* Non-critical */ }
-    }
-  }
-
-  // ============ INTERNAL TEAM MODE (mature) ============
-  else if (mode === 'internal') {
-    const now = new Date();
-    const sast = new Date(now.getTime() + (2 * 60 * 60 * 1000));
-    const hour = sast.getUTCHours();
-
-    // Determine which shift nurse to alert
-    let nursePhone = null;
-    let shiftLabel = '';
-    if (hour >= 6 && hour < 14) {
-      nursePhone = ON_CALL_CONFIG.internalTeam.shift1;
-      shiftLabel = 'Shift 1 (06:00-14:00)';
-    } else if (hour >= 14 && hour < 22) {
-      nursePhone = ON_CALL_CONFIG.internalTeam.shift2;
-      shiftLabel = 'Shift 2 (14:00-22:00)';
-    }
-    // 22:00-06:00: no shift nurse, automated only + supervisor notified
-
-    const nurseMsg = `🚨 *BIZUSIZO ESCALATION — ${shiftLabel}*\n\n*Level:* ${triageLevel}\n*Time:* ${timestamp}\n*Symptoms:* ${symptomPreview}\n*Patient ID:* ${patientIdShort}\n*Context:* ${context}\n\n⚡ Please review and respond within 15 minutes.`;
-
-    if (nursePhone) {
-      try { await sendWhatsAppMessage(nursePhone, nurseMsg); } catch (e) { console.error('Shift nurse alert failed:', e); }
-    }
-
-    // Supervisor always gets a copy
-    if (ON_CALL_CONFIG.internalTeam.supervisor) {
-      try {
-        await sendWhatsAppMessage(ON_CALL_CONFIG.internalTeam.supervisor, `ℹ️ Escalation (${shiftLabel || 'overnight'}): ${triageLevel} at ${timestamp}. ${nursePhone ? 'Sent to shift nurse.' : 'No shift nurse — automated only.'}`);
-      } catch (e) { /* Non-critical */ }
-    }
-  }
-
-  // ============ HYBRID MODE ============
-  else if (mode === 'hybrid') {
-    // Staffed hours: internal team handles it
-    if (coverage === 'STAFFED' && ON_CALL_CONFIG.internalTeam.shift1) {
-      // Route to internal shift nurse (same as internal mode)
-      const nursePhone = ON_CALL_CONFIG.internalTeam.shift1;
-      const nurseMsg = `🚨 *BIZUSIZO ESCALATION*\n\n*Level:* ${triageLevel}\n*Time:* ${timestamp}\n*Symptoms:* ${symptomPreview}\n*Patient ID:* ${patientIdShort}\n\n⚡ Please review within 15 minutes.`;
-      if (nursePhone) {
-        try { await sendWhatsAppMessage(nursePhone, nurseMsg); } catch (e) { console.error('Hybrid internal alert failed:', e); }
-      }
-    } else {
-      // After hours: route to call centre
-      const cc = ON_CALL_CONFIG.callCentre;
-      if (cc.whatsappNumber) {
-        const ccMsg = `🚨 *BIZUSIZO AFTER-HOURS ESCALATION*\n\n*Level:* ${triageLevel}\n*Time:* ${timestamp}\n*Symptoms:* ${symptomPreview}\n*Patient ID:* ${patientIdShort}\n*Context:* ${context}\n\nPlease review and contact patient if needed.`;
-        try { await sendWhatsAppMessage(cc.whatsappNumber, ccMsg); } catch (e) { console.error('Hybrid call centre alert failed:', e); }
-      }
-    }
-  }
-
-  // Log escalation metadata regardless of mode
-  try {
-    await supabase.from('triage_logs').update({
-      escalation_coverage: coverage,
-      escalation_mode: mode,
-      escalation_oncall: mode === 'founders' ? getOnCallPerson() : mode,
-      escalation_alerted_at: new Date()
-    }).eq('patient_id', patientId).order('created_at', { ascending: false }).limit(1);
-  } catch (e) { /* Non-critical */ }
-}
-
-// Enhanced after-hours RED message — more specific than the standard one
-const AFTER_HOURS_RED_MESSAGES = {
-  en: `🔴 *EMERGENCY — IMMEDIATE ACTION NEEDED*
-
-Based on your symptoms, you need urgent medical attention.
-
-*Do this NOW:*
-1. Call *10177* for an ambulance
-2. Or call *084 124* (ER24)
-3. Or go directly to the nearest hospital emergency unit
-
-*Do NOT wait.* If someone is with you, ask them to help.
-
-A BIZUSIZO team member has been alerted and will follow up with you. But do not wait for us — call emergency services now.
-
-If you cannot call, ask someone nearby to call for you.`,
-
-  zu: `🔴 *ISIMO ESIPHUTHUMAYO — KUDINGEKA ISENZO NGOKUSHESHA*
-
-Ngokwezimpawu zakho, udinga ukunakekelwa kwezempilo ngokushesha.
-
-*Yenza lokhu MANJE:*
-1. Shaya *10177* ucele i-ambulensi
-2. Noma shaya *084 124* (ER24)
-3. Noma uye ngqo esibhedlela esiseduze esimeni esiphuthumayo
-
-*UNGALINDI.* Uma kukhona umuntu onawe, mcele akusize.
-
-Ilungu leqembu le-BIZUSIZO lazisiwe futhi lizokulindela. Kodwa ungasilindi — shaya izinsizakalo zokuphuthuma manje.
-
-Uma ungakwazi ukushaya, cela umuntu oseduze akushayele.`,
-
-  xh: `🔴 *INGXAKEKO — KUFUNEKA ISENZO NGOKUKHAWULEZA*
-
-Ngokweempawu zakho, ufuna unyango olungxamisekileyo.
-
-*Yenza oku NGOKU:*
-1. Tsalela *10177* ucele iambulensi
-2. Okanye tsalela *084 124* (ER24)
-3. Okanye uye ngqo kwisibhedlele esikufutshane kwicandelo lengxakeko
-
-*MUSA UKULINDA.* Ukuba kukho umntu onawe, mcele akuncede.
-
-Ilungu leqela le-BIZUSIZO lazisiwe kwaye liza kukulandela. Kodwa musa ukusilinda — tsalela iinkonzo zongxamiseko ngoku.`,
-
-  af: `🔴 *NOODGEVAL — ONMIDDELLIKE AKSIE NODIG*
-
-Op grond van jou simptome het jy dringende mediese aandag nodig.
-
-*Doen dit NOU:*
-1. Bel *10177* vir 'n ambulans
-2. Of bel *084 124* (ER24)
-3. Of gaan direk na die naaste hospitaal noodafdeling
-
-*MOENIE WAG NIE.* As iemand by jou is, vra hulle om te help.
-
-'n BIZUSIZO-spanlid is in kennis gestel en sal jou opvolg. Maar moenie vir ons wag nie — bel nooddienste nou.`,
+  NHLS_API_URL: process.env.NHLS_API_URL || null,        // Future: NHLS LabTrack API endpoint
+  NHLS_API_KEY: process.env.NHLS_API_KEY || null,         // Future: NHLS API credentials
 };
 
 // ================== HELPERS ==================
@@ -426,7 +130,7 @@ async function markFollowUpDone(id) {
 // HARDCODED MESSAGES — ALL 11 OFFICIAL SA LANGUAGES
 // ================================================================
 // NOTE TO TEAM: These should be reviewed by native speakers.
-// Flag any unnatural phrasing to hello@bizusizo.co.za
+// Flag any unnatural phrasing to hello@healthbridgesa.co.za
 // Priority review: isiZulu, isiXhosa, Sesotho, Sepedi, Setswana
 // ================================================================
 
@@ -475,201 +179,124 @@ Reply with the number.`
   consent: {
     en: `Welcome to BIZUSIZO.
 
-This service helps you understand the urgency of your symptoms and guides you on where to seek care.
+This service:
+• Gives guidance — it does NOT diagnose
+• May refer you to a nurse if needed
+• Keeps your information safe under POPIA
 
-Important:
-• This service provides health guidance only.
-• It does not diagnose medical conditions.
-• It does not replace a doctor or nurse.
-• We may use automated technology to help assess your symptoms.
-
-Your responses may be securely stored to improve the safety and quality of the service. Your information will be handled according to South African privacy laws (POPIA).
-
-If you have severe symptoms such as chest pain, severe breathing difficulty, or loss of consciousness, please go to the nearest emergency facility or call *10177* immediately.
-
-Do you consent to using this service?
-1 — Yes, I consent
-2 — No, exit`,
+Do you agree?
+1 — Yes, I agree
+2 — No, I decline`,
 
     zu: `Siyakwamukela ku-BIZUSIZO.
 
-Le sevisiikusiza uqonde ukuthi izimpawu zakho ziphuthuma kangakanani futhi ikuqondise lapho ungathola khona usizo lwezempilo.
+Le sevisi:
+• Inikezela iseluleko — AYIKUXILONGI
+• Ingakudlulisela kunesi uma kudingeka
+• Igcina imininingwane yakho iphephile nge-POPIA
 
-Okubalulekile:
-• Le sevisi inikeza isiqondiso sezempilo kuphela.
-• Ayixilongi izifo.
-• Ayithathi indawo kadokotela noma unesi.
-• Singasebenzisa ubuchwepheshe obuzenzakalelayo ukusiza sihlole izimpawu zakho.
-
-Izimpendulo zakho zingagcinwa ngokuphephile ukuthuthukisa ukuphepha nekhwalithi yesevisi. Imininingwane yakho izophathwa ngokuvumelana nemithetho yobumfihlo yaseNingizimu Afrika (POPIA).
-
-Uma unezimpawu ezinzima njengokubuhlungu kwesifuba, ukukhathazeka okukhulu kokuphefumula, noma ukuquleka, sicela uye esibhedlela esiseduze noma ushaye *10177* ngokushesha.
-
-Uyavuma ukusebenzisa le sevisi?
+Uyavuma?
 1 — Yebo, ngiyavuma
-2 — Cha, phuma`,
+2 — Cha, angivumi`,
 
     xh: `Wamkelekile ku-BIZUSIZO.
 
-Le sevisi ikunceda uqonde ukuba iimpawu zakho zingxamiseke kangakanani kwaye ikukhokele apho ungafumana khona unyango.
+Le sevisi:
+• Inika iingcebiso — AYIXILONGI
+• Inokukudlulisela kumongikazi ukuba kuyafuneka
+• Igcina inkcazelo yakho ikhuselekile nge-POPIA
 
-Okubalulekileyo:
-• Le sevisi inika isikhokelo sezempilo kuphela.
-• Ayixilongi izifo.
-• Ayithathi indawo kagqirha okanye umongikazi.
-• Sinokusebenzisa ubuchwepheshe obuzenzakalelayo ukunceda sihlole iimpawu zakho.
-
-Iimpendulo zakho zinokugcinwa ngokukhuselekileyo ukuphucula ukhuseleko nomgangatho wesevisi. Inkcazelo yakho iya kuphathwa ngokuvumelana nemithetho yabucala yaseMzantsi Afrika (POPIA).
-
-Ukuba uneempawu ezinzima ezinjengentlungu yesifuba, ubunzima obukhulu bokuphefumla, okanye ukuphulukana neziqondo, nceda uye kwisibhedlele esikufutshane okanye utsalele *10177* ngokukhawuleza.
-
-Uyavuma ukusebenzisa le sevisi?
+Uyavuma?
 1 — Ewe, ndiyavuma
-2 — Hayi, phuma`,
+2 — Hayi, andivumi`,
 
     af: `Welkom by BIZUSIZO.
 
-Hierdie diens help jou om die dringendheid van jou simptome te verstaan en lei jou na waar om sorg te soek.
+Hierdie diens:
+• Gee leiding — dit diagnoseer NIE
+• Kan jou na 'n verpleegster verwys indien nodig
+• Hou jou inligting veilig onder POPIA
 
-Belangrik:
-• Hierdie diens bied slegs gesondheidsleiding.
-• Dit diagnoseer nie mediese toestande nie.
-• Dit vervang nie 'n dokter of verpleegster nie.
-• Ons kan outomatiese tegnologie gebruik om jou simptome te help assesseer.
-
-Jou antwoorde kan veilig gestoor word om die veiligheid en kwaliteit van die diens te verbeter. Jou inligting sal hanteer word volgens Suid-Afrikaanse privaatheidswette (POPIA).
-
-As jy ernstige simptome het soos borspyn, ernstige asemhalingsprobleme, of bewusteloosheid, gaan asseblief na die naaste noodfasiliteit of bel *10177* onmiddellik.
-
-Stem jy in om hierdie diens te gebruik?
-1 — Ja, ek stem in
-2 — Nee, verlaat`,
+Stem jy saam?
+1 — Ja, ek stem saam
+2 — Nee, ek stem nie saam nie`,
 
     nso: `O amogetšwe go BIZUSIZO.
 
-Tirelo ye e go thuša go kwešiša gore dika tša gago di šutišwa gakaakang le go go šupa moo o ka hwetšago thušo ya kalafo.
+Tirelo ye:
+• E fa maele — GA E NYAKIŠIŠE bolwetši
+• E ka go romela go mooki ge go nyakega
+• E boloka tshedimošo ya gago e bolokegile ka POPIA
 
-Se bohlokwa:
-• Tirelo ye e fa tataiso ya maphelo fela.
-• Ga e nyakišiše malwetši.
-• Ga e tšee legato la ngaka goba mooki.
-• Re ka šomiša theknolotši ya go itiragalela go thuša go lekola dika tša gago.
-
-Dikarabo tša gago di ka bolokwa ka polokego go kaonafatša polokego le boleng bja tirelo. Tshedimošo ya gago e tla swarwa go ya ka melao ya sephiri ya Afrika Borwa (POPIA).
-
-Ge o na le dika tše šoro go swana le bohloko bja sehuba, bothata bjo bogolo bja go hema, goba go lahlegelwa ke temogo, hle eya lefelong la tšhoganetšo la kgauswi goba o leletše *10177* ka pela.
-
-A o dumela go šomiša tirelo ye?
+A o dumela?
 1 — Ee, ke a dumela
-2 — Aowa, tšwa`,
+2 — Aowa, ga ke dumele`,
 
     tn: `O amogelwa go BIZUSIZO.
 
-Tirelo e e go thusa go tlhaloganya gore matshwao a gago a potlakile go le kae le go go kaela kwa o ka batlelang thuso ya kalafi teng.
+Tirelo e:
+• E fa kgakololo — GA E TLHATLHOBE
+• E ka go romela go mooki fa go tlhokega
+• E boloka tshedimosetso ya gago e babalesegile ka POPIA
 
-Se se botlhokwa:
-• Tirelo e e fana ka kaelo ya boitekanelo fela.
-• Ga e tlhatlhobe malwetse.
-• Ga e tsee legato la ngaka kgotsa mooki.
-• Re ka dirisa thekenoloji e e itiragalelang go thusa go sekaseka matshwao a gago.
-
-Dikarabo tsa gago di ka bolokwa ka polokesego go tokafatsa polokesego le boleng jwa tirelo. Tshedimosetso ya gago e tla tsholwa go ya ka melao ya sephiri ya Aforika Borwa (POPIA).
-
-Fa o na le matshwao a a masisi jaaka botlhoko jwa sehuba, bothata jo bo masisi jwa go hema, kgotsa go latlhegelwa ke temogo, tswee-tswee ya lefelong la tshoganyetso le le gaufi kgotsa leletsa *10177* ka bonako.
-
-A o dumela go dirisa tirelo e?
+A o dumela?
 1 — Ee, ke a dumela
-2 — Nnyaa, tswa`,
+2 — Nnyaa, ga ke dumele`,
 
     st: `O amohelehile ho BIZUSIZO.
 
-Tshebeletso ena e o thusa ho utlwisisa hore matshwao a hao a potlakile hakae le ho o tataisa moo o ka batlang thuso ya bongaka.
+Tshebeletso ena:
+• E fana ka tataiso — HA E HLAHLOBE
+• E ka o romela ho mooki haeba ho hlokahala
+• E boloka tlhahisoleseding ya hao e bolokehile ka POPIA
 
-Se bohlokwa:
-• Tshebeletso ena e fana ka tataiso ya bophelo fela.
-• Ha e hlahlobe mafu.
-• Ha e nke sebaka sa ngaka kapa mooki.
-• Re ka sebedisa theknoloji e iketsahalang ho thusa ho hlahloba matshwao a hao.
-
-Dikarabo tsa hao di ka bolokwa ka polokelo e bolokehileng ho ntlafatsa polokeho le boleng ba tshebeletso. Tlhahisoleseding ya hao e tla tshwarwa ho latela melao ya lekunutu ya Afrika Borwa (POPIA).
-
-Haeba o na le matshwao a boima joaloka bohloko ba sefuba, bothata bo boholo ba ho hema, kapa ho lahlehelwa ke fahleho, ka kopo eya lefapheng la tshohanyetso le haufi kapa o letsetse *10177* hang.
-
-Na o dumela ho sebedisa tshebeletso ena?
+Na o dumela?
 1 — E, ke a dumela
-2 — Tjhe, tswa`,
+2 — Tjhe, ha ke dumele`,
 
     ts: `U amukelekile eka BIZUSIZO.
 
-Vukorhokeri lebyi byi ku pfuna ku twisisa leswaku swikombiso swa wena swi hatlisa ku fikela kwihi naswona byi ku komba laha u nga kumaka pfuno ya vutshunguri.
+Vukorhokeri lebyi:
+• Byi nyika switsundzuxo — A BYI KAMBELI
+• Byi nga ku rhumela eka nesi loko swi laveka
+• Byi hlayisa vuxokoxoko bya wena byi hlayisekile hi POPIA
 
-Swa nkoka:
-• Vukorhokeri lebyi byi nyika vulanguteri bya rihanyo ntsena.
-• A byi kambeli mavabyi.
-• A byi teki ndhawu ya dokodela kumbe nesi.
-• Hi nga tirhisa xitirhisiwa xo tiyendlela ku pfuna ku kambela swikombiso swa wena.
-
-Tinhlamulo ta wena ti nga hlayisiwa hi vuhlayiseki ku antswisa vuhlayiseki na xiyimo xa vukorhokeri. Vuxokoxoko bya wena byi ta swarwa hi ku ya hi milawu ya xihundla ya Afrika Dzonga (POPIA).
-
-Loko u na swikombiso swo tika ku fana na ku vava ka xifuva, ku tika ko kulu ka ku hefemula, kumbe ku lahlekeriwa hi ku tiva, hi kombela u ya eka ndhawu ya swihatla ya kusuhi kumbe u ringela *10177* hi ku hatlisa.
-
-Xana wa pfumela ku tirhisa vukorhokeri lebyi?
+Xana wa pfumela?
 1 — Ina, ndza pfumela
-2 — Ee-ee, huma`,
+2 — Ee-ee, a ndzi pfumeli`,
 
     ss: `Wemukelekile ku-BIZUSIZO.
 
-Lesevisi likusita kutsi ucondze kutsi timphawu takho tisheshisa kangakanani futsi likucondzise lapho ungayotfola lusito lwetekwelashwa.
+Lesevisi:
+• Inika teluleko — AYIHLONGI
+• Ingakutfumela kunesi uma kudzingeka
+• Igcina lokutsintana kwakho kuphephile nge-POPIA
 
-Lokubalulekile:
-• Lesevisi liniketa teluleko yempilo kuphela.
-• Alihlongi tifo.
-• Alitsatsi sikhundla sedokotela noma nesi.
-• Singasebentisa buchwepheshe lobusebenta bodvwana kusita kuhlola timphawu takho.
-
-Timphendvulo takho tingagcinwa ngekuphepha kwentfutfukisa kuphepha nekhwalithi yesevisi. Lokutsintana kwakho kutawusingatswa ngekuvumelana nemtsetfo yekufihla yaseNingizimu ye-Afrika (POPIA).
-
-Uma unetimphawu letinkhulu njengekuva buhlungu esifubeni, kuphefumula nzima, noma kulahlekelwa ngumcondvo, sicela uye endzaweni yekusheshisa leseduze noma ushayele *10177* masinyane.
-
-Uyavuma kusebentisa lesevisi?
+Uyavuma?
 1 — Yebo, ngiyavuma
-2 — Cha, phuma`,
+2 — Cha, angivumi`,
 
     ve: `Vho ṱanganedzwa kha BIZUSIZO.
 
-Tshumelo iyi i ni thusa u pfesesa uri zwiga zwaṋu zwi ṱoḓa u ṱavhanya hani na u ni sumbedza hune na nga wana thuso ya mutakalo.
+Tshumelo iyi:
+• I ṋea vhulivhisi — A I ṰOḒISISI VHULWADZE
+• I nga ni rumela kha nese arali zwi tshi ṱoḓea
+• I vhulunga mafhungo aṋu o tsireledzeaho nga POPIA
 
-Zwa ndeme:
-• Tshumelo iyi i ṋea vhulivhisi ha mutakalo fhedzi.
-• A i ṱoḓisisi vhulwadze.
-• A i dzhii fhethu ha dokotela kana nese.
-• Ri nga shumisa thekhinolodzhi i ḓi shumaho u thusa u sedza zwiga zwaṋu.
-
-Phindulo dzaṋu dzi nga vhulungwa nga vhutsireledzi u khwinisa vhutsireledzi na khalithi ya tshumelo. Mafhungo aṋu a ḓo farwa u ya nga milayo ya tshiphiri ya Afrika Tshipembe (POPIA).
-
-Arali ni na zwiga zwi vhavhaho zwi ngaho vhuṱungu ha tshifuva, u kundelwa u femba, kana u xela muhumbulo, ri humbela ni ye fhethu ha tshoganetso hu re tsini kana ni founele *10177* nga u ṱavhanya.
-
-Ni a tenda u shumisa tshumelo iyi?
+Ni a tenda?
 1 — Ee, ndi a tenda
-2 — Hai, bvani`,
+2 — Hai, a thi tendi`,
 
     nr: `Wamukelekile ku-BIZUSIZO.
 
-Isevisi le ikurhelebha ucondze bona iimpawu zakho ziphuthumisa kangangani begodu ikukhombise lapha ungathola khona usizo lokwelatjhwa.
+Isevisi le:
+• Inikela isinqophiso — AYIHLONGI
+• Ingakuthumela kunesi uma kutlhogeka
+• Igcina imininingwane yakho iphephile nge-POPIA
 
-Okuqakathekileko:
-• Isevisi le inikela isinqophiso sempilo kwaphela.
-• Ayihlongi amalwelwe.
-• Ayitsatsi isikhundla sakadokotela namkha unesi.
-• Singasebenzisa ithekinoloji ezisebenzako ukusiza sihlole iimpawu zakho.
-
-Iimpendulo zakho zingabanjwa ngokuphepha ukukhulisa ukuphepha nekhwalithi yesevisi. Imininingwane yakho izokusingathwa ngokuvumelana nemithetho yefihlo yeSewula Afrika (POPIA).
-
-Uma uneempawu ezikhulu ezinjengokuva buhlungu esifubeni, ukukhathazeka okukhulu kokuphefumula, namkha ukulahlekelwa mumcondvo, sibawa uye endaweni yesiphuthumako eseduze namkha urhingele *10177* khonokho.
-
-Uyavuma ukusebenzisa isevisi le?
+Uyavuma?
 1 — Iye, ngiyavuma
-2 — Awa, phuma`
+2 — Awa, angivumi`
   },
 
   // ==================== CONSENT RESPONSES ====================
@@ -1112,7 +739,7 @@ async function translateWithClaude(text, targetLang) {
   };
 
   const res = await anthropic.messages.create({
-    model: 'claude-sonnet-4-20250514',
+    model: 'claude-3-haiku-20240307',
     max_tokens: 400,
     system: `You are a South African language translator specialising in healthcare communication.
 
@@ -1135,11 +762,10 @@ RULES:
 
 // ================== TRIAGE (AI) ==================
 async function runTriage(text, lang) {
-  try {
-    const res = await anthropic.messages.create({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 300,
-      system: `You are a clinical triage classifier for South Africa, aligned with the South African Triage Scale (SATS).
+  const res = await anthropic.messages.create({
+    model: 'claude-3-haiku-20240307',
+    max_tokens: 300,
+    system: `You are a clinical triage classifier for South Africa, aligned with the South African Triage Scale (SATS).
 
 The input may be in any of South Africa's 11 official languages, including code-switching and township medical terminology (e.g. "sugar" = diabetes, "high blood" = hypertension, "ikhanda" = headache).
 
@@ -1149,285 +775,67 @@ Assign a confidence score 0-100.
 SAFETY: When in doubt, classify UP (more urgent), never down.
 
 Return ONLY valid JSON: {"triage_level":"RED|ORANGE|YELLOW|GREEN","confidence":0-100}`,
-      messages: [{ role: 'user', content: text }]
-    });
+    messages: [{ role: 'user', content: text }]
+  });
 
-    try {
-      return JSON.parse(res.content[0].text);
-    } catch (e) {
-      // AI returned invalid JSON — escalate to human
-      return { triage_level: 'ORANGE', confidence: 30 };
-    }
-  } catch (apiError) {
-    // API is down or unreachable — return fallback signal
-    console.error('Anthropic API failure:', apiError.message);
-    return { triage_level: 'API_FAILURE', confidence: 0, api_error: true };
-  }
-}
-
-// ================== API FAILURE FALLBACK ==================
-// Governance Section 7.4: When AI is unavailable, fall back to structured menu.
-// Free-text input is logged for later processing when the API recovers.
-
-const API_FALLBACK_MESSAGES = {
-  en: `We're sorry — our symptom assessment system is temporarily unavailable.
-
-To help you right now, please choose from these categories instead:
-
-1. 🫁 Breathing / Chest pain
-2. 🤕 Head injury / Headache
-3. 🤰 Pregnancy related
-4. 🩸 Bleeding / Wound
-5. 🤒 Fever / Flu / Cough
-6. 🤢 Stomach / Vomiting
-7. 👶 Child illness
-8. 💊 Medication / Chronic
-9. 🦴 Bone / Joint / Back pain
-10. 🧠 Mental health
-11. 🤧 Allergy / Rash
-13. 👤 Speak to a human
-
-Your description has been saved and will be reviewed when the system recovers.
-
-⚠️ If this is an emergency, call *10177* now.`,
-
-  zu: `Siyaxolisa — uhlelo lwethu lokwhlola izimpawu alutholakali okwesikhashana.
-
-Ukukusiza manje, sicela ukhethe kulezi zinhlobo:
-
-1. 🫁 Ukuphefumula / Ubuhlungu besifuba
-2. 🤕 Ukulimala kwekhanda / Ikhanda elibuhlungu
-3. 🤰 Okuphathelene nokukhulelwa
-4. 🩸 Ukopha / Inxeba
-5. 🤒 Imfiva / Umkhuhlane / Ukukhwehlela
-6. 🤢 Isisu / Ukuhlanza
-7. 👶 Ukugula kwengane
-8. 💊 Umuthi / Isifo esingamahlalakhona
-9. 🦴 Ithambo / Amalunga / Ubuhlungu bomhlane
-10. 🧠 Impilo yengqondo
-11. 🤧 I-allergy / Ukuvuvukala kwesikhumba
-13. 👤 Khuluma nomuntu
-
-Incazelo yakho igciniwe futhi izobhekwa uma uhlelo seluvulelekile.
-
-⚠️ Uma kuphuthumile, shaya *10177* manje.`,
-
-  xh: `Siyaxolisa — inkqubo yethu yokuhlola iimpawu ayifumaneki okwethutyana.
-
-Ukukunceda ngoku, nceda ukhethe kolu luhlu:
-
-1. 🫁 Ukuphefumla / Intlungu yesifuba
-2. 🤕 Ukonzakala kwentloko / Intloko ebuhlungu
-3. 🤰 Okuphathelene nokukhulelwa
-4. 🩸 Ukopha / Inxeba
-5. 🤒 Ifiva / Umkhuhlane / Ukukhohlela
-6. 🤢 Isisu / Ukugabha
-7. 👶 Ukugula komntwana
-8. 💊 Amayeza / Isifo esinganyangekiyo
-9. 🦴 Ithambo / Amalungu / Umqolo obuhlungu
-10. 🧠 Impilo yengqondo
-11. 🤧 I-aloji / Ukuvuvukala kwesikhumba
-13. 👤 Thetha nomntu
-
-Inkcazo yakho igciniwe kwaye iya kuhlolwa xa inkqubo ibuyile.
-
-⚠️ Ukuba yingxakeko, tsalela *10177* ngoku.`,
-
-  af: `Ons is jammer — ons simptoom-assesseringstelsel is tydelik onbeskikbaar.
-
-Om jou nou te help, kies asseblief uit hierdie kategorieë:
-
-1. 🫁 Asemhaling / Borspyn
-2. 🤕 Kopbesering / Hoofpyn
-3. 🤰 Swangerskap verwant
-4. 🩸 Bloeding / Wond
-5. 🤒 Koors / Griep / Hoes
-6. 🤢 Maag / Braking
-7. 👶 Kindergesiekte
-8. 💊 Medikasie / Chroniese siekte
-9. 🦴 Been / Gewrig / Rugpyn
-10. 🧠 Geestesgesondheid
-11. 🤧 Allergie / Uitslag
-13. 👤 Praat met 'n mens
-
-Jou beskrywing is gestoor en sal hersien word wanneer die stelsel herstel.
-
-⚠️ As dit 'n noodgeval is, bel *10177* nou.`,
-};
-
-// Log free-text input for later reprocessing when API recovers
-async function logFailedFreeText(patientId, text, lang) {
   try {
-    await supabase.from('triage_logs').insert({
-      patient_id: patientId,
-      triage_level: 'PENDING_REPROCESS',
-      confidence: 0,
-      escalation: false,
-      pathway: 'api_failure_fallback',
-      symptoms: text,
-      location: null,
-      facility_name: null,
-    });
+    return JSON.parse(res.content[0].text);
   } catch (e) {
-    console.error('Failed to log free-text for reprocessing:', e);
+    // If AI returns invalid JSON, escalate to human
+    return { triage_level: 'ORANGE', confidence: 30 };
   }
 }
-
-// Reprocess queued free-text entries when API is back
-async function reprocessFailedTriages() {
-  try {
-    const { data: pending } = await supabase
-      .from('triage_logs')
-      .select('*')
-      .eq('triage_level', 'PENDING_REPROCESS')
-      .limit(20);
-
-    if (!pending || pending.length === 0) return;
-
-    // Test if API is available with a simple call
-    try {
-      await anthropic.messages.create({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 10,
-        messages: [{ role: 'user', content: 'test' }]
-      });
-    } catch (e) {
-      // API still down — try again later
-      return;
-    }
-
-    // API is back — reprocess each pending entry
-    for (const entry of pending) {
-      const triage = await runTriage(entry.symptoms, 'en');
-      if (triage.api_error) break; // API went down again
-
-      const finalTriage = applyClinicalRules(entry.symptoms, triage);
-
-      await supabase
-        .from('triage_logs')
-        .update({
-          triage_level: finalTriage.triage_level,
-          confidence: finalTriage.confidence,
-          escalation: finalTriage.triage_level === 'RED' || finalTriage.confidence < CONFIDENCE_THRESHOLD,
-          pathway: 'reprocessed_from_api_failure',
-        })
-        .eq('id', entry.id);
-
-      // If RED or low confidence, escalate retroactively
-      if (finalTriage.triage_level === 'RED' || finalTriage.confidence < CONFIDENCE_THRESHOLD) {
-        console.log(`REPROCESS ALERT: Patient ${entry.patient_id} had pending triage that resolved to ${finalTriage.triage_level} (confidence: ${finalTriage.confidence}). Manual follow-up may be needed.`);
-      }
-    }
-
-    console.log(`Reprocessed ${pending.length} failed triage entries.`);
-  } catch (e) {
-    console.error('Reprocessing error:', e);
-  }
-}
-
-// Run reprocessing every 10 minutes
-setInterval(reprocessFailedTriages, 10 * 60 * 1000);
 
 // ================== RULES ENGINE ==================
-// v2.0 — Fixed after vignette stress test (March 2026)
-// Bugs fixed: (1) "cant breathe" not matching "shortness of breath"
-//             (2) isiXhosa "phefumla" not matching isiZulu "phefumuli"
-//             (3) "bitten by a snake" not matching "snake bite"
-// New overrides: overdose/poisoning, anaphylaxis, major trauma
-// Methodology: keywords expanded to match natural patient language
-
-// Helper: check if text contains ANY of the given terms
-function hasAny(text, terms) {
-  return terms.some(t => text.includes(t));
-}
-
 function applyClinicalRules(text, triage) {
   const lower = text.toLowerCase();
 
-  // ============================================================
   // HARD OVERRIDES — SAFETY FIRST
-  // These fire REGARDLESS of AI classification or confidence.
-  // Order: most specific first, then broader patterns.
-  // ============================================================
-
-  // --- NEONATAL: Baby not breathing (check before general airway) ---
-  if (hasAny(lower, ['baby', 'infant', 'newborn', 'ingane', 'usana', 'umntwana', 'baba']) &&
-      hasAny(lower, ['not breathing', 'cant breathe', 'stopped breathing', 'no breath',
-                      'akaphefumuli', 'akaphefumli', 'ayiphefumuli', 'phefumla'])) {
+  // English terms
+  if (lower.includes('chest pain') && lower.includes('shortness of breath')) {
+    return { triage_level: 'RED', confidence: 100, rule_override: 'cardiac_emergency' };
+  }
+  if (lower.includes('pregnant') && lower.includes('bleeding')) {
+    return { triage_level: 'RED', confidence: 100, rule_override: 'obstetric_emergency' };
+  }
+  if (lower.includes('not breathing') || lower.includes('unconscious')) {
+    return { triage_level: 'RED', confidence: 100, rule_override: 'airway_emergency' };
+  }
+  if (lower.includes('snake bite') || lower.includes('snakebite')) {
+    return { triage_level: 'RED', confidence: 100, rule_override: 'envenomation' };
+  }
+  if (lower.includes('baby') && lower.includes('not breathing')) {
     return { triage_level: 'RED', confidence: 100, rule_override: 'neonatal_emergency' };
   }
 
-  // --- CARDIAC: Chest pain + breathing difficulty ---
-  // BUG FIX #1: patients say "cant breathe" not "shortness of breath"
-  if (hasAny(lower, ['chest pain', 'pain in my chest', 'seer in my bors', 'borspyn',
-                      'isifuba', 'ubuhlungu besifuba', 'sifuba sibuhlungu']) &&
-      hasAny(lower, ['shortness of breath', 'cant breathe', 'can\'t breathe', 'cannot breathe',
-                      'hard to breathe', 'struggling to breathe', 'difficulty breathing',
-                      'breathe properly', 'breathing problem', 'breathing difficult',
-                      'ukuphefumula', 'ukuphefumla', 'phefumula kanzima', 'phefumla kanzima',
-                      'asemhaal', 'nie asemhaal', 'asem'])) {
-    return { triage_level: 'RED', confidence: 100, rule_override: 'cardiac_emergency' };
+  // isiZulu terms
+  if (lower.includes('isifuba') && lower.includes('ukuphefumula')) {
+    return { triage_level: 'RED', confidence: 100, rule_override: 'cardiac_emergency_zu' };
+  }
+  if (lower.includes('khulelwe') && lower.includes('opha')) {
+    return { triage_level: 'RED', confidence: 100, rule_override: 'obstetric_emergency_zu' };
+  }
+  if (lower.includes('akaphefumuli') || lower.includes('uqulekile')) {
+    return { triage_level: 'RED', confidence: 100, rule_override: 'airway_emergency_zu' };
+  }
+  if (lower.includes('inyoka') && lower.includes('luma')) {
+    return { triage_level: 'RED', confidence: 100, rule_override: 'envenomation_zu' };
   }
 
-  // --- OBSTETRIC: Pregnant + bleeding ---
-  if (hasAny(lower, ['pregnant', 'pregnancy', 'khulelwe', 'ukhulelwe', 'ngikhulelwe',
-                      'swanger', 'boimana', 'moimana', 'boima']) &&
-      hasAny(lower, ['bleeding', 'bleed', 'blood', 'opha', 'ngopha', 'ngiyangopha',
-                      'igazi', 'bloei', 'madi'])) {
-    return { triage_level: 'RED', confidence: 100, rule_override: 'obstetric_emergency' };
+  // isiXhosa terms
+  if (lower.includes('isifuba') && lower.includes('ukuphefumla')) {
+    return { triage_level: 'RED', confidence: 100, rule_override: 'cardiac_emergency_xh' };
+  }
+  if (lower.includes('khulelwe') && lower.includes('opha')) {
+    return { triage_level: 'RED', confidence: 100, rule_override: 'obstetric_emergency_xh' };
   }
 
-  // --- AIRWAY: Not breathing / unconscious ---
-  // BUG FIX #2: added isiXhosa variants (phefumla vs phefumuli)
-  if (hasAny(lower, ['not breathing', 'stopped breathing', 'cant breathe', 'can\'t breathe',
-                      'cannot breathe', 'no breath', 'isnt breathing', 'not responsive',
-                      'unconscious', 'passed out', 'collapsed', 'unresponsive',
-                      'akaphefumuli', 'akaphefumli', 'akasenakuphefumla', 'akaphefumla',
-                      'uqulekile', 'akaphenduli', 'ulele phantsi',
-                      'nie asemhaal', 'bewusteloos', 'onbewus'])) {
-    return { triage_level: 'RED', confidence: 100, rule_override: 'airway_emergency' };
+  // Afrikaans terms
+  if (lower.includes('borspyn') && lower.includes('asem')) {
+    return { triage_level: 'RED', confidence: 100, rule_override: 'cardiac_emergency_af' };
   }
-
-  // --- ENVENOMATION: Snake bite ---
-  // BUG FIX #3: "bitten by a snake" doesn't contain "snake bite"
-  if (hasAny(lower, ['snake bite', 'snakebite', 'bitten by a snake', 'bitten by snake',
-                      'snake bit', 'bit by a snake', 'bit by snake',
-                      'inyoka', 'slang gebyt', 'slangbyt',
-                      'inyoka ilumile', 'ulunywe yinyoka'])) {
-    return { triage_level: 'RED', confidence: 100, rule_override: 'envenomation' };
-  }
-
-  // --- NEW: OVERDOSE / POISONING ---
-  // Two-part check: (action words) + (substance words) OR single-phrase matches
-  const hasODAction = hasAny(lower, ['overdose', 'drank', 'swallowed', 'took', 'ate', 'ingested']);
-  const hasODSubstance = hasAny(lower, ['pills', 'tablets', 'poison', 'bleach', 'paraffin',
-                                         'paracetamol', 'medication', 'medicine', 'bottle of',
-                                         'ipilisi', 'ushevu', 'ityhefu', 'gif', 'pille']);
-  const hasODDirect = hasAny(lower, ['overdose', 'poisoned', 'took too many',
-                                      'drank poison', 'drank bleach', 'drank paraffin',
-                                      'gif gedrink', 'pille gedrink']);
-  if (hasODDirect || (hasODAction && hasODSubstance)) {
-    return { triage_level: 'RED', confidence: 100, rule_override: 'overdose_poisoning' };
-  }
-
-  // --- NEW: ANAPHYLAXIS / SEVERE ALLERGIC REACTION ---
-  if (hasAny(lower, ['throat closing', 'throat is closing', 'throat swelling', 'throat swollen',
-                      'cant swallow and cant breathe', 'lips swollen', 'face swollen',
-                      'tongue swollen', 'anaphylax',
-                      'keel is toe', 'lippe is geswel']) &&
-      hasAny(lower, ['cant breathe', 'can\'t breathe', 'not breathing', 'struggling to breathe',
-                      'hard to breathe', 'asemhaal', 'breathe', 'swelling', 'swollen', 'geswel'])) {
-    return { triage_level: 'RED', confidence: 100, rule_override: 'anaphylaxis' };
-  }
-
-  // --- NEW: MAJOR TRAUMA (fall from height / not moving / severe mechanism) ---
-  if (hasAny(lower, ['fell from', 'fallen from', 'fall from', 'jumped from',
-                      'hit by a car', 'hit by car', 'run over', 'vehicle accident',
-                      'car accident', 'motor accident']) &&
-      hasAny(lower, ['not moving', 'cant move', 'can\'t move', 'unconscious', 'unresponsive',
-                      'blood from ear', 'blood from his ear', 'blood from nose',
-                      'not responding', 'akaphenduli', 'bewusteloos'])) {
-    return { triage_level: 'RED', confidence: 100, rule_override: 'major_trauma' };
+  if (lower.includes('swanger') && lower.includes('bloei')) {
+    return { triage_level: 'RED', confidence: 100, rule_override: 'obstetric_emergency_af' };
   }
 
   return triage;
@@ -2878,44 +2286,6 @@ async function orchestrate(patientId, from, message, session) {
     }
   }
 
-  // ==================== STEP: API FALLBACK CATEGORY SELECTION ====================
-  // If patient was shown the fallback menu due to API failure, handle their category choice
-  if (session.awaitingFallbackCategory) {
-    const categoryNum = parseInt(message);
-    if (categoryNum >= 1 && categoryNum <= 11) {
-      // Valid structured category — reset fallback state and show the category menu
-      session.awaitingFallbackCategory = false;
-      await saveSession(patientId, session);
-      // Re-send the full category menu so they can proceed through structured triage
-      await sendWhatsAppMessage(from, msg('category_menu', lang));
-      return;
-    }
-    if (message === '13') {
-      // Speak to human — escalate
-      session.awaitingFallbackCategory = false;
-      await saveSession(patientId, session);
-      await logTriage({
-        patient_id: patientId,
-        triage_level: 'YELLOW',
-        confidence: 100,
-        escalation: true,
-        pathway: 'human_request_during_api_failure',
-        symptoms: session.lastSymptoms || 'human request',
-        location: session.location || null,
-        facility_name: null,
-      });
-      const humanMsg = lang === 'en'
-        ? '👤 A healthcare worker will contact you shortly. If urgent, call *10177*.'
-        : '👤 Isisebenzi sezempilo sizokuxhumana nawe maduze. Uma kuphuthuma, shaya *10177*.';
-      await sendWhatsAppMessage(from, humanMsg);
-      return;
-    }
-    // Invalid input — re-show the fallback menu
-    const fallbackMsg = API_FALLBACK_MESSAGES[lang] || API_FALLBACK_MESSAGES['en'];
-    await sendWhatsAppMessage(from, fallbackMsg);
-    return;
-  }
-
   // ==================== STEP: LAB RESULTS QUERY ====================
   if (FEATURES.LAB_RESULTS && isLabResultsQuery(message)) {
     await handleLabResultsQuery(patientId, from, session);
@@ -2931,82 +2301,40 @@ async function orchestrate(patientId, from, message, session) {
     return;
   }
 
-  // ==================== STEP 2: TRIAGE ====================
-  let triage = await runTriage(message, lang);
-
-  // ==================== STEP 2.5: API FAILURE FALLBACK ====================
-  // Governance Section 7.4: If AI is unavailable, fall back to structured menu
-  if (triage.api_error) {
-    // Log the free-text for reprocessing when API recovers
-    await logFailedFreeText(patientId, message, lang);
-
-    // But FIRST — check if the rules engine catches anything dangerous
-    // The rules engine doesn't need AI and catches critical emergencies
-    const rulesCheck = applyClinicalRules(message, { triage_level: 'GREEN', confidence: 0 });
-    if (rulesCheck.rule_override) {
-      // Rules engine caught an emergency — handle it even without AI
-      await sendWhatsAppMessage(from, msg('triage_red', lang));
-      await logTriage({
-        patient_id: patientId,
-        triage_level: rulesCheck.triage_level,
-        confidence: rulesCheck.confidence,
-        escalation: true,
-        pathway: 'rules_engine_fallback',
-        facility_name: null,
-        location: session.location || null,
-        symptoms: message
-      });
-      await scheduleFollowUp(patientId, from, rulesCheck.triage_level);
-      await saveSession(patientId, session);
-      return;
-    }
-
-    // No emergency detected by rules engine — offer structured menu
-    const fallbackMsg = API_FALLBACK_MESSAGES[lang] || API_FALLBACK_MESSAGES['en'];
-    await sendWhatsAppMessage(from, fallbackMsg);
-
-    // Set session to expect a structured category choice next
-    session.awaitingFallbackCategory = true;
-    await saveSession(patientId, session);
-    return;
-  }
-
-  triage = applyClinicalRules(message, triage);
+  // ==================== STEP 2: TRIAGE (GOVERNANCE-INTEGRATED) ====================
+  // Pillar 1: Failsafe mode (deterministic RED classifier) if API is down
+  // Pillar 2: Risk factor upgrades + confidence threshold enforcement
+  const govResult = await governance.runTriageWithGovernance(
+    message, lang, session, runTriage, applyClinicalRules
+  );
+  let triage = govResult.triage;
+  const govMeta = govResult.governance;
 
   // Store for later logging
   session.lastTriage = triage;
   session.lastSymptoms = message;
+  session.lastGovMeta = govMeta; // Governance audit trail
 
   // ==================== STEP 3: RED / LOW CONFIDENCE → ESCALATE ====================
   if (triage.triage_level === 'RED' || triage.confidence < CONFIDENCE_THRESHOLD) {
-    const coverage = getCoverageLevel();
-
-    // Send appropriate message based on coverage level
-    if (coverage === 'STAFFED') {
-      // Business hours — standard RED message, team will review within 15 min
-      await sendWhatsAppMessage(from, msg('triage_red', lang));
-    } else {
-      // After hours — enhanced emergency message with more specific instructions
-      const afterHoursMsg = AFTER_HOURS_RED_MESSAGES[lang] || AFTER_HOURS_RED_MESSAGES['en'];
-      await sendWhatsAppMessage(from, afterHoursMsg);
-    }
+    await sendWhatsAppMessage(from, msg('triage_red', lang));
 
     await logTriage({
       patient_id: patientId,
       triage_level: triage.triage_level,
       confidence: triage.confidence,
-      escalation: true,
-      pathway: coverage === 'STAFFED' ? 'ambulance' : `ambulance_${coverage.toLowerCase()}`,
+      escalation: triage.confidence < CONFIDENCE_THRESHOLD,
+      pathway: 'ambulance',
       facility_name: null,
       location: session.location || null,
-      symptoms: message
+      symptoms: message,
+      governance: {
+        failsafe: govMeta.failsafe,
+        risk_upgrade: triage.risk_upgrade || null,
+        rule_override: triage.rule_override || null,
+        issues: govMeta.issues.length,
+      }
     });
-
-    // Alert on-call team member (does nothing during STAFFED hours)
-    await alertOnCallTeam(
-      patientId, from, message, triage.triage_level,
-      triage.confidence < CONFIDENCE_THRESHOLD ? 'Low AI confidence' : 'RED triage classification'
-    );
 
     await scheduleFollowUp(patientId, from, triage.triage_level);
     await saveSession(patientId, session);
@@ -3101,39 +2429,6 @@ async function handleMessage(msgObj) {
     await saveSession(patientId, {});
     await sendWhatsAppMessage(from, MESSAGES.language_menu._all);
     return;
-  }
-
-  // STOP COMMAND — Consent withdrawal (Governance Section 6.5)
-  if (msgObj.type === 'text' && msgObj.text.body.trim().toUpperCase() === 'STOP') {
-    const lang = session.language || 'en';
-    const stopMessages = {
-      en: '🛑 Your session has ended and data processing has stopped.\n\nSafety records may be retained as required by law.\n\nIf you change your mind, send "Hi" to start again.\n\nFor emergencies, call *10177*.',
-      zu: '🛑 Isikhathi sakho siphelile futhi ukusetshenziswa kwedatha kumisiwe.\n\nAmarekhodi okuphepha angagcinwa njengoba kufunwa umthetho.\n\nUma uguqula umqondo, thumela "Hi" ukuqala kabusha.\n\nNgezimo eziphuthumayo, shaya *10177*.',
-      xh: '🛑 Iseshoni yakho iphelile kwaye ukusetyenziswa kwedatha kumisiwe.\n\nIingxelo zokhuseleko zinokugcinwa njengoko kufunwa ngumthetho.\n\nUkuba utshintshe ingqondo, thumela "Hi" ukuqala kwakhona.\n\nKwiimeko ezingxamisekileyo, tsalela *10177*.',
-      af: '🛑 Jou sessie is beëindig en dataverwerking is gestop.\n\nVeiligheidsrekords kan behou word soos deur die wet vereis.\n\nAs jy van plan verander, stuur "Hi" om weer te begin.\n\nVir noodgevalle, bel *10177*.',
-    };
-    await sendWhatsAppMessage(from, stopMessages[lang] || stopMessages['en']);
-
-    // Clear session but log the withdrawal
-    await supabase.from('consent_log').insert({
-      patient_id: patientId,
-      action: 'consent_withdrawn',
-      timestamp: new Date()
-    }).catch(() => {});
-
-    await saveSession(patientId, { consent_withdrawn: true });
-    return;
-  }
-
-  // Block interaction if consent was previously withdrawn (must send "Hi" to re-start)
-  if (session.consent_withdrawn && msgObj.type === 'text') {
-    const text = msgObj.text.body.trim().toLowerCase();
-    if (text === 'hi' || text === 'hello' || text === 'start') {
-      await saveSession(patientId, {});
-      await sendWhatsAppMessage(from, MESSAGES.language_menu._all);
-      return;
-    }
-    return; // Silently ignore all other messages after consent withdrawal
   }
 
   // LOCATION HANDLING
@@ -3258,10 +2553,249 @@ app.get('/webhook', (req, res) => {
 
 // ================== HEALTH CHECK ==================
 app.get('/', (req, res) => {
-  res.json({ status: 'ok', version: '2.1', service: 'BIZUSIZO' });
+  res.json({
+    status: 'ok',
+    version: '2.2',
+    service: 'BIZUSIZO',
+    governance: governance.systemIntegrity.isFailsafeActive() ? 'FAILSAFE' : 'NOMINAL',
+  });
+});
+
+// ================================================================
+// GOVERNANCE DASHBOARD — API ENDPOINTS
+// ================================================================
+
+// GET /api/governance/status — Full governance status across all pillars
+app.get('/api/governance/status', requireDashboardAuth, async (req, res) => {
+  try {
+    const status = await governance.getGovernanceStatus();
+    res.json(status);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /api/governance/alerts — List governance alerts (filterable)
+app.get('/api/governance/alerts', requireDashboardAuth, async (req, res) => {
+  try {
+    let query = supabase
+      .from('governance_alerts')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(parseInt(req.query.limit) || 50);
+
+    if (req.query.pillar) query = query.eq('pillar', req.query.pillar);
+    if (req.query.severity) query = query.eq('severity', req.query.severity);
+    if (req.query.resolved === 'false') query = query.eq('resolved', false);
+    if (req.query.resolved === 'true') query = query.eq('resolved', true);
+
+    const { data, error } = await query;
+    if (error) throw error;
+    res.json({ alerts: data });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// PUT /api/governance/alerts/:id/resolve — Resolve an alert
+app.put('/api/governance/alerts/:id/resolve', requireDashboardAuth, async (req, res) => {
+  try {
+    await supabase
+      .from('governance_alerts')
+      .update({ resolved: true, resolved_at: new Date(), resolved_by: req.body.resolved_by || 'dashboard' })
+      .eq('id', req.params.id);
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// POST /api/governance/incidents — Report an incident (L1-L4)
+app.post('/api/governance/incidents', requireDashboardAuth, async (req, res) => {
+  try {
+    const result = await governance.incidentManager.reportIncident(req.body);
+    res.json(result);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /api/governance/incidents — List incidents
+app.get('/api/governance/incidents', requireDashboardAuth, async (req, res) => {
+  try {
+    let query = supabase
+      .from('governance_incidents')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(parseInt(req.query.limit) || 50);
+
+    if (req.query.severity_level) query = query.eq('severity_level', parseInt(req.query.severity_level));
+    if (req.query.status) query = query.eq('status', req.query.status);
+
+    const { data, error } = await query;
+    if (error) throw error;
+    res.json({ incidents: data });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// PUT /api/governance/incidents/:id/resolve — Resolve an incident
+app.put('/api/governance/incidents/:id/resolve', requireDashboardAuth, async (req, res) => {
+  try {
+    const result = await governance.incidentManager.resolveIncident(req.params.id, req.body);
+    res.json(result);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// POST /api/governance/audit/run — Trigger monthly audit manually
+app.post('/api/governance/audit/run', requireDashboardAuth, async (req, res) => {
+  try {
+    const result = await governance.incidentManager.runMonthlyAudit();
+    res.json(result);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /api/governance/audits — List audits
+app.get('/api/governance/audits', requireDashboardAuth, async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('governance_audits')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(parseInt(req.query.limit) || 20);
+
+    if (error) throw error;
+    res.json({ audits: data });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// PUT /api/governance/audits/:id — Submit clinical review for an audit
+app.put('/api/governance/audits/:id', requireDashboardAuth, async (req, res) => {
+  try {
+    const { clinician_feedback, computed_metrics, reviewed_by } = req.body;
+
+    await supabase
+      .from('governance_audits')
+      .update({
+        clinician_feedback,
+        computed_metrics: computed_metrics || null,
+        reviewed_by: reviewed_by || 'clinical_governance_lead',
+        reviewed_at: new Date(),
+        status: 'reviewed'
+      })
+      .eq('id', req.params.id);
+
+    // If metrics provided, trigger statistical check
+    if (computed_metrics) {
+      await governance.clinicalPerformance.runStatisticalCheck();
+    }
+
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /api/governance/metrics — Performance metrics over time
+app.get('/api/governance/metrics', requireDashboardAuth, async (req, res) => {
+  try {
+    const days = parseInt(req.query.days) || 30;
+    const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+
+    const { data, error } = await supabase
+      .from('governance_metrics')
+      .select('*')
+      .gte('created_at', since.toISOString())
+      .order('created_at', { ascending: true });
+
+    if (error) throw error;
+    res.json({ metrics: data, period_days: days });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// POST /api/governance/baselines — Set/update validation baselines
+app.post('/api/governance/baselines', requireDashboardAuth, async (req, res) => {
+  try {
+    const { ppv, sensitivity, concordance, set_by } = req.body;
+
+    // Deactivate previous baselines
+    await supabase
+      .from('governance_baselines')
+      .update({ active: false })
+      .eq('active', true);
+
+    // Insert new baseline
+    const { data, error } = await supabase
+      .from('governance_baselines')
+      .insert({
+        values: { ppv, sensitivity, concordance },
+        active: true,
+        set_by: set_by || 'dashboard',
+        created_at: new Date()
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    // Reload baselines in the clinical monitor
+    await governance.clinicalPerformance._loadBaselines();
+
+    res.json({ success: true, baseline: data });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /api/governance/reviews — Lifecycle reviews
+app.get('/api/governance/reviews', requireDashboardAuth, async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('governance_reviews')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    res.json({ reviews: data });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// PUT /api/governance/reviews/:id — Complete a lifecycle review
+app.put('/api/governance/reviews/:id', requireDashboardAuth, async (req, res) => {
+  try {
+    const { decision, notes, reviewed_by, actions } = req.body;
+    // decision: 'continue' | 'retrain' | 'reprompt' | 'retire_pathway' | 'rollback'
+
+    await supabase
+      .from('governance_reviews')
+      .update({
+        status: 'completed',
+        decision,
+        notes,
+        reviewed_by: reviewed_by || 'governance_forum',
+        completed_at: new Date(),
+        actions: actions || []
+      })
+      .eq('id', req.params.id);
+
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // ================== START ==================
 app.listen(process.env.PORT || 3000, () => {
-  console.log('🚀 BIZUSIZO v2.1 Orchestrator LIVE');
+  console.log('🚀 BIZUSIZO v2.2 Orchestrator LIVE (Governance Framework Active)');
 });
