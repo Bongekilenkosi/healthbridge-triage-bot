@@ -499,7 +499,10 @@ class ClinicalPerformanceMonitor {
       {
         name: 'chronic_multimorbid',
         detect: (text, session) => {
-          return session?.ccmddConditions && session.ccmddConditions.length >= 2;
+          // Check both sources: chronicConditions (from universal screening)
+          // and ccmddConditions (from CCMDD medication flow)
+          const conditions = session?.chronicConditions || session?.ccmddConditions || [];
+          return conditions.length >= 2;
         },
         minLevel: 'YELLOW'
       },
@@ -507,7 +510,8 @@ class ClinicalPerformanceMonitor {
         name: 'hiv_on_arvs',
         detect: (text, session) => {
           const l = (text || '').toLowerCase();
-          const hasHIV = session?.ccmddConditions?.some(c => c.key === 'hiv');
+          const conditions = session?.chronicConditions || session?.ccmddConditions || [];
+          const hasHIV = conditions.some(c => c.key === 'hiv');
           const mentionsHIV = l.includes('hiv') || l.includes('arv');
           return hasHIV || mentionsHIV;
         },
