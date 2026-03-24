@@ -1186,6 +1186,22 @@ Uyavuma?
     nr: '🔍 Sihlola iimpawu zakho...'
   },
 
+  // ==================== HELPFUL TIPS ====================
+  // Sent after triage results so the patient knows how to navigate
+  tips: {
+    en: '\n💡 *Tips:*\nType *0* — new consultation\nType *language* — change language\nType *code* — show your study code',
+    zu: '\n💡 *Amathiphu:*\nBhala *0* — ukuxoxa okusha\nBhala *ulimi* — shintsha ulimi\nBhala *code* — khombisa ikhodi yakho',
+    xh: '\n💡 *Amathiphu:*\nBhala *0* — incoko entsha\nBhala *ulwimi* — tshintsha ulwimi\nBhala *code* — bonisa ikhowudi yakho',
+    af: '\n💡 *Wenke:*\nTik *0* — nuwe konsultasie\nTik *taal* — verander taal\nTik *code* — wys jou studiekode',
+    nso: '\n💡 *Maele:*\nNgwala *0* — poledišano ye mpsha\nNgwala *polelo* — fetola polelo\nNgwala *code* — bontšha khoutu ya gago',
+    tn: '\n💡 *Maele:*\nKwala *0* — puisano e ntšhwa\nKwala *puo* — fetola puo\nKwala *code* — bontsha khoutu ya gago',
+    st: '\n💡 *Maele:*\nNgola *0* — puisano e ncha\nNgola *puo* — fetola puo\nNgola *code* — bontsha khoutu ya hao',
+    ts: '\n💡 *Switsundzuxo:*\nTsala *0* — nkani leyintshwa\nTsala *ririmi* — cinca ririmi\nTsala *code* — kombisa khodi ya wena',
+    ss: '\n💡 *Ema-thiphu:*\nBhala *0* — ingcoco lensha\nBhala *lulwimi* — shintja lulwimi\nBhala *code* — khombisa ikhodi yakho',
+    ve: '\n💡 *Nyeletshedzo:*\nṄwalani *0* — nyambedzano ntswa\nṄwalani *luambo* — shandukani luambo\nṄwalani *code* — sumbedzani khoudu yaṋu',
+    nr: '\n💡 *Amathiphu:*\nTlola *0* — ingcoco etja\nTlola *ilimi* — tjhentjha ilimi\nTlola *code* — khombisa ikhodi yakho'
+  },
+
   // ==================== SYSTEM TIMEOUT / OUTAGE FALLBACK ====================
   // Sent when the system cannot process a message within 15 seconds
   // (load shedding, Railway outage, Supabase downtime, etc.)
@@ -2876,6 +2892,7 @@ async function orchestrate(patientId, from, message, session) {
       });
 
       await scheduleFollowUp(patientId, from, session.lastTriage?.triage_level);
+      await sendWhatsAppMessage(from, msg('tips', lang));
       return;
     }
 
@@ -2925,6 +2942,7 @@ async function orchestrate(patientId, from, message, session) {
       });
 
       await scheduleFollowUp(patientId, from, session.lastTriage?.triage_level);
+      await sendWhatsAppMessage(from, msg('tips', lang));
       return;
     }
   }
@@ -3154,6 +3172,7 @@ async function orchestrate(patientId, from, message, session) {
     }
 
     await scheduleFollowUp(patientId, from, triage.triage_level);
+    await sendWhatsAppMessage(from, msg('tips', lang));
     await saveSession(patientId, session);
     return;
   }
@@ -3177,6 +3196,7 @@ async function orchestrate(patientId, from, message, session) {
       symptoms: message
     });
     await scheduleFollowUp(patientId, from, 'GREEN');
+    await sendWhatsAppMessage(from, msg('tips', lang));
     await saveSession(patientId, session);
     return;
   }
