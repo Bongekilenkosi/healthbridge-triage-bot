@@ -79,7 +79,8 @@ td{padding:8px 12px;border-bottom:1px solid #1e293b}
 <div id="login" class="login">
   <div class="login-box">
     <h2>BIZUSIZO Governance</h2>
-    <p style="color:#64748b;font-size:13px;margin-bottom:16px">Enter dashboard password</p>
+    <p style="color:#64748b;font-size:13px;margin-bottom:16px">Sign in to access the dashboard</p>
+    <input type="text" id="uname" placeholder="Your name (e.g. Bongekile)" style="width:100%;padding:10px;border-radius:6px;border:1px solid #1e293b;background:#0d1321;color:#e2e8f0;margin-bottom:8px;font-size:14px">
     <input type="password" id="pwd" placeholder="Password" onkeyup="if(event.key==='Enter')doLogin()">
     <button onclick="doLogin()">Sign in</button>
     <p id="login-err" style="color:#ef4444;font-size:12px;margin-top:8px"></p>
@@ -91,6 +92,7 @@ td{padding:8px 12px;border-bottom:1px solid #1e293b}
     <h1>BIZUSIZO Governance Dashboard</h1>
     <div>
       <span id="sys-status" class="status nominal">LOADING...</span>
+      <span style="color:#475569;font-size:11px;margin-left:12px" id="logged-in-as"></span>
       <span style="color:#475569;font-size:11px;margin-left:12px" id="last-refresh"></span>
     </div>
   </div>
@@ -128,20 +130,28 @@ td{padding:8px 12px;border-bottom:1px solid #1e293b}
 
 <script>
 let PWD='';
+let UNAME='';
 const API='';
 
 async function api(path){
   try{
-    const r=await fetch(API+path,{headers:{'x-dashboard-password':PWD}});
+    const r=await fetch(API+path,{headers:{'x-dashboard-password':PWD,'x-dashboard-user':UNAME}});
     if(!r.ok)throw new Error(r.status);
     return await r.json();
   }catch(e){console.error(path,e);return null;}
 }
 
 function doLogin(){
+  UNAME=document.getElementById('uname').value.trim();
   PWD=document.getElementById('pwd').value;
+  if(!UNAME){document.getElementById('login-err').textContent='Please enter your name';return;}
   api('/api/governance/status').then(d=>{
-    if(d){document.getElementById('login').style.display='none';document.getElementById('app').style.display='block';refresh();}
+    if(d){
+      document.getElementById('login').style.display='none';
+      document.getElementById('app').style.display='block';
+      document.getElementById('logged-in-as').textContent='Signed in as: '+UNAME;
+      refresh();
+    }
     else{document.getElementById('login-err').textContent='Invalid password or server error';}
   });
 }
@@ -2802,13 +2812,101 @@ setInterval(pollNHLSResults, 15 * 60 * 1000);
 // ================================================================
 
 // Middleware: simple auth check
+// ================================================================
+// DASHBOARD AUTH WITH ACCESS LOGGING
+// ================================================================
+// Every dashboard API call is logged with:
+// - WHO (user name from x-dashboard-user header)
+// - WHAT (API endpoint accessed)
+// - WHEN (timestamp)
+// This creates a full audit trail for governance accountability.
+// ================================================================
 function requireDashboardAuth(req, res, next) {
   const password = req.headers['x-dashboard-password'] || req.query.password;
   if (password !== process.env.DASHBOARD_PASSWORD) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
+
+  // Log the access (async, don't block the request)
+  const userName = req.headers['x-dashboard-user'] || 'unknown';
+  const endpoint = req.method + ' ' + req.path;
+  const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown';
+
+  supabase.from('dashboard_access_logs').insert({
+    user_name: userName,
+    endpoint: endpoint,
+    ip_address: ip,
+    accessed_at: new Date(),
+  }).then(() => {}).catch(e => {
+    // Don't fail the request if logging fails — queue locally
+    console.error('[ACCESS_LOG] Failed to log:', e.message);
+    if (typeof queueEvent === 'function') {
+      queueEvent({
+        type: 'dashboard_access',
+        table: 'dashboard_access_logs',
+        data: {
+          user_name: userName,
+          endpoint: endpoint,
+          ip_address: ip,
+          original_timestamp: new Date().toISOString(),
+        }
+      });
+    }
+  });
+
   next();
 }
+
+// GET /api/access-logs — View dashboard access history
+app.get('/api/access-logs', requireDashboardAuth, async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit) || 100;
+    const { data } = await supabase
+      .from('dashboard_access_logs')
+      .select('*')
+      .order('accessed_at', { ascending: false })
+      .limit(limit);
+    res.json(data || []);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /api/access-logs/summary — Daily summary of who accessed what
+app.get('/api/access-logs/summary', requireDashboardAuth, async (req, res) => {
+  try {
+    const { data } = await supabase
+      .from('dashboard_access_logs')
+      .select('user_name, endpoint, accessed_at')
+      .order('accessed_at', { ascending: false })
+      .limit(500);
+
+    if (!data) return res.json({ users: [], daily: [] });
+
+    // Group by user
+    const userSummary = {};
+    const dailySummary = {};
+    data.forEach(row => {
+      const user = row.user_name || 'unknown';
+      const day = new Date(row.accessed_at).toISOString().split('T')[0];
+
+      if (!userSummary[user]) userSummary[user] = { total: 0, last_access: row.accessed_at, endpoints: {} };
+      userSummary[user].total++;
+      userSummary[user].endpoints[row.endpoint] = (userSummary[user].endpoints[row.endpoint] || 0) + 1;
+
+      if (!dailySummary[day]) dailySummary[day] = { total: 0, users: new Set() };
+      dailySummary[day].total++;
+      dailySummary[day].users.add(user);
+    });
+
+    // Convert sets to arrays for JSON
+    Object.values(dailySummary).forEach(d => { d.users = [...d.users]; });
+
+    res.json({ users: userSummary, daily: dailySummary });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
 
 // GET /api/lab-results — List results (filterable)
 app.get('/api/lab-results', requireDashboardAuth, async (req, res) => {
@@ -3959,13 +4057,14 @@ function getClinicalDashboardHTML() {
 '<body>',
 '<div id="login" class="login"><div class="login-box">',
 '<h2>BIZUSIZO Clinical Dashboard</h2>',
-'<p style="color:#64748b;font-size:13px;margin-bottom:16px">Enter dashboard password</p>',
+'<p style="color:#64748b;font-size:13px;margin-bottom:16px">Sign in to access the dashboard</p>',
+'<input type="text" id="uname" placeholder="Your name (e.g. Bongekile)" style="width:100%;padding:10px;border-radius:6px;border:1px solid #1e293b;background:#0d1321;color:#e2e8f0;margin-bottom:8px;font-size:14px">',
 '<input type="password" id="pwd" placeholder="Password" onkeyup="if(event.key===\'Enter\')doLogin()">',
 '<button onclick="doLogin()">Sign in</button>',
 '<p id="login-err" style="color:#ef4444;font-size:12px;margin-top:8px"></p>',
 '</div></div>',
 '<div id="app" style="display:none">',
-'<div class="header"><h1>BIZUSIZO Clinical Dashboard</h1><span style="color:#475569;font-size:11px" id="last-refresh"></span></div>',
+'<div class="header"><h1>BIZUSIZO Clinical Dashboard</h1><div><span style="color:#475569;font-size:11px" id="logged-in-as"></span><span style="color:#475569;font-size:11px;margin-left:12px" id="last-refresh"></span></div></div>',
 '<div class="nav"><a href="/dashboard">Governance Dashboard</a><a href="/clinical" class="active">Clinical Dashboard</a></div>',
 '<div class="grid" id="stat-cards"></div>',
 '<div class="chart-row">',
@@ -3983,10 +4082,10 @@ function getClinicalDashboardHTML() {
 '<span>BIZUSIZO Clinical Dashboard v1.0</span><span>Auto-refresh every 60s</span></div>',
 '</div>',
 '<script>',
-'var PWD="";',
+'var PWD="";var UNAME="";',
 'var langNames={en:"English",zu:"isiZulu",xh:"isiXhosa",af:"Afrikaans",nso:"Sepedi",tn:"Setswana",st:"Sesotho",ts:"Xitsonga",ss:"siSwati",ve:"Tshivenda",nr:"isiNdebele"};',
-'async function api(p){try{var r=await fetch(p,{headers:{"x-dashboard-password":PWD}});if(!r.ok)throw new Error(r.status);return await r.json();}catch(e){console.error(p,e);return null;}}',
-'function doLogin(){PWD=document.getElementById("pwd").value;api("/api/clinical/stats").then(function(d){if(d&&!d.error){document.getElementById("login").style.display="none";document.getElementById("app").style.display="block";refresh();}else{document.getElementById("login-err").textContent="Invalid password or server error";}});}',
+'async function api(p){try{var r=await fetch(p,{headers:{"x-dashboard-password":PWD,"x-dashboard-user":UNAME}});if(!r.ok)throw new Error(r.status);return await r.json();}catch(e){console.error(p,e);return null;}}',
+'function doLogin(){UNAME=document.getElementById("uname").value.trim();PWD=document.getElementById("pwd").value;if(!UNAME){document.getElementById("login-err").textContent="Please enter your name";return;}api("/api/clinical/stats").then(function(d){if(d&&!d.error){document.getElementById("login").style.display="none";document.getElementById("app").style.display="block";document.getElementById("logged-in-as").textContent="Signed in as: "+UNAME;refresh();}else{document.getElementById("login-err").textContent="Invalid password or server error";}});}',
 'function timeAgo(d){if(!d)return"-";var s=Math.floor((Date.now()-new Date(d))/1000);if(s<60)return s+"s ago";if(s<3600)return Math.floor(s/60)+"m ago";if(s<86400)return Math.floor(s/3600)+"h ago";return Math.floor(s/86400)+"d ago";}',
 'function makeBars(id,data,cm){var el=document.getElementById(id);var e=Object.entries(data).sort(function(a,b){return b[1]-a[1]});var mx=Math.max.apply(null,e.map(function(x){return x[1]}));if(mx<1)mx=1;if(e.length===0){el.innerHTML="<div class=\\"empty\\">No data yet</div>";return;}el.innerHTML=e.map(function(x){var pct=Math.round(x[1]/mx*100);var cls=cm&&cm[x[0]]?cm[x[0]]:"bar-default";var lb=langNames[x[0]]||x[0];return "<div class=\\"bar\\"><span class=\\"bar-label\\">"+lb+"</span><div class=\\"bar-fill "+cls+"\\" style=\\"width:"+pct+"%\\">"+x[1]+"</div></div>";}).join("");}',
 'async function refresh(){var stats=await api("/api/clinical/stats");if(!stats)return;document.getElementById("last-refresh").textContent="Updated "+new Date().toLocaleTimeString();var td=stats.triage_distribution||{};var total=stats.total_triages||0;',
