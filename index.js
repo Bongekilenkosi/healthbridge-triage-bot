@@ -709,17 +709,17 @@ Uyavuma?
 
   // ==================== TRIAGE RESULTS ====================
   triage_red: {
-    en: '🔴 *EMERGENCY*\nCall *10177* for an ambulance NOW.\nIf private: ER24 *084 124*.\nA nurse has been notified of your case.',
-    zu: '🔴 *ISIMO ESIPHUTHUMAYO*\nShaya *10177* ucele i-ambulensi MANJE.\nUma usebenzisa ezimfihlo: ER24 *084 124*.\nUnesi wazisiwe ngodaba lwakho.',
-    xh: '🔴 *INGXAKEKO ENGXAMISEKILEYO*\nTsalela *10177* ucele i-ambulensi NGOKU.\nYabucala: ER24 *084 124*.\nUmongikazi wazisiwe ngodaba lwakho.',
-    af: '🔴 *NOODGEVAL*\nBel *10177* vir \'n ambulans NOU.\nPrivaat: ER24 *084 124*.\n\'n Verpleegster is in kennis gestel.',
-    nso: '🔴 *TŠHOGANETŠO*\nLeletša *10177* go kgopela ambulense BJALE.\nPraebete: ER24 *084 124*.\nMooki o tsebišitšwe ka tiragalo ya gago.',
-    tn: '🔴 *TSHOGANYETSO*\nLeletsa *10177* go kopa ambulense JAANONG.\nPraebete: ER24 *084 124*.\nMooki o itsisiwe ka tiragalo ya gago.',
-    st: '🔴 *TSHOHANYETSO*\nLetsetsa *10177* ho kopa ambulense HONA JOALE.\nPraebete: ER24 *084 124*.\nMooki o tsebisitswe ka ketsahalo ya hao.',
-    ts: '🔴 *XIHATLA*\nRingela *10177* ku kombela ambulense SWESWI.\nPrayivhete: ER24 *084 124*.\nNesi u tivisiwe hi mhaka ya wena.',
-    ss: '🔴 *LOKUSHESHISAKO*\nShayela *10177* ucele i-ambulensi NYALO.\nYangasese: ER24 *084 124*.\nNesi watiwe ngebuhlungu bakho.',
-    ve: '🔴 *TSHOGANETSO*\nFounelani *10177* u humbela ambulense ZWINO.\nPuraivete: ER24 *084 124*.\nNese o ḓivhadzwa nga mulandu waṋu.',
-    nr: '🔴 *ISIMO ESIPHUTHUMAKO*\nRingela *10177* ubawa i-ambulensi NJE.\nYefihlo: ER24 *084 124*.\nUnesi watjhejiswe ngodaba lwakho.'
+    en: '🔴 *EMERGENCY*\n\nCall *10177* for an ambulance NOW.\nIf private: ER24 *084 124*.\n\n⚠️ *Do NOT wait for the ambulance* — go to your nearest hospital emergency unit immediately. Ask someone to drive you or take a taxi.',
+    zu: '🔴 *ISIMO ESIPHUTHUMAYO*\n\nShaya *10177* ucele i-ambulensi MANJE.\nUma usebenzisa ezimfihlo: ER24 *084 124*.\n\n⚠️ *UNGALINDI i-ambulensi* — yana esibhedlela esiseduze nawe ngokushesha. Cela umuntu akushayele noma uthathe itekisi.',
+    xh: '🔴 *INGXAKEKO ENGXAMISEKILEYO*\n\nTsalela *10177* ucele i-ambulensi NGOKU.\nYabucala: ER24 *084 124*.\n\n⚠️ *MUSA UKULINDA i-ambulensi* — yiya esibhedlele esikufutshane nawe ngokukhawuleza. Cela umntu akuqhubele okanye uthathe iteksi.',
+    af: '🔴 *NOODGEVAL*\n\nBel *10177* vir \'n ambulans NOU.\nPrivaat: ER24 *084 124*.\n\n⚠️ *MOENIE WAG vir die ambulans nie* — gaan na jou naaste hospitaal noodafdeling dadelik. Vra iemand om jou te ry of neem \'n taxi.',
+    nso: '🔴 *TŠHOGANETŠO*\n\nLeletša *10177* go kgopela ambulense BJALE.\nPraebete: ER24 *084 124*.\n\n⚠️ *O SE KE WA EMA ambulense* — yaa sepetleleng sa kgauswi ka pela. Kgopela motho go go išetša goba o tšee thekisi.',
+    tn: '🔴 *TSHOGANYETSO*\n\nLeletsa *10177* go kopa ambulense JAANONG.\nPraebete: ER24 *084 124*.\n\n⚠️ *O SE KA WA EMA ambulense* — ya bookelong jo bo gaufi ka bonako. Kopa motho go go isa kgotsa o tseye thekisi.',
+    st: '🔴 *TSHOHANYETSO*\n\nLetsetsa *10177* ho kopa ambulense HONA JOALE.\nPraebete: ER24 *084 124*.\n\n⚠️ *O SE KE OA EMA ambulense* — eya sepetlele se haufi kapele. Kopa motho ho o isa kapa o nke thekisi.',
+    ts: '🔴 *XIHATLA*\n\nRingela *10177* ku kombela ambulense SWESWI.\nPrayivhete: ER24 *084 124*.\n\n⚠️ *U NGA YIMI ambulense* — famba u ya exibedlhele xa kusuhi hi ku hatlisa. Kombela munhu ku ku yisa kumbe u teka thekisi.',
+    ss: '🔴 *LOKUSHESHISAKO*\n\nShayela *10177* ucele i-ambulensi NYALO.\nYangasese: ER24 *084 124*.\n\n⚠️ *UNGALINDZI i-ambulensi* — hamba uye esibhedlela leseduze masinyane. Cela umuntfu akushayele noma utfatse lithekisi.',
+    ve: '🔴 *TSHOGANETSO*\n\nFounelani *10177* u humbela ambulense ZWINO.\nPuraivete: ER24 *084 124*.\n\n⚠️ *NI SONGO LINDELA ambulense* — iyani sibadela tshi re tsini nga u ṱavhanya. Humbelani muthu u ni fhira kana ni dzhie thekisi.',
+    nr: '🔴 *ISIMO ESIPHUTHUMAKO*\n\nRingela *10177* ubawa i-ambulensi NJE.\nYefihlo: ER24 *084 124*.\n\n⚠️ *UNGALINDELI i-ambulensi* — iya esibhedlela esiseduze ngokurhaba. Bawa umuntu akuse namkha uthathe ithekisi.'
   },
 
   triage_orange: {
@@ -3106,6 +3106,7 @@ async function orchestrate(patientId, from, message, session) {
 
   // ==================== STEP 3: RED / LOW CONFIDENCE → ESCALATE ====================
   if (triage.triage_level === 'RED' || triage.confidence < CONFIDENCE_THRESHOLD) {
+    // Send emergency message immediately — every second counts
     await sendWhatsAppMessage(from, msg('triage_red', lang));
 
     await logTriage({
@@ -3113,7 +3114,7 @@ async function orchestrate(patientId, from, message, session) {
       triage_level: triage.triage_level,
       confidence: triage.confidence,
       escalation: triage.confidence < CONFIDENCE_THRESHOLD,
-      pathway: 'ambulance',
+      pathway: 'emergency',
       facility_name: null,
       location: session.location || null,
       symptoms: message,
@@ -3124,6 +3125,33 @@ async function orchestrate(patientId, from, message, session) {
         issues: govMeta.issues.length,
       }
     });
+
+    // ALSO route to nearest hospital emergency unit — ambulances are unreliable in SA.
+    // The patient needs to know WHERE to go, not just to call 10177.
+    if (session.location) {
+      const nearestHospitals = await findNearestFacilities(session.location, 'hospital', 3);
+      if (nearestHospitals.length > 0) {
+        const nearest = nearestHospitals[0];
+        const emergencyRouteMsg = {
+          en: `🏥 Your nearest hospital emergency unit:\n*${nearest.name}* (${nearest.distance} km)\n${nearest.address || ''}\n\nGo there NOW if an ambulance is not coming quickly. Do not wait.`,
+          zu: `🏥 Isibhedlela esiseduze nawe:\n*${nearest.name}* (${nearest.distance} km)\n${nearest.address || ''}\n\nYana khona MANJE uma i-ambulensi ingezi ngokushesha. Ungalindi.`,
+          xh: `🏥 Isibhedlele esikufutshane nawe:\n*${nearest.name}* (${nearest.distance} km)\n${nearest.address || ''}\n\nYiya khona NGOKU ukuba i-ambulensi ayizi ngokukhawuleza. Musa ukulinda.`,
+          af: `🏥 Jou naaste hospitaal noodafdeling:\n*${nearest.name}* (${nearest.distance} km)\n${nearest.address || ''}\n\nGaan soontoe NOU as die ambulans nie vinnig kom nie. Moenie wag nie.`,
+        };
+        await sendWhatsAppMessage(from, emergencyRouteMsg[lang] || emergencyRouteMsg['en']);
+      }
+    } else {
+      // No location — ask for it so we can route them
+      const locationAskMsg = {
+        en: '📍 Send us your location (tap the + button → Location) so we can tell you which hospital is nearest to you.',
+        zu: '📍 Sithumelele indawo yakho (cindezela inkinobho ye-+ → Indawo) ukuze sikutshele ukuthi isiphi isibhedlela esiseduze nawe.',
+        xh: '📍 Sithumelele indawo yakho (cofa iqhosha le-+ → Indawo) ukuze sikuxelele esiphi isibhedlele esikufutshane nawe.',
+        af: '📍 Stuur ons jou ligging (tik die + knoppie → Ligging) sodat ons jou kan sê watter hospitaal die naaste aan jou is.',
+      };
+      await sendWhatsAppMessage(from, locationAskMsg[lang] || locationAskMsg['en']);
+      session.pendingTriage = true;
+      session.lastTriage = triage;
+    }
 
     await scheduleFollowUp(patientId, from, triage.triage_level);
     await saveSession(patientId, session);
