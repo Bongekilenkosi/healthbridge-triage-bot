@@ -12,6 +12,8 @@ require('dotenv').config();
 const express = require('express');
 const crypto = require('crypto');
 const fetch = require('node-fetch');
+const fs = require('fs');
+const path = require('path');
 const { createClient } = require('@supabase/supabase-js');
 const Anthropic = require('@anthropic-ai/sdk');
 
@@ -32,15 +34,9 @@ const supabase = createClient(
 
 const CONFIDENCE_THRESHOLD = 75;
 
-// ================== GOVERNANCE ORCHESTRATOR INIT ==================
-const governance = new GovernanceOrchestrator(supabase, {
-  alertCallback: (alert) => {
-    // TODO: Replace with Slack webhook, email, or PagerDuty integration
-    console.log(`[GOV ALERT] [${alert.severity}] [${alert.pillar}] ${alert.message}`);
-    // Future: send to engineering Slack channel for CRITICAL alerts
-    // Future: email clinical_governance_lead for HIGH clinical alerts
-  }
-});
+// ================== GOVERNANCE ORCHESTRATOR ==================
+// Initialized after helpers section below (needs queueEvent to be defined first)
+let governance;
 
 // ================== FEATURE FLAGS ==================
 // Set these to true when partnerships/integrations are ready
@@ -57,6 +53,121 @@ const FEATURES = {
 };
 
 // ================== HELPERS ==================
+
+// ================================================================
+// RESILIENT EVENT LOG
+// ================================================================
+// During outages (load shedding, Supabase downtime), governance events
+// that can't be written to the database are queued in a local JSON file.
+// A flush agent runs every 2 minutes and pushes queued events to Supabase
+// when connectivity returns. This ensures no governance data is lost
+// even during extended outages.
+// ================================================================
+const EVENT_LOG_PATH = path.join(__dirname, '.bizusizo_event_queue.json');
+
+function readEventQueue() {
+  try {
+    if (fs.existsSync(EVENT_LOG_PATH)) {
+      const data = fs.readFileSync(EVENT_LOG_PATH, 'utf8');
+      return JSON.parse(data);
+    }
+  } catch (e) {
+    console.error('[EVENT_LOG] Failed to read queue:', e.message);
+  }
+  return [];
+}
+
+function writeEventQueue(events) {
+  try {
+    fs.writeFileSync(EVENT_LOG_PATH, JSON.stringify(events, null, 2));
+  } catch (e) {
+    console.error('[EVENT_LOG] Failed to write queue:', e.message);
+  }
+}
+
+function queueEvent(event) {
+  // Append to local file — survives process restarts on Railway
+  const queue = readEventQueue();
+  queue.push({
+    ...event,
+    queued_at: new Date().toISOString(),
+    flushed: false
+  });
+  writeEventQueue(queue);
+  console.log(`[EVENT_LOG] Event queued locally (${queue.length} in queue): ${event.type}`);
+}
+
+async function flushEventQueue() {
+  const queue = readEventQueue();
+  if (queue.length === 0) return;
+
+  const unflushed = queue.filter(e => !e.flushed);
+  if (unflushed.length === 0) {
+    // All flushed — clear the file
+    writeEventQueue([]);
+    return;
+  }
+
+  console.log(`[EVENT_LOG] Attempting to flush ${unflushed.length} queued events to Supabase...`);
+
+  let flushedCount = 0;
+  for (const event of unflushed) {
+    try {
+      if (event.table === 'governance_alerts') {
+        await supabase.from('governance_alerts').insert({
+          alert_type: event.data.alert_type,
+          severity: event.data.severity,
+          pillar: event.data.pillar,
+          message: event.data.message,
+          data: event.data.extra || null,
+          created_at: event.data.original_timestamp || event.queued_at,
+          resolved: false,
+          assigned_to: event.data.assigned_to || null,
+        });
+      } else if (event.table === 'governance_metrics') {
+        await supabase.from('governance_metrics').insert({
+          metric_type: event.data.metric_type,
+          data: event.data.metric_data || {},
+          created_at: event.data.original_timestamp || event.queued_at,
+        });
+      }
+
+      event.flushed = true;
+      flushedCount++;
+    } catch (e) {
+      // Supabase still unreachable — stop trying, will retry next cycle
+      console.log(`[EVENT_LOG] Flush failed (DB still unreachable), ${unflushed.length - flushedCount} events remain queued`);
+      writeEventQueue(queue);
+      return;
+    }
+  }
+
+  // All flushed successfully — clear the file
+  if (flushedCount === unflushed.length) {
+    writeEventQueue([]);
+    console.log(`[EVENT_LOG] ✅ All ${flushedCount} queued events flushed to Supabase`);
+  } else {
+    writeEventQueue(queue);
+    console.log(`[EVENT_LOG] Partially flushed: ${flushedCount}/${unflushed.length}`);
+  }
+}
+
+// Flush agent: every 2 minutes, try to push queued events to Supabase
+setInterval(flushEventQueue, 2 * 60 * 1000);
+// Also flush on startup in case events were queued before a restart
+setTimeout(flushEventQueue, 10000);
+
+// ================== GOVERNANCE ORCHESTRATOR INIT ==================
+// Now that queueEvent is defined, we can initialize governance with
+// the local event queue for load shedding resilience.
+governance = new GovernanceOrchestrator(supabase, {
+  alertCallback: (alert) => {
+    // TODO: Replace with Slack webhook, email, or PagerDuty integration
+    console.log(`[GOV ALERT] [${alert.severity}] [${alert.pillar}] ${alert.message}`);
+  },
+  queueEvent: queueEvent,
+});
+
 function hashPhone(phone) {
   return crypto.createHash('sha256').update(phone).digest('hex').slice(0, 16);
 }
@@ -3169,7 +3280,21 @@ app.post('/webhook', async (req, res) => {
             // Log the timeout for governance monitoring
             try {
               governance.systemIntegrity.recordInferenceError('message_processing_timeout_15s');
-            } catch (e) { /* governance might be down too */ }
+            } catch (e) {
+              // Governance/Supabase is also down — queue locally for later flush
+              queueEvent({
+                type: 'message_processing_timeout',
+                table: 'governance_alerts',
+                data: {
+                  alert_type: 'message_processing_timeout_15s',
+                  severity: 'HIGH',
+                  pillar: 'system_integrity',
+                  message: `Patient message timed out after 15s. Fallback emergency message sent (lang: ${lang}). Patient: ${patientId}`,
+                  assigned_to: 'devops_engineer',
+                  original_timestamp: new Date().toISOString(),
+                }
+              });
+            }
           } catch (e) {
             console.error('[TIMEOUT] Failed to send fallback message:', e.message);
           }
