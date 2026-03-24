@@ -710,7 +710,146 @@ Uyavuma?
     ss: '📍 Sicela wabelane ngendzawo yakho sitewutfola indzawo yelatjhwa lesesedvuze.\n\nCindzetela inkinobho ye-📎 → Indzawo → Tfumela indzawo yakho yamanje.',
     ve: '📍 Ri humbela ni kovhele fhethu haṋu uri ri wane fhethu ha u alafhiwa hu re tsini.\n\nDindani bhatani ya 📎 → Fhethu → Rumelani fhethu haṋu ha zwino.',
     nr: '📍 Sibawa wabelane nendawo yakho bona sithole indawo yokulatjhwa eseduze.\n\nCindezela inkinobho ye-📎 → Indawo → Thumela indawo yakho yanje.'
+  },
+
+  // ==================== CHRONIC CONDITION SCREENING ====================
+  chronic_screening: {
+    en: `Before we continue, do you take medication for any of these conditions? (Reply with the numbers, e.g. "1,3" or "0" for none)
+
+0. None
+1. 💊 HIV / ARVs
+2. 🩸 High blood pressure
+3. 🍬 Diabetes (sugar)
+4. ❤️ Heart condition
+5. 🫁 Asthma / Lung condition
+6. 🧠 Epilepsy
+7. 💊 Other chronic medication`,
+
+    zu: `Ngaphambi kokuthi siqhubeke, ingabe uthatha umuthi walezi zifo? (Phendula ngenombolo, isib. "1,3" noma "0" uma kungekho)
+
+0. Lutho
+1. 💊 HIV / Ama-ARV
+2. 🩸 Igazi eliphakeme
+3. 🍬 Ushukela (Diabetes)
+4. ❤️ Isifo senhliziyo
+5. 🫁 Isifuba / Iphaphu
+6. 🧠 Isifo sokuwa (Epilepsy)
+7. 💊 Omunye umuthi wamahlalakhona`,
+
+    xh: `Phambi kokuba siqhubeke, ingaba uthatha amayeza ezi zifo? (Phendula ngenombolo, umz. "1,3" okanye "0" ukuba akukho)
+
+0. Akukho
+1. 💊 HIV / Ii-ARV
+2. 🩸 Uxinzelelo lwegazi
+3. 🍬 Iswekile (Diabetes)
+4. ❤️ Isifo sentliziyo
+5. 🫁 Isifuba / Imiphunga
+6. 🧠 Isifo sokuwa (Epilepsy)
+7. 💊 Esinye isigulo esinganyangekiyo`,
+
+    af: `Voordat ons voortgaan, neem jy medikasie vir enige van hierdie toestande? (Antwoord met die nommers, bv. "1,3" of "0" vir geen)
+
+0. Geen
+1. 💊 MIV / ARV's
+2. 🩸 Hoë bloeddruk
+3. 🍬 Diabetes (suiker)
+4. ❤️ Harttoestand
+5. 🫁 Asma / Longtoestand
+6. 🧠 Epilepsie
+7. 💊 Ander chroniese medikasie`,
+
+    nso: `Pele re tšwela pele, a o nwa dihlare tša malwetši a? (Araba ka dinomoro, mohlala "1,3" goba "0" ge e le gore ga go na)
+
+0. Ga go na
+1. 💊 HIV / Dihlare tša ARV
+2. 🩸 Madi a go phagama
+3. 🍬 Bolwetši bja swikiri
+4. ❤️ Bolwetši bja pelo
+5. 🫁 Sefuba / Maphephu
+6. 🧠 Bolwetši bja go wa
+7. 💊 Dihlare tše dingwe tša go se fole`,
+
+    tn: `Pele re tswelela, a o nwa melemo ya malwetse a? (Araba ka dinomoro, sk. "1,3" kgotsa "0" fa go sena)
+
+0. Ga go na
+1. 💊 HIV / Melemo ya ARV
+2. 🩸 Madi a kwa godimo
+3. 🍬 Bolwetse jwa sukiri
+4. ❤️ Bolwetse jwa pelo
+5. 🫁 Sefuba / Matshwafo
+6. 🧠 Bolwetse jwa go wa
+7. 💊 Melemo e mengwe ya go sa fole`,
+
+    st: `Pele re tswela pele, na o nwa dihlare tsa malwetse ana? (Araba ka dinomoro, mohlala "1,3" kapa "0" ha ho na)
+
+0. Ha ho na
+1. 💊 HIV / Dihlare tsa ARV
+2. 🩸 Madi a phahameng
+3. 🍬 Lefu la tsoekere
+4. ❤️ Lefu la pelo
+5. 🫁 Sefuba / Matshwafo
+6. 🧠 Lefu la ho wa
+7. 💊 Dihlare tse ding tsa malwetse a sa foleng`,
+
+    ts: `Loko hi nga si ya emahlweni, xana u nwa mirhi ya mavabyi lama? (Hlamula hi tinomboro, xik. "1,3" kumbe "0" loko ku ri hava)
+
+0. Ku hava
+1. 💊 HIV / Mirhi ya ARV
+2. 🩸 Ngati ya le henhla
+3. 🍬 Vuvabyi bya xwikiri
+4. ❤️ Vuvabyi bya mbilu
+5. 🫁 Xifuva / Maphapha
+6. 🧠 Vuvabyi bya ku wa
+7. 💊 Mirhi yin'wana ya mavabyi ya ku nga heli`,
+
+    ss: `Ngaphambi kwekutsi sichubeke, uyawanata yini emitsi yaletifo? (Phendvula ngetinombolo, sib. "1,3" noma "0" uma kungekho)
+
+0. Kute
+1. 💊 HIV / Ema-ARV
+2. 🩸 Ingati lephakeme
+3. 🍬 Sifo seswikili
+4. ❤️ Sifo senhlitiyo
+5. 🫁 Sifuba / Timphaphu
+6. 🧠 Sifo sekuwa
+7. 💊 Leminye imitsi yetifo letingapheli`,
+
+    ve: `Phanḓa ha musi ri sa athu ya phanḓa, naa ni khou nwa mushonga wa malwadze aya? (Fhindulani nga dinomboro, tsumbo "1,3" kana "0" arali hu si na)
+
+0. A hu na
+1. 💊 HIV / Mushonga wa ARV
+2. 🩸 Malofha a ṱhahani
+3. 🍬 Vhulwadze ha swigiri
+4. ❤️ Vhulwadze ha mbilu
+5. 🫁 Tshifuva / Maṱhaha
+6. 🧠 Vhulwadze ha u wa
+7. 💊 Muṅwe mushonga wa vhulwadze vhu sa folaho`,
+
+    nr: `Ngaphambi kobana siragele phambili, uyawasela na imitjhi yobulwelibu? (Phendula ngenomboro, isib. "1,3" namkha "0" uma kungekho)
+
+0. Akukho
+1. 💊 HIV / Ama-ARV
+2. 🩸 Iingazi eziphezulu
+3. 🍬 Isifo seswigiri
+4. ❤️ Isifo senhliziyo
+5. 🫁 Isifuba / Iphaphu
+6. 🧠 Isifo sokuwa
+7. 💊 Eminye imitjhi yeenzifo ezingapheliko`
+  },
+
+  chronic_screening_saved: {
+    en: '✅ Thank you. This helps us give you better guidance.',
+    zu: '✅ Siyabonga. Lokhu kusisiza sikunikeze iseluleko esingcono.',
+    xh: '✅ Enkosi. Oku kusinceda sikunike iingcebiso ezingcono.',
+    af: '✅ Dankie. Dit help ons om jou beter leiding te gee.',
+    nso: '✅ Re a leboga. Se se re thuša go go fa maele a kaone.',
+    tn: '✅ Re a leboga. Se se re thusa go go fa kgakololo e e botoka.',
+    st: '✅ Re a leboha. Sena se re thusa ho u fa tataiso e ntle.',
+    ts: '✅ Hi khensa. Leswi swi hi pfuna ku ku nyika switsundzuxo swo antswa.',
+    ss: '✅ Siyabonga. Loku kusisita sikunikete teluleko lencono.',
+    ve: '✅ Ri a livhuwa. Izwi ḽi ri thusa u ni ṋea vhulivhisi ha khwine.',
+    nr: '✅ Siyathokoza. Lokhu kusisiza sikunikele isinqophiso esingcono.'
   }
+
 };
 
 // ================================================================
@@ -2183,7 +2322,8 @@ async function orchestrate(patientId, from, message, session) {
       session.consent = true;
       await saveSession(patientId, session);
       await sendWhatsAppMessage(from, msg('consent_yes', lang));
-      await sendWhatsAppMessage(from, msg('category_menu', lang));
+      // Route to chronic screening (not straight to category menu)
+      await sendWhatsAppMessage(from, msg('chronic_screening', lang));
       return;
     }
     if (message === '2') {
@@ -2194,6 +2334,40 @@ async function orchestrate(patientId, from, message, session) {
     }
     // Re-show consent
     await sendWhatsAppMessage(from, msg('consent', lang));
+    return;
+  }
+
+  // ==================== STEP 1.5: CHRONIC CONDITION SCREENING ====================
+  // Runs once after consent, before any triage. Captures chronic conditions
+  // for ALL patients so the governance risk upgrade (Pillar 2) works universally.
+  // Stored in session.chronicConditions — used by ClinicalPerformanceMonitor
+  // for multimorbidity risk factor detection.
+  if (session.consent && !session.chronicScreeningDone) {
+    // Parse response: "0" = none, "1,3" = HIV + diabetes, "1 2" = HIV + hypertension
+    if (message === '0') {
+      // No chronic conditions
+      session.chronicConditions = [];
+      session.chronicScreeningDone = true;
+      await saveSession(patientId, session);
+      await sendWhatsAppMessage(from, msg('chronic_screening_saved', lang));
+      await sendWhatsAppMessage(from, msg('category_menu', lang));
+      return;
+    }
+
+    const choices = message.replace(/[, ]+/g, ',').split(',').filter(c => CONDITION_MAP[c.trim()]);
+    if (choices.length > 0) {
+      session.chronicConditions = choices.map(c => CONDITION_MAP[c.trim()]);
+      // Also populate ccmddConditions so the CCMDD module and risk scoring work
+      session.ccmddConditions = session.chronicConditions;
+      session.chronicScreeningDone = true;
+      await saveSession(patientId, session);
+      await sendWhatsAppMessage(from, msg('chronic_screening_saved', lang));
+      await sendWhatsAppMessage(from, msg('category_menu', lang));
+      return;
+    }
+
+    // Invalid input — re-show screening
+    await sendWhatsAppMessage(from, msg('chronic_screening', lang));
     return;
   }
 
