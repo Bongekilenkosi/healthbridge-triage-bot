@@ -4344,7 +4344,35 @@ async function orchestrate(patientId, from, message, session) {
 
     // After-hours: tell patient to come tomorrow morning + schedule reminder
     if (!isClinicOpen()) {
-      await sendWhatsAppMessage(from, msg('triage_yellow_after_hours', lang));
+      // Count how many patients already scheduled for tomorrow — stagger times (#8)
+      let slotTime = '07:00';
+      try {
+        const tmrw = new Date();
+        tmrw.setDate(tmrw.getDate() + 1);
+        tmrw.setHours(0, 0, 0, 0);
+        const tmrwEnd = new Date(tmrw);
+        tmrwEnd.setHours(23, 59, 59, 999);
+        const { data: tmrwPats } = await supabase
+          .from('follow_ups')
+          .select('id')
+          .eq('type', 'morning_reminder')
+          .eq('status', 'pending')
+          .gte('scheduled_at', tmrw.toISOString())
+          .lte('scheduled_at', tmrwEnd.toISOString());
+        const count = (tmrwPats || []).length;
+        const slots = ['07:00', '08:00', '09:00', '10:00'];
+        slotTime = slots[Math.min(Math.floor(count / 10), slots.length - 1)];
+      } catch (e) { /* use default 07:00 */ }
+
+      session.appointmentSlot = slotTime;
+
+      const slotMsg = {
+        en: `\u23f0 Clinics are closed now.\n\n1. *If manageable* \u2014 rest at home, come to the clinic tomorrow at *${slotTime}*\n2. *If symptoms worsen tonight* \u2014 go to hospital or call *10177*\n\nWe will send you a reminder tomorrow morning.`,
+        zu: `\u23f0 Imitholampilo ivaliwe manje.\n\n1. *Uma kubekezeleka* \u2014 phumula ekhaya, woza emtholampilo kusasa ngo-*${slotTime}*\n2. *Uma izimpawu ziba zimbi ebusuku* \u2014 yana esibhedlela noma ushaye *10177*\n\nSizokuthumelela isikhumbuzo kusasa.`,
+        xh: `\u23f0 Iikliniki zivaliwe ngoku.\n\n1. *Ukuba zinokumelana nazo* \u2014 phumla ekhaya, yiza ekliniki ngomso nge-*${slotTime}*\n2. *Ukuba iimpawu ziba mbi ebusuku* \u2014 yiya esibhedlele okanye utsalele *10177*\n\nSiza kukuthumela isikhumbuzo ngomso.`,
+        af: `\u23f0 Klinieke is gesluit.\n\n1. *As hanteerbaar* \u2014 rus tuis, kom m\u00f4re na die kliniek om *${slotTime}*\n2. *As simptome vererger* \u2014 gaan hospitaal toe of bel *10177*\n\nOns stuur m\u00f4re 'n herinnering.`,
+      };
+      await sendWhatsAppMessage(from, slotMsg[lang] || slotMsg['en']);
 
       // Schedule a morning reminder for 06:30 SAST next day
       const now = new Date();
@@ -4600,60 +4628,49 @@ async function handleMessage(msgObj) {
   const patientId = hashPhone(from);
   let session = await getSession(patientId);
 
-  // RESET COMMAND — soft reset
-  // Preserves: language, chronic conditions, study code, study participation
-  // Clears: current triage state, facility routing, pending steps
-  // This means returning patients don't have to redo onboarding
-  // ONLY triggers if onboarding is complete — during onboarding, "0" means "none" for chronic screening
+  // RESET COMMAND — with shared phone detection (#4)
+  // In SA, families share phones. Ask if same person or different.
   const isOnboarded = session.consent && session.identityDone && session.chronicScreeningDone && session.isStudyParticipant !== undefined;
-  if (msgObj.type === 'text' && msgObj.text.body.trim() === '0' && isOnboarded) {
-    const preserved = {
-      language: session.language,
-      consent: session.consent,
-      // Identity fields (never re-ask)
-      firstName: session.firstName,
-      surname: session.surname,
-      dob: session.dob,
-      sex: session.sex,
-      identityDone: session.identityDone,
-      // Existing preserved fields
-      chronicConditions: session.chronicConditions,
-      ccmddConditions: session.ccmddConditions,
-      chronicScreeningDone: session.chronicScreeningDone,
-      isStudyParticipant: session.isStudyParticipant,
-      studyCode: session.studyCode,
-      location: session.location,
-      patientAge: session.patientAge,
-      // File status
-      isReturningPatient: session.isReturningPatient,
-      fileStatus: session.fileStatus,
-    };
-    await saveSession(patientId, preserved);
-
-    const lang = preserved.language || 'en';
-
-    // If they have a full profile, skip straight to category menu
-    if (preserved.language && preserved.consent && preserved.identityDone && preserved.chronicScreeningDone && preserved.isStudyParticipant !== undefined) {
-      const resetMsg = {
-        en: '🔄 Conversation reset. How can we help you today?',
-        zu: '🔄 Ingxoxo iqalwe kabusha. Singakusiza ngani namuhla?',
-        xh: '🔄 Incoko iqalwe ngokutsha. Singakunceda ngantoni namhlanje?',
-        af: '🔄 Gesprek herstel. Hoe kan ons jou vandag help?',
-        nso: '🔄 Poledišano e thomilwe gape. Re ka go thuša ka eng lehono?',
-        tn: '🔄 Puisano e simolotšwe gape. Re ka go thusa ka eng gompieno?',
-        st: '🔄 Puisano e qalilwe bocha. Re ka o thusa ka eng kajeno?',
-        ts: '🔄 Nkani yi sungurile nakambe. Hi nga ku pfuna hi yini namuntlha?',
-        ss: '🔄 Ingcoco icalwe kabusha. Singakusita ngani lamuhla?',
-        ve: '🔄 Nyambedzano yo thoma hafhu. Ri nga ni thusa nga mini ṋamusi?',
-        nr: '🔄 Ingcoco iqalwe kabutjha. Singakusiza ngani namhlanje?',
-      };
-      await sendWhatsAppMessage(from, resetMsg[lang] || resetMsg['en']);
-      await sendWhatsAppMessage(from, msg('category_menu', lang));
-    } else {
-      // Incomplete profile — show language menu to restart onboarding
-      await sendWhatsAppMessage(from, MESSAGES.language_menu._all);
-    }
+  if (msgObj.type === 'text' && msgObj.text.body.trim() === '0' && isOnboarded && !session.awaitingSharedPhoneCheck) {
+    session.awaitingSharedPhoneCheck = true;
+    await saveSession(patientId, session);
+    const lang = session.language || 'en';
+    const name = session.firstName || 'the same person';
+    await sendWhatsAppMessage(from, 'Are you *' + name + '*?\n\n1 \u2014 Yes, it\'s me (new consultation)\n2 \u2014 No, I am a different person using this phone');
     return;
+  }
+
+  // Handle shared phone check response
+  if (session.awaitingSharedPhoneCheck && msgObj.type === 'text') {
+    const answer = msgObj.text.body.trim();
+    session.awaitingSharedPhoneCheck = false;
+    const lang = session.language || 'en';
+    if (answer === '1') {
+      const preserved = {
+        language: session.language, consent: session.consent,
+        firstName: session.firstName, surname: session.surname, dob: session.dob,
+        sex: session.sex, identityDone: session.identityDone,
+        chronicConditions: session.chronicConditions, ccmddConditions: session.ccmddConditions,
+        chronicScreeningDone: session.chronicScreeningDone,
+        isStudyParticipant: session.isStudyParticipant, studyCode: session.studyCode,
+        location: session.location, patientAge: session.patientAge,
+        isReturningPatient: session.isReturningPatient, fileStatus: session.fileStatus,
+      };
+      await saveSession(patientId, preserved);
+      await sendWhatsAppMessage(from, 'Conversation reset. How can we help you today?');
+      await sendWhatsAppMessage(from, msg('category_menu', lang));
+      return;
+    } else if (answer === '2') {
+      await saveSession(patientId, {});
+      await sendWhatsAppMessage(from, 'Welcome! Starting fresh for a new person on this phone.');
+      await sendWhatsAppMessage(from, MESSAGES.language_menu._all);
+      return;
+    } else {
+      session.awaitingSharedPhoneCheck = true;
+      await saveSession(patientId, session);
+      await sendWhatsAppMessage(from, 'Please reply with 1 (same person) or 2 (different person).');
+      return;
+    }
   }
 
   // LOCATION HANDLING
@@ -6268,7 +6285,170 @@ app.get('/api/clinic/nurse-view', requireDashboardAuth, async (req, res) => {
   }
 });
 
+// ================== KIOSK — Self-service clinic entrance device ==================
+// Serves a touch-friendly web app for patients without WhatsApp.
+// Same triage logic, feeds into the same clinic_queue and dashboard.
+
+app.get('/kiosk', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'kiosk.html'));
+});
+
+// POST /api/kiosk/triage — Process kiosk check-in
+// Takes patient details + symptoms, runs triage, creates queue entry
+app.post('/api/kiosk/triage', async (req, res) => {
+  try {
+    const { firstName, surname, dob, sex, category, categoryName, severity, symptoms, language } = req.body;
+
+    if (!firstName) return res.status(400).json({ error: 'Name required' });
+
+    // Generate a patient ID from name + DOB (kiosk patients don't have phone numbers)
+    const kioskId = 'kiosk_' + crypto.createHash('sha256')
+      .update((firstName + surname + dob + Date.now()).toLowerCase())
+      .digest('hex').slice(0, 16);
+
+    // Build symptom text for triage
+    const severityLabels = { mild: 'MILD', moderate: 'MODERATE', severe: 'SEVERE' };
+    const symptomText = `Category: ${categoryName || category}. Severity: ${severityLabels[severity] || 'UNKNOWN'}. ${symptoms ? 'Patient says: ' + symptoms : ''}`;
+
+    // Run triage via Claude API
+    let triageLevel = 'YELLOW';
+    let confidence = 75;
+    try {
+      const triageResult = await callTriageAI(symptomText, {
+        age: dob ? calculateAge(dob) : null,
+        sex,
+        chronicConditions: [],
+        language: language || 'en',
+      });
+      triageLevel = triageResult.triage_level || 'YELLOW';
+      confidence = triageResult.confidence || 75;
+    } catch (e) {
+      console.error('[KIOSK] AI triage failed, using severity fallback:', e.message);
+      // Fallback: map severity to triage level
+      triageLevel = severity === 'severe' ? 'ORANGE' : severity === 'moderate' ? 'YELLOW' : 'GREEN';
+      confidence = 60;
+    }
+
+    // Deterministic overrides
+    const redResult = deterministicRedClassifier(symptomText);
+    if (redResult.isRed) {
+      triageLevel = 'RED';
+      confidence = 100;
+    }
+
+    // Generate reference code
+    const refNum = Math.floor(1000 + Math.random() * 9000);
+    const refCode = 'BZ-' + refNum;
+
+    // Store study code
+    try {
+      await supabase.from('study_codes').insert({
+        patient_id: kioskId,
+        study_code: refCode,
+        created_at: new Date()
+      });
+    } catch (e) { /* ignore duplicate */ }
+
+    // Log triage
+    await logTriage({
+      patient_id: kioskId,
+      triage_level: triageLevel,
+      confidence,
+      escalation: false,
+      pathway: 'kiosk',
+      facility_name: null,
+      symptoms: symptomText,
+    });
+
+    // Add to clinic queue
+    const queueType = ['RED', 'ORANGE'].includes(triageLevel) ? 'fast_track' : 'routine';
+
+    const { data: lastInQueue } = await supabase
+      .from('clinic_queue')
+      .select('position')
+      .eq('queue_type', queueType)
+      .order('position', { ascending: false })
+      .limit(1);
+    const nextPos = (lastInQueue?.[0]?.position || 0) + 1;
+
+    const { data: queueEntry } = await supabase.from('clinic_queue').insert({
+      patient_id: kioskId,
+      patient_name: firstName + (surname ? ' ' + surname : ''),
+      patient_phone: null, // Kiosk patients have no phone
+      triage_level: triageLevel,
+      queue_type: queueType,
+      position: nextPos,
+      status: 'waiting',
+      checked_in_at: new Date(),
+      symptoms_summary: symptomText.slice(0, 500),
+      study_code: refCode,
+      source: 'kiosk',
+    }).select().single();
+
+    console.log(`[KIOSK] ${firstName} ${surname || ''} → ${triageLevel} (${confidence}%) → Queue #${nextPos} (${queueType}) → ${refCode}`);
+
+    res.json({
+      success: true,
+      triage_level: triageLevel,
+      confidence,
+      ref_code: refCode,
+      queue_position: nextPos,
+      queue_type: queueType,
+    });
+  } catch (e) {
+    console.error('[KIOSK] Error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Helper: Calculate age from DOB string (DD-MM-YYYY)
+function calculateAge(dobStr) {
+  if (!dobStr) return null;
+  const parts = dobStr.split(/[-/]/);
+  if (parts.length !== 3) return null;
+  const d = parseInt(parts[0]), m = parseInt(parts[1]) - 1, y = parseInt(parts[2]);
+  const birth = new Date(y, m, d);
+  const now = new Date();
+  let age = now.getFullYear() - birth.getFullYear();
+  if (now.getMonth() < m || (now.getMonth() === m && now.getDate() < d)) age--;
+  return age > 0 && age < 150 ? age : null;
+}
+
+// Helper: Call triage AI (reuses existing orchestration logic)
+async function callTriageAI(symptoms, context) {
+  const systemPrompt = `You are a clinical triage assistant for South African public clinics using the SATS triage scale.
+Given the patient's symptoms, classify them into one of four levels:
+- RED: Life-threatening emergency
+- ORANGE: Very urgent, needs immediate attention
+- YELLOW: Urgent, needs to be seen today
+- GREEN: Routine, can self-manage with advice
+
+Respond ONLY with valid JSON: {"triage_level":"YELLOW","confidence":80,"reasoning":"brief reason"}
+
+Consider: patient age (${context.age || 'unknown'}), sex (${context.sex || 'unknown'}), chronic conditions (${(context.chronicConditions || []).join(', ') || 'none'}).
+When uncertain, escalate to a HIGHER triage level.`;
+
+  const response = await anthropic.messages.create({
+    model: 'claude-sonnet-4-20250514',
+    max_tokens: 200,
+    system: systemPrompt,
+    messages: [{ role: 'user', content: symptoms }],
+  });
+
+  const text = response.content[0]?.text || '';
+  try {
+    const parsed = JSON.parse(text.replace(/```json|```/g, '').trim());
+    return parsed;
+  } catch (e) {
+    // Try to extract triage level from text
+    if (text.includes('RED')) return { triage_level: 'RED', confidence: 70 };
+    if (text.includes('ORANGE')) return { triage_level: 'ORANGE', confidence: 70 };
+    if (text.includes('GREEN')) return { triage_level: 'GREEN', confidence: 70 };
+    return { triage_level: 'YELLOW', confidence: 60 };
+  }
+}
+
 // ================== START ==================
 app.listen(process.env.PORT || 3000, () => {
-  console.log('🚀 BIZUSIZO v2.3 Orchestrator LIVE (Governance + Identity + Clinic Queue)');
+  console.log('🚀 BIZUSIZO v2.3 Orchestrator LIVE (Governance + Identity + Clinic Queue + Kiosk)');
 });
