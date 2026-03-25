@@ -1132,17 +1132,17 @@ Uyavuma?
   },
 
   facility_confirmed: {
-    en: (name) => `✅ Go to *${name}*.\n\nSafe travels. We will check in with you in 48 hours.`,
-    zu: (name) => `✅ Yana ku-*${name}*.\n\nUhambe kahle. Sizokubuza emva kwamahora angu-48.`,
-    xh: (name) => `✅ Yiya ku-*${name}*.\n\nUhambe kakuhle. Siza kukubuza emva kweeyure ezingama-48.`,
-    af: (name) => `✅ Gaan na *${name}*.\n\nVeilige reis. Ons sal oor 48 uur by jou inskakel.`,
-    nso: (name, dist) => `✅ Yaa go *${name}*.\n\nO sepele gabotse. Re tla go botšiša morago ga diiri tše 48.`,
-    tn: (name) => `✅ Ya go *${name}*.\n\nO tsamae sentle. Re tla go botsa morago ga diura di le 48.`,
-    st: (name) => `✅ Eya ho *${name}*.\n\nO tsamae hantle. Re tla o botsa kamora hora tse 48.`,
-    ts: (name) => `✅ Famba u ya eka *${name}*.\n\nU famba kahle. Hi ta ku vutisa endzhaku ka tiawara ta 48.`,
-    ss: (name) => `✅ Hamba uye ku-*${name}*.\n\nUhambe kahle. Sitakubutsa emvakwema-awa langu-48.`,
-    ve: (name) => `✅ Iyani kha *${name}*.\n\nNi tshimbile zwavhuḓi. Ri ḓo ni vhudzisa nga murahu ha awara dza 48.`,
-    nr: (name) => `✅ Iya ku-*${name}*.\n\nUkhambe kuhle. Sizakubuza ngemva kwama-iri angu-48.`
+    en: (name) => `✅ Go to *${name}*.\n\n📋 *When you arrive:*\n1. Go to reception\n2. Tell them: "I used BIZUSIZO"\n3. Show your reference number (type *code* to see it)\n4. They already have your details\n\nSafe travels. We will check in with you in 48 hours.`,
+    zu: (name) => `✅ Yana ku-*${name}*.\n\n📋 *Uma ufika:*\n1. Yana e-reception\n2. Batshele: "Ngisebenzise i-BIZUSIZO"\n3. Bakhombise inombolo yakho (bhala *code*)\n4. Sebe nemininingwane yakho\n\nUhambe kahle. Sizokubuza emva kwamahora angu-48.`,
+    xh: (name) => `✅ Yiya ku-*${name}*.\n\n📋 *Xa ufika:*\n1. Yiya e-reception\n2. Baxelele: "Ndisebenzise i-BIZUSIZO"\n3. Babonise inombolo yakho (bhala *code*)\n4. Banayo inkcazelo yakho\n\nUhambe kakuhle. Siza kukubuza emva kweeyure ezingama-48.`,
+    af: (name) => `✅ Gaan na *${name}*.\n\n📋 *Wanneer jy aankom:*\n1. Gaan na ontvangs\n2. Sê vir hulle: "Ek het BIZUSIZO gebruik"\n3. Wys jou verwysingsnommer (tik *code*)\n4. Hulle het reeds jou besonderhede\n\nVeilige reis. Ons sal oor 48 uur by jou inskakel.`,
+    nso: (name) => `✅ Yaa go *${name}*.\n\n📋 *Ge o fihla:*\n1. Yaa go reception\n2. Ba botše: "Ke šomišitše BIZUSIZO"\n3. Ba bontšhe nomoro ya gago (ngwala *code*)\n4. Ba na le tshedimošo ya gago\n\nO sepele gabotse. Re tla go botšiša morago ga diiri tše 48.`,
+    tn: (name) => `✅ Ya go *${name}*.\n\n📋 *Fa o goroga:*\n1. Ya kwa go reception\n2. Ba bolelele: "Ke dirisitse BIZUSIZO"\n3. Ba bontshe nomoro ya gago (kwala *code*)\n4. Ba na le tshedimosetso ya gago\n\nO tsamae sentle. Re tla go botsa morago ga diura di le 48.`,
+    st: (name) => `✅ Eya ho *${name}*.\n\n📋 *Ha o fihla:*\n1. Eya ho reception\n2. Ba bolelle: "Ke sebedisitse BIZUSIZO"\n3. Ba bontshe nomoro ya hao (ngola *code*)\n4. Ba na le tlhahisoleseding ya hao\n\nO tsamae hantle. Re tla o botsa kamora hora tse 48.`,
+    ts: (name) => `✅ Famba u ya eka *${name}*.\n\n📋 *Loko u fika:*\n1. Yaa eka reception\n2. Va byela: "Ndzi tirhisile BIZUSIZO"\n3. Va kombela nomboro ya wena (tsala *code*)\n4. Va na vuxokoxoko bya wena\n\nU famba kahle. Hi ta ku vutisa endzhaku ka tiawara ta 48.`,
+    ss: (name) => `✅ Hamba uye ku-*${name}*.\n\n📋 *Nawufika:*\n1. Ya ku-reception\n2. Batjele: "Ngisebentise i-BIZUSIZO"\n3. Bakhombise inombolo yakho (bhala *code*)\n4. Sebe nemininingwane yakho\n\nUhambe kahle. Sitakubutsa emvakwema-awa langu-48.`,
+    ve: (name) => `✅ Iyani kha *${name}*.\n\n📋 *Musi ni tshi swika:*\n1. Iyani kha reception\n2. Vha vhudzeni: "Ndo shumisa BIZUSIZO"\n3. Vha sumbedzeni nomboro yaṋu (ṅwalani *code*)\n4. Vha na mafhungo aṋu\n\nNi tshimbile zwavhuḓi. Ri ḓo ni vhudzisa nga murahu ha awara dza 48.`,
+    nr: (name) => `✅ Iya ku-*${name}*.\n\n📋 *Nawufikako:*\n1. Iya ku-reception\n2. Babatjele: "Ngisebenzise i-BIZUSIZO"\n3. Bakhombise inomboro yakho (tlola *code*)\n4. Banawo imininingwane yakho\n\nUkhambe kuhle. Sizakubuza ngemva kwama-iri angu-48.`
   },
 
   facility_alternatives: {
@@ -4074,6 +4074,28 @@ async function orchestrate(patientId, from, message, session) {
       }
       return;
     }
+
+    // --- ARRIVAL CHECK-IN ---
+    const ARRIVE_WORDS = ['arrived','here','im here',"i'm here",'checked in','check in',
+      'ngifikile','sengifikile','ndifikile','ek is hier','ke fihlile','ke gorogile',
+      'ke fihlile','ndzi fikile','sengifikile','ndo swika','ngifikile'];
+    if (ARRIVE_WORDS.includes(message)) {
+      try {
+        await supabase.from('clinic_queue')
+          .update({ notes: 'ARRIVED — confirmed via WhatsApp at ' + new Date().toLocaleTimeString('en-ZA') })
+          .eq('patient_id', patientId)
+          .eq('status', 'waiting');
+      } catch (e) { console.error('[ARRIVE] DB update failed:', e.message); }
+
+      const arriveMsg = {
+        en: `✅ *Welcome!* You have checked in.\n\nPlease take a seat. The nurse will call you when it's your turn.\n\nYour reference: *${session.studyCode || 'N/A'}*`,
+        zu: `✅ *Siyakwemukela!* Usuzibhalisile.\n\nSicela uhlale phansi. Unesi uzokubiza uma kufika ithuba lakho.\n\nInombolo yakho: *${session.studyCode || 'N/A'}*`,
+        xh: `✅ *Wamkelekile!* Ubhalise.\n\nNceda uhlale phantsi. Umongikazi uza kukubiza xa kufika ithuba lakho.\n\nInombolo yakho: *${session.studyCode || 'N/A'}*`,
+        af: `✅ *Welkom!* Jy het ingeboek.\n\nNeem asseblief 'n sitplek. Die verpleegster sal jou roep wanneer jy aan die beurt is.\n\nJou verwysing: *${session.studyCode || 'N/A'}*`,
+      };
+      await sendWhatsAppMessage(from, arriveMsg[lang] || arriveMsg['en']);
+      return;
+    }
   }
 
   // Handle language selection after "language" command
@@ -4745,15 +4767,52 @@ async function handleMessage(msgObj) {
       } else if (text === '2') {
         await sendWhatsAppMessage(from, msg('follow_up_same', lang));
       } else if (text === '3') {
+        // ESCALATION: symptoms worsening — upgrade recommendation
+        const prevLevel = followUp.triage_level || session.lastTriage?.triage_level;
+        let escalateMsg;
+
+        if (prevLevel === 'GREEN') {
+          // GREEN → YELLOW: now needs a clinic visit
+          escalateMsg = {
+            en: '⚠️ Your symptoms are worsening. You need to *visit a clinic today*. Do not delay.\n\nIf you cannot get there safely, call *10177*.\n\nWe have upgraded your triage to *URGENT*.',
+            zu: '⚠️ Izimpawu zakho ziyabhibha. Udinga *ukuvakashela umtholampilo namuhla*. Ungalibali.\n\nUma ungakwazi ukuya ngokuphepha, shaya *10177*.\n\nSikhuphulile isimo sakho sokuhlolwa saba ngu-*KUPHUTHUMA*.',
+            xh: '⚠️ Iimpawu zakho ziyabhibha. Kufuneka *utyelele ikliniki namhlanje*. Musa ukulibazisa.\n\nUkuba awukwazi ukuya ngokukhuselekileyo, tsalela *10177*.\n\nSiyinyusile inqanaba lakho lokuhlolwa laba yi-*KUNGXAMISEKILE*.',
+            af: '⚠️ Jou simptome vererger. Jy moet *vandag \'n kliniek besoek*. Moenie uitstel nie.\n\nAs jy nie veilig daar kan kom nie, bel *10177*.\n\nOns het jou triage na *DRINGEND* opgegradeer.',
+          };
+          await logTriage({ patient_id: patientId, triage_level: 'YELLOW', confidence: 100, escalation: true, pathway: 'follow_up_escalation_green_to_yellow', symptoms: 'Follow-up: patient reports worsening (was GREEN → now YELLOW)' });
+
+        } else if (prevLevel === 'YELLOW') {
+          // YELLOW → ORANGE: needs urgent care NOW
+          if (isClinicOpen()) {
+            escalateMsg = {
+              en: '🟠 *URGENT — your symptoms are getting worse.* Go to the clinic *immediately* and tell them you were triaged as VERY URGENT by BIZUSIZO.\n\nIf you cannot travel safely, call *10177*.',
+              zu: '🟠 *KUPHUTHUMA — izimpawu zakho ziyabhibha.* Yana emtholampilo *MANJE* ubatshele ukuthi uhloliwe njengo-KUPHUTHUMA KAKHULU yi-BIZUSIZO.\n\nUma ungakwazi ukuhamba ngokuphepha, shaya *10177*.',
+              xh: '🟠 *KUNGXAMISEKILE — iimpawu zakho ziyabhibha.* Yiya ekliniki *NGOKU* ubaxelele ukuba uhlolwe njenge-KUNGXAMISEKE KAKHULU yi-BIZUSIZO.\n\nUkuba awukwazi ukuhamba ngokukhuselekileyo, tsalela *10177*.',
+              af: '🟠 *DRINGEND — jou simptome vererger.* Gaan *dadelik* na die kliniek en sê jy is as BAIE DRINGEND deur BIZUSIZO getrieer.\n\nAs jy nie veilig kan reis nie, bel *10177*.',
+            };
+          } else {
+            escalateMsg = {
+              en: '🟠 *URGENT — your symptoms are getting worse.* The clinic is closed. Go to your nearest *hospital emergency unit* immediately.\n\nOr call *10177* for an ambulance.',
+              zu: '🟠 *KUPHUTHUMA — izimpawu zakho ziyabhibha.* Umtholampilo uvaliwe. Yana *esibhedlela esiseduze* ewodini yeziphuthumayo MANJE.\n\nNoma shaya *10177*.',
+              xh: '🟠 *KUNGXAMISEKILE — iimpawu zakho ziyabhibha.* Ikliniki ivaliwe. Yiya *esibhedlele esikufutshane* kwicandelo lezongxamiseko NGOKU.\n\nOkanye tsalela *10177*.',
+              af: '🟠 *DRINGEND — jou simptome vererger.* Die kliniek is gesluit. Gaan *dadelik na die naaste hospitaal noodafdeling*.\n\nOf bel *10177*.',
+            };
+          }
+          await logTriage({ patient_id: patientId, triage_level: 'ORANGE', confidence: 100, escalation: true, pathway: 'follow_up_escalation_yellow_to_orange', symptoms: 'Follow-up: patient reports worsening (was YELLOW → now ORANGE)' });
+
+        } else {
+          // ORANGE or other — straight to emergency
+          escalateMsg = {
+            en: '🔴 *Your symptoms are worsening. Call an ambulance NOW: 10177 or 084 124 (ER24).* Do not wait.\n\nIf you can get to a hospital emergency unit, go immediately.',
+            zu: '🔴 *Izimpawu zakho ziyabhibha. Shaya i-ambulensi MANJE: 10177 noma 084 124 (ER24).* Ungalindi.\n\nUma ungaya esibhedlela ewodini yeziphuthumayo, hamba MANJE.',
+            xh: '🔴 *Iimpawu zakho ziyabhibha. Tsalela i-ambulensi NGOKU: 10177 okanye 084 124 (ER24).* Musa ukulinda.\n\nUkuba ungaya esibhedlele kwicandelo lezongxamiseko, yiya NGOKU.',
+            af: '🔴 *Jou simptome vererger. Bel \'n ambulans NOU: 10177 of 084 124 (ER24).* Moenie wag nie.\n\nAs jy by \'n hospitaal noodafdeling kan uitkom, gaan dadelik.',
+          };
+          await logTriage({ patient_id: patientId, triage_level: 'RED', confidence: 100, escalation: true, pathway: 'follow_up_escalation_to_red', symptoms: 'Follow-up: patient reports worsening (was ' + prevLevel + ' → escalated to RED)' });
+        }
+
+        await sendWhatsAppMessage(from, escalateMsg[lang] || escalateMsg['en']);
         await sendWhatsAppMessage(from, msg('follow_up_worse', lang));
-        await logTriage({
-          patient_id: patientId,
-          triage_level: 'RECHECK',
-          confidence: 100,
-          escalation: true,
-          pathway: 'follow_up_escalation',
-          symptoms: 'follow-up worsening'
-        });
       }
 
       await supabase
@@ -5737,6 +5796,77 @@ app.put('/api/clinic/queue/:id/call', requireDashboardAuth, async (req, res) => 
       }
     }
 
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// PUT /api/clinic/queue/:id/feedback — Nurse triage feedback (agree/disagree)
+app.put('/api/clinic/queue/:id/feedback', requireDashboardAuth, async (req, res) => {
+  try {
+    const { verdict, nurse_triage_level, nurse_name } = req.body;
+
+    // Get current queue entry
+    const { data: entry } = await supabase
+      .from('clinic_queue')
+      .select('patient_id, triage_level, notes')
+      .eq('id', req.params.id)
+      .single();
+
+    if (!entry) return res.status(404).json({ error: 'Patient not found' });
+
+    // Store feedback in notes
+    const feedbackNote = `Nurse ${nurse_name || 'unknown'}: ${verdict}${nurse_triage_level ? ' → ' + nurse_triage_level : ''} (AI was ${entry.triage_level})`;
+    const updatedNotes = (entry.notes ? entry.notes + ' | ' : '') + feedbackNote;
+
+    const update = { notes: updatedNotes };
+
+    // If nurse disagrees, update triage level and potentially reassign queue
+    if (verdict === 'disagree' && nurse_triage_level) {
+      update.triage_level = nurse_triage_level;
+      if (['RED', 'ORANGE'].includes(nurse_triage_level) && entry.triage_level !== 'RED' && entry.triage_level !== 'ORANGE') {
+        update.queue_type = 'fast_track';
+      } else if (['YELLOW', 'GREEN'].includes(nurse_triage_level) && ['RED', 'ORANGE'].includes(entry.triage_level)) {
+        update.queue_type = 'routine';
+      }
+    }
+
+    await supabase.from('clinic_queue').update(update).eq('id', req.params.id);
+
+    // Log feedback for research
+    await supabase.from('triage_logs').insert({
+      patient_id: entry.patient_id,
+      triage_level: nurse_triage_level || entry.triage_level,
+      confidence: 100,
+      escalation: false,
+      pathway: 'nurse_feedback',
+      facility_name: null,
+      symptoms: `Nurse ${verdict}: AI=${entry.triage_level}, Nurse=${nurse_triage_level || entry.triage_level}`,
+    });
+
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// POST /api/clinic/arrive — Patient arrival check-in via WhatsApp
+// Called when patient sends "arrived" or "here" command
+app.post('/api/clinic/arrive', async (req, res) => {
+  try {
+    const { patient_id } = req.body;
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+
+    const { data, error } = await supabase
+      .from('clinic_queue')
+      .update({ notes: 'ARRIVED — confirmed via WhatsApp' })
+      .eq('patient_id', patient_id)
+      .eq('status', 'waiting')
+      .gte('checked_in_at', todayStart.toISOString());
+
+    if (error) throw error;
     res.json({ success: true });
   } catch (e) {
     res.status(500).json({ error: e.message });
