@@ -206,7 +206,7 @@ a{color:#60a5fa;text-decoration:none}
       </div>
       <div style="background:#0a1120;border:1px solid #131b2e;border-radius:10px;overflow:auto;max-height:70vh">
         <table class="exp-table">
-          <thead><tr><th>Surname</th><th>Name</th><th>DOB</th><th>Sex</th><th>Triage</th><th>Chronic</th><th>File Status</th><th>File Hints</th><th>Time</th></tr></thead>
+          <thead><tr><th>Surname</th><th>Name</th><th>DOB</th><th>Sex</th><th>Triage</th><th>Symptoms</th><th>Chronic</th><th>File Status</th><th>File Hints</th><th>Time</th></tr></thead>
           <tbody id="exp-body"></tbody>
         </table>
       </div>
@@ -351,7 +351,7 @@ async function refreshExpected(){
   document.getElementById('exp-count').textContent=d.count+' patients expected · '+d.date;
   const tb=document.getElementById('exp-body');
   if(!d.patients||d.patients.length===0){
-    tb.innerHTML='<tr><td colspan="9" style="text-align:center;padding:32px;color:#334155">No patients triaged for today yet. They will appear here as patients use BIZUSIZO.</td></tr>';
+    tb.innerHTML='<tr><td colspan="10" style="text-align:center;padding:32px;color:#334155">No patients triaged for today yet. They will appear here as patients use BIZUSIZO.</td></tr>';
     return;
   }
   tb.innerHTML=d.patients.map(p=>{
@@ -369,6 +369,7 @@ async function refreshExpected(){
       '<td>'+(p.dob||'—')+'</td>'+
       '<td>'+(p.sex?p.sex.charAt(0).toUpperCase():'—')+'</td>'+
       '<td>'+triageBadge(p.triage_level)+(p.triage_level==='ORANGE'?' <span style="display:inline-block;padding:1px 5px;border-radius:3px;font-size:8px;font-weight:700;background:rgba(249,115,22,.15);color:#f97316;border:1px solid rgba(249,115,22,.3);vertical-align:middle">FAST-TRACK</span>':'')+'</td>'+
+      '<td style="max-width:180px;font-size:10px;color:#94a3b8;line-height:1.3">'+(p.symptoms_summary?((p.symptoms_summary||'').length>120?(p.symptoms_summary||'').slice(0,120)+'…':p.symptoms_summary):'—')+'</td>'+
       '<td>'+(chronic||'—')+'</td>'+
       '<td>'+fs+'</td>'+
       '<td>'+hints+'</td>'+
@@ -463,7 +464,7 @@ async function refreshNurse(){
   document.getElementById('nurse-columns').innerHTML=types.map(t=>{
     return '<div class="q-col"><div class="q-hdr" style="border-bottom-color:'+t.color+'"><div class="q-hdr-title">'+t.icon+' Next in '+t.label+'</div></div>'+(t.data.length===0?'<div class="q-empty">Queue empty</div>':t.data.slice(0,5).map((p,i)=>{
       const w=waitMin(p.checked_in_at);
-      return '<div style="padding:8px 14px;border-bottom:1px solid #131b2e"><div style="display:flex;justify-content:space-between;align-items:center"><div><span style="font-size:11px;font-weight:600;color:#475569;margin-right:6px">#'+(i+1)+'</span><span style="font-size:12px;font-weight:600;color:#e2e8f0">'+(p.patient_name||'Unknown')+'</span></div>'+triageBadge(p.triage_level)+'</div><div style="font-size:10px;color:#475569;margin-top:3px">Wait: '+w+' min · '+(p.symptoms_summary?(p.symptoms_summary||'').slice(0,50):'No symptoms recorded')+'</div><div class="p-actions" style="margin-top:4px"><button class="btn btn-call" onclick="callPatient(\''+p.id+'\')">✓ Call</button><button class="btn btn-noshow" onclick="noShow(\''+p.id+'\')">✕ No-show</button></div></div>';
+      return '<div style="padding:8px 14px;border-bottom:1px solid #131b2e"><div style="display:flex;justify-content:space-between;align-items:center"><div><span style="font-size:11px;font-weight:600;color:#475569;margin-right:6px">#'+(i+1)+'</span><span style="font-size:12px;font-weight:600;color:#e2e8f0">'+(p.patient_name||'Unknown')+'</span></div>'+triageBadge(p.triage_level)+'</div>'+(p.symptoms_summary?'<div style="font-size:10px;color:#94a3b8;margin-top:4px;padding:4px 6px;background:rgba(255,255,255,.03);border-radius:4px;line-height:1.4">'+((p.symptoms_summary||'').length>140?(p.symptoms_summary||'').slice(0,140)+'…':p.symptoms_summary)+'</div>':'')+'<div style="font-size:10px;color:#475569;margin-top:3px">Waiting: '+w+' min</div><div class="p-actions" style="margin-top:4px"><button class="btn btn-call" onclick="callPatient(\''+p.id+'\')">✓ Call</button><button class="btn btn-noshow" onclick="noShow(\''+p.id+'\')">✕ No-show</button><button class="btn" style="color:#22c55e;border-color:rgba(34,197,94,.3);background:rgba(34,197,94,.08)" onclick="nurseFeedback(\''+p.id+'\',\'agree\')">👍 Agree</button><button class="btn" style="color:#f97316;border-color:rgba(249,115,22,.3);background:rgba(249,115,22,.08)" onclick="nurseFeedback(\''+p.id+'\',\'disagree\')">👎 Disagree</button></div></div>';
     }).join(''))+'</div>';
   }).join('');
 }
@@ -592,6 +593,26 @@ function printExpected(){
   win.document.write('</body></html>');
   win.document.close();
   win.print();
+}
+
+// ==================== NURSE TRIAGE FEEDBACK (#4) ====================
+async function nurseFeedback(id,verdict){
+  let nurseLevel=null;
+  if(verdict==='disagree'){
+    nurseLevel=prompt('What should the triage level be? (RED / ORANGE / YELLOW / GREEN)','');
+    if(!nurseLevel)return;
+    nurseLevel=nurseLevel.toUpperCase().trim();
+    if(!['RED','ORANGE','YELLOW','GREEN'].includes(nurseLevel)){alert('Invalid level. Use RED, ORANGE, YELLOW, or GREEN.');return;}
+  }
+  const res=await api('/api/clinic/queue/'+id+'/feedback',{method:'PUT',body:JSON.stringify({
+    verdict,
+    nurse_triage_level:nurseLevel,
+    nurse_name:UNAME
+  })});
+  if(res&&res.success){
+    alert(verdict==='agree'?'Triage confirmed. Thank you!':'Feedback recorded. Triage updated to '+nurseLevel+'.');
+    refresh();
+  }
 }
 
 // ==================== WALK-IN REGISTRATION ====================
