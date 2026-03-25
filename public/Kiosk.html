@@ -106,7 +106,54 @@ function showLanguage(){
   state.step='language';
   render('<div class="card"><h2>BIZUSIZO</h2><p>Choose your language / Khetha ulimi lwakho</p><div class="btn-grid cols-2">'+
     LANGS.map(l=>'<div class="btn" onclick="selectLang(\''+l.code+'\')">'+l.name+'</div>').join('')+
-  '</div></div><div style="text-align:center;margin-top:16px"><div class="btn btn-danger" style="display:inline-flex;width:auto;padding:14px 28px" onclick="alert(\'Call 10177 or 084 124 (ER24) immediately!\')">EMERGENCY / KUPHUTHUMILE</div></div>');
+  '</div></div><div style="text-align:center;margin-top:16px"><div class="btn btn-danger" style="display:inline-flex;width:auto;padding:14px 28px" onclick="kioskEmergency()">EMERGENCY / KUPHUTHUMILE</div></div>');
+}
+
+async function kioskEmergency(){
+  render('<div class="card" style="border:3px solid #dc2626"><div class="result-box">'+
+    '<div style="font-size:56px;margin-bottom:8px">\uD83D\uDEA8</div>'+
+    '<h3 style="color:#dc2626;font-size:24px">Alerting the nurse...</h3>'+
+    '<p style="font-size:16px;color:#4b5563">Sazisa unesi...</p>'+
+    '</div></div>');
+
+  try {
+    const res = await fetch(API+'/api/kiosk/triage', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        firstName: 'EMERGENCY',
+        surname: 'WALK-IN',
+        dob: '',
+        sex: '',
+        category: '1',
+        categoryName: 'Emergency at kiosk',
+        severity: 'severe',
+        symptoms: 'Patient pressed EMERGENCY button at kiosk entrance. Needs immediate nurse attention.',
+        language: 'en',
+      })
+    });
+    const data = await res.json();
+    render('<div class="card" style="border:3px solid #dc2626"><div class="result-box">'+
+      '<div style="font-size:56px;margin-bottom:8px">\uD83D\uDEA8</div>'+
+      '<h3 style="color:#dc2626;font-size:28px">NURSE HAS BEEN ALERTED</h3>'+
+      '<p style="font-size:20px;font-weight:700;color:#dc2626;margin:12px 0">UNESI WAZISIWE</p>'+
+      '<p style="font-size:18px;color:#1f2937;margin:16px 0">Please stay here. A nurse will come to you.</p>'+
+      '<p style="font-size:16px;color:#4b5563">Sicela ulinde lapha. Unesi uzokuza kuwe.</p>'+
+      '<div style="margin-top:20px;padding:16px;background:#fef2f2;border-radius:12px">'+
+      '<p style="font-size:14px;color:#dc2626;font-weight:600">You are #1 priority — FAST-TRACK</p>'+
+      (data.ref_code?'<div class="ref-num">'+data.ref_code+'</div>':'')+
+      '</div></div></div>'+
+      '<button class="btn-primary" style="background:#64748b;border-color:#64748b;margin-top:16px" onclick="resetKiosk()">Done (New Patient)</button>');
+  } catch(e){
+    render('<div class="card" style="border:3px solid #dc2626"><div class="result-box">'+
+      '<div style="font-size:56px;margin-bottom:8px">\uD83D\uDEA8</div>'+
+      '<h3 style="color:#dc2626;font-size:24px">EMERGENCY</h3>'+
+      '<p style="font-size:18px;font-weight:700;margin:16px 0">System error \u2014 please tell a nurse directly</p>'+
+      '<p style="font-size:16px">Tshela unesi ngqo</p>'+
+      '</div></div>'+
+      '<button class="btn-primary" style="background:#64748b;border-color:#64748b" onclick="resetKiosk()">Back</button>');
+  }
+  setTimeout(()=>{ resetKiosk(); }, 90000);
 }
 
 function selectLang(code){
@@ -242,7 +289,7 @@ function showResult(data){
   const labels = {RED:'Emergency',ORANGE:'Very Urgent',YELLOW:'Urgent',GREEN:'Routine'};
   const emojis = {RED:'\uD83D\uDEA8',ORANGE:'\uD83D\uDFE0',YELLOW:'\uD83D\uDFE1',GREEN:'\uD83D\uDFE2'};
   const instructions = {
-    RED:{en:'Tell a nurse IMMEDIATELY. Do not sit down.',zu:'Tshela unesi MANJE. Ungahlali phansi.'},
+    RED:{en:'A nurse has been alerted. Stay here — you are #1 priority.',zu:'Unesi wazisiwe. Linda lapha — ubaluleke kakhulu.'},
     ORANGE:{en:'Tell reception you are VERY URGENT. You will be fast-tracked.',zu:'Tshela i-reception ukuthi KUPHUTHUMA KAKHULU. Uzosheshiswa.'},
     YELLOW:{en:'Have a seat. The nurse will call your name.',zu:'Hlala phansi. Unesi uzokubiza ngegama.'},
     GREEN:{en:'You may be able to manage at home. Ask the nurse for advice.',zu:'Ungakwazi ukuzinakekela ekhaya. Buza unesi iseluleko.'},
