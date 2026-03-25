@@ -995,17 +995,75 @@ Uyavuma?
   },
 
   triage_orange: {
-    en: '🟠 *VERY URGENT*\nGo to the nearest hospital emergency unit NOW.',
-    zu: '🟠 *KUPHUTHUMA KAKHULU*\nYa esibhedlela esiseduze MANJE — ewodini yeziphuthumayo.',
-    xh: '🟠 *KUNGXAMISEKE KAKHULU*\nYiya esibhedlele esikufutshane NGOKU — kwicandelo lezongxamiseko.',
-    af: '🟠 *BAIE DRINGEND*\nGaan NA die naaste hospitaal noodafdeling NOU.',
-    nso: '🟠 *GO ŠUTIŠWA KUDU*\nYa sepetleleng sa kgauswi BJALE — ka karolong ya tšhoganetšo.',
-    tn: '🟠 *GO TSHOGANYETSO THATA*\nYa bookelong jo bo gaufi JAANONG — ka karolong ya tshoganyetso.',
-    st: '🟠 *HO POTLAKILE HAHOLO*\nEa sepetlele se haufi HONA JOALE — karolong ya tshohanyetso.',
-    ts: '🟠 *SWI HATLISA NGOPFU*\nYa exibedlhele xa kusuhi SWESWI — ka xiyenge xa swihatla.',
-    ss: '🟠 *KUSHESHISA KAKHULU*\nYa esibhedlela leseduze NYALO — endlini yekusheshisa.',
-    ve: '🟠 *ZWO ṰOḒEA VHUKUMA*\nYani sibadela tshi re tsini ZWINO — kha tshiimiswa tsha tshoganetso.',
-    nr: '🟠 *KUPHUTHUMA KHULU*\nYa esibhedlela esiseduze NJE — esigeni seziphuthumako.'
+    en: '🟠 *VERY URGENT*\nYou need care quickly.',
+    zu: '🟠 *KUPHUTHUMA KAKHULU*\nUdinga usizo ngokushesha.',
+    xh: '🟠 *KUNGXAMISEKE KAKHULU*\nUfuna inkathalo ngokukhawuleza.',
+    af: '🟠 *BAIE DRINGEND*\nJy het vinnig sorg nodig.',
+    nso: '🟠 *GO ŠUTIŠWA KUDU*\nO hloka tlhokomelo ka pela.',
+    tn: '🟠 *GO TSHOGANYETSO THATA*\nO tlhoka tlhokomelo ka bonako.',
+    st: '🟠 *HO POTLAKILE HAHOLO*\nO hloka tlhokomelo kapele.',
+    ts: '🟠 *SWI HATLISA NGOPFU*\nU lava vukorhokeri hi ku hatlisa.',
+    ss: '🟠 *KUSHESHISA KAKHULU*\nUdzinga lusito masinyane.',
+    ve: '🟠 *ZWO ṰOḒEA VHUKUMA*\nNi ṱoḓa tshumelo nga u ṱavhanya.',
+    nr: '🟠 *KUPHUTHUMA KHULU*\nUdinga lusizo ngokurhaba.'
+  },
+
+  // Time-aware ORANGE routing messages
+  triage_orange_clinic: {
+    en: (name, dist) => `🏥 Go to *${name}* (${dist} km) NOW.\n\nTell reception you were triaged as *VERY URGENT* by BIZUSIZO. You will be fast-tracked.\n\nDo not wait at home.`,
+    zu: (name, dist) => `🏥 Yana ku-*${name}* (${dist} km) MANJE.\n\nTshela i-reception ukuthi uhloliwe njengo-*KUPHUTHUMA KAKHULU* yi-BIZUSIZO. Uzosheshiswa.\n\nUngalindi ekhaya.`,
+    xh: (name, dist) => `🏥 Yiya ku-*${name}* (${dist} km) NGOKU.\n\nXelela i-reception ukuba uhlolwe njenge-*KUNGXAMISEKE KAKHULU* yi-BIZUSIZO. Uza kukhawuleziswa.\n\nMusa ukulinda ekhaya.`,
+    af: (name, dist) => `🏥 Gaan na *${name}* (${dist} km) NOU.\n\nS\u00EA vir ontvangs jy is as *BAIE DRINGEND* deur BIZUSIZO getrieer. Jy sal vinnig gehelp word.\n\nMoenie by die huis wag nie.`,
+  },
+
+  triage_orange_hospital: {
+    en: 'The clinic is closed now. Go to your nearest hospital emergency unit immediately.',
+    zu: 'Umtholampilo uvaliwe manje. Yana esibhedlela esiseduze — ewodini yeziphuthumayo.',
+    xh: 'Ikliniki ivaliwe ngoku. Yiya esibhedlele esikufutshane — kwicandelo lezongxamiseko.',
+    af: 'Die kliniek is nou gesluit. Gaan na jou naaste hospitaal noodafdeling dadelik.',
+    nso: 'Kiliniki e tswaletšwe bjale. Ya sepetleleng sa kgauswi — ka karolong ya tšhoganetšo.',
+    tn: 'Kliniki e tswaletswe jaanong. Ya bookelong jo bo gaufi — ka karolong ya tshoganyetso.',
+    st: 'Kliniki e koetswe joale. Eya sepetlele se haufi — karolong ya tshohanyetso.',
+    ts: 'Kliniki yi pfariwile sweswi. Ya exibedlhele xa kusuhi — ka xiyenge xa swihatla.',
+    ss: 'Ikliniki ivaliwe nyalo. Ya esibhedlela leseduze — endlini yekusheshisa.',
+    ve: 'Kiliniki yo valwa zwino. Iyani sibadela tshi re tsini — kha tshiimiswa tsha tshoganetso.',
+    nr: 'Ikliniki ivaliwe nje. Ya esibhedlela esiseduze — esigeni seziphuthumako.'
+  },
+
+  // Transport safety question for ORANGE
+  ask_transport_safety: {
+    en: 'Can you travel to the facility safely?\n\n1 — Yes, I can get there myself or someone can take me\n2 — No, I am too unwell to travel safely\n3 — I have no transport',
+    zu: 'Ungaya endaweni yokulapha ngokuphepha?\n\n1 — Yebo, ngingaya ngokwami noma umuntu angihambisa\n2 — Cha, ngigula kakhulu ukuhamba ngokuphepha\n3 — Anginayo indlela yokuhamba',
+    xh: 'Ungahamba uye kwindawo yokugula ngokukhuselekileyo?\n\n1 — Ewe, ndingaya ndodwa okanye umntu angandisa\n2 — Hayi, ndigula kakhulu ukuhamba ngokukhuselekileyo\n3 — Andinayo indlela yokuhamba',
+    af: 'Kan jy veilig na die fasiliteit reis?\n\n1 — Ja, ek kan self gaan of iemand kan my neem\n2 — Nee, ek is te siek om veilig te reis\n3 — Ek het geen vervoer nie',
+    nso: 'O ka ya lefelong la kalafo ka polokego?\n\n1 — Ee, nka ya ka bonna goba motho a ka ntšhiša\n2 — Aowa, ke lwala kudu go sepela ka polokego\n3 — Ga ke na sefata',
+    tn: 'O ka ya lefelong la kalafi ka polokesego?\n\n1 — Ee, nka ya ka bonna kgotsa motho a ka ntisa\n2 — Nnyaa, ke lwala thata go tsamaya ka polokesego\n3 — Ga ke na sefata',
+    st: 'O ka ya lefelong la bophelo ka polokeho?\n\n1 — E, nka ya ka bonna kapa motho a ka ntisa\n2 — Tjhe, ke kula haholo ho tsamaya ka polokeho\n3 — Ha ke na sefata',
+    ts: 'U nga ya endhawini yo kufumela hi ku hlayiseka?\n\n1 — Ina, ndzi nga ya hi ndzi ri ndzexe kumbe munhu a nga ndzi yisa\n2 — Ee-ee, ndzi vabya ngopfu ku famba hi ku hlayiseka\n3 — A ndzi na xifambisi',
+    ss: 'Ungaya endzaweni yelatjhwa ngekuphepha?\n\n1 — Yebo, ngingaya ngedvwa noma umuntfu angihambisa\n2 — Cha, ngigula kakhulu kuhamba ngekuphepha\n3 — Anginayo indlela yekuhamba',
+    ve: 'Ni nga ya fhethu ha u alafhiwa nga u tsireledza?\n\n1 — Ee, ndi nga ya nga ndoṱhe kana muthu a nga ntshimbila\n2 — Hai, ndi khou lwala vhukuma u tshimbila nga u tsireledza\n3 — A thi na tshifhambisi',
+    nr: 'Ungaya endaweni yokulatjhwa ngokuphepha?\n\n1 — Iye, ngingaya ngedwa namkha umuntu angangihambisa\n2 — Awa, ngigula khulu ukukhamba ngokuphepha\n3 — Anginayo indlela yokukhamba',
+  },
+
+  transport_safe: {
+    en: 'Good. Please leave now — do not delay.',
+    zu: 'Kuhle. Sicela uhambe manje — ungalibali.',
+    xh: 'Kulungile. Nceda uhambe ngoku — musa ukulibazisa.',
+    af: 'Goed. Vertrek asseblief nou — moenie uitstel nie.',
+  },
+
+  transport_unsafe: {
+    en: '🚑 Call an ambulance NOW:\n*10177* (public) or *084 124* (ER24)\n\nTell them your symptoms and location.\n\nIf the ambulance is slow, ask someone nearby to drive you to the nearest hospital emergency unit. Do not wait at home.',
+    zu: '🚑 Shaya i-ambulensi MANJE:\n*10177* (kahulumeni) noma *084 124* (ER24)\n\nBatshele izimpawu zakho nendawo yakho.\n\nUma i-ambulensi iphuza, cela umuntu oseduze akushayele esibhedlela. Ungalindi ekhaya.',
+    xh: '🚑 Tsalela i-ambulensi NGOKU:\n*10177* (karhulumente) okanye *084 124* (ER24)\n\nBaxelele iimpawu zakho nendawo yakho.\n\nUkuba i-ambulensi ilibele, cela umntu okufutshane akuqhubele esibhedlele. Musa ukulinda ekhaya.',
+    af: '🚑 Bel \'n ambulans NOU:\n*10177* (publiek) of *084 124* (ER24)\n\nVertel hulle jou simptome en ligging.\n\nAs die ambulans stadig is, vra iemand naby om jou na die naaste hospitaal noodafdeling te ry. Moenie by die huis wag nie.',
+  },
+
+  transport_none: {
+    en: '🚑 Call an ambulance: *10177* or *084 124* (ER24)\n\nAlternatively, ask a neighbour, family member, or community member to take you. If you can reach a taxi rank, take a taxi to the nearest clinic or hospital.\n\nDo not stay at home — you need care today.',
+    zu: '🚑 Shaya i-ambulensi: *10177* noma *084 124* (ER24)\n\nNoma ucele umakhelwane, ilungu lomndeni, noma ilungu lomphakathi likuhambise. Uma ungafinyelela erenki yamatekisi, thatha itekisi uye emtholampilo noma esibhedlela.\n\nUngahlali ekhaya — udinga usizo namuhla.',
+    xh: '🚑 Tsalela i-ambulensi: *10177* okanye *084 124* (ER24)\n\nOkanye cela ummelwane, ilungu losapho, okanye ilungu lasekuhlaleni likuse. Ukuba ungafikelela kwindawo yamateksi, thatha iteksi uye ekliniki okanye esibhedlele.\n\nMusa ukuhlala ekhaya — ufuna inkathalo namhlanje.',
+    af: '🚑 Bel \'n ambulans: *10177* of *084 124* (ER24)\n\nOf vra \'n buurman, familielid, of gemeenskapslid om jou te neem. As jy \'n taxistaanplek kan bereik, neem \'n taxi na die naaste kliniek of hospitaal.\n\nMoenie by die huis bly nie — jy het vandag sorg nodig.',
   },
 
   triage_yellow: {
@@ -2014,10 +2072,31 @@ async function autoAddToQueue(patientId, from, session) {
   }
 }
 
+// ================== CLINIC HOURS HELPER ==================
+// Most SA PHC clinics operate 07:00–16:00 weekdays
+// Some extend to 16:30 or 17:00, but 07–16 is the safe window
+function isClinicOpen() {
+  const now = new Date();
+  // Convert to SAST (UTC+2)
+  const sast = new Date(now.getTime() + (2 * 60 * 60 * 1000));
+  const hour = sast.getUTCHours();
+  const day = sast.getUTCDay(); // 0=Sun, 6=Sat
+  // Weekdays 07:00–16:00
+  if (day >= 1 && day <= 5 && hour >= 7 && hour < 16) {
+    return true;
+  }
+  return false;
+}
+
 function getTriagePathway(triageLevel) {
   switch (triageLevel) {
     case 'RED': return { pathway: 'ambulance', facilityType: 'hospital' };
-    case 'ORANGE': return { pathway: 'emergency_unit', facilityType: 'hospital' };
+    case 'ORANGE':
+      // Time-aware: during clinic hours → clinic fast-track; after hours → hospital
+      if (isClinicOpen()) {
+        return { pathway: 'clinic_fast_track', facilityType: 'clinic' };
+      }
+      return { pathway: 'emergency_unit', facilityType: 'hospital' };
     case 'YELLOW': return { pathway: 'clinic_visit', facilityType: 'clinic' };
     default: return { pathway: 'self_care', facilityType: null };
   }
@@ -3655,6 +3734,114 @@ async function orchestrate(patientId, from, message, session) {
     }
   }
 
+  // ==================== STEP: TRANSPORT SAFETY (ORANGE patients) ====================
+  if (session.awaitingTransportSafety) {
+    session.awaitingTransportSafety = false;
+
+    if (message === '1') {
+      // Can travel safely — route to facility
+      await sendWhatsAppMessage(from, msg('transport_safe', lang));
+      // Continue to facility routing (same as YELLOW/GREEN flow)
+      const { pathway, facilityType } = getTriagePathway(session.lastTriage.triage_level);
+      session.lastPathway = pathway;
+
+      if (!session.location) {
+        session.pendingTriage = true;
+        await saveSession(patientId, session);
+        await sendWhatsAppMessage(from, msg('request_location', lang));
+        return;
+      }
+
+      const nearestFacilities = await findNearestFacilities(session.location, facilityType, 3);
+      if (nearestFacilities.length > 0) {
+        const nearest = nearestFacilities[0];
+        const alternatives = nearestFacilities.slice(1);
+        session.suggestedFacility = nearest;
+        session.alternativeFacilities = alternatives;
+
+        // During clinic hours: use the specific ORANGE clinic message
+        if (isClinicOpen() && facilityType === 'clinic') {
+          session.awaitingFacilityConfirm = true;
+          await saveSession(patientId, session);
+          await sendWhatsAppMessage(from, msg('triage_orange_clinic', lang, nearest.name, nearest.distance));
+          return;
+        }
+
+        session.awaitingFacilityConfirm = true;
+        await saveSession(patientId, session);
+        await sendWhatsAppMessage(from, msg('facility_suggest', lang, nearest.name, nearest.distance));
+      } else {
+        await logTriage({
+          patient_id: patientId,
+          triage_level: session.lastTriage.triage_level,
+          confidence: session.lastTriage.confidence,
+          escalation: false,
+          pathway,
+          facility_name: null,
+          location: session.location || null,
+          symptoms: session.lastSymptoms
+        });
+        await scheduleFollowUp(patientId, from, session.lastTriage.triage_level);
+        await sendWhatsAppMessage(from, msg('tips', lang));
+      }
+      await saveSession(patientId, session);
+      return;
+
+    } else if (message === '2') {
+      // Too unwell to travel — advise ambulance
+      await sendWhatsAppMessage(from, msg('transport_unsafe', lang));
+
+      // Also give nearest hospital if we have location
+      if (session.location) {
+        const nearestHospitals = await findNearestFacilities(session.location, 'hospital', 1);
+        if (nearestHospitals.length > 0) {
+          const nearest = nearestHospitals[0];
+          const hospitalMsg = {
+            en: `🏥 If ambulance is delayed, your nearest hospital is:\n*${nearest.name}* (${nearest.distance} km)\n\nAsk someone to drive you there.`,
+            zu: `🏥 Uma i-ambulensi iphuza, isibhedlela esiseduze:\n*${nearest.name}* (${nearest.distance} km)\n\nCela umuntu akushayele.`,
+            xh: `🏥 Ukuba i-ambulensi ilibele, isibhedlele esikufutshane:\n*${nearest.name}* (${nearest.distance} km)\n\nCela umntu akuqhubele.`,
+            af: `🏥 As die ambulans vertraag word, jou naaste hospitaal is:\n*${nearest.name}* (${nearest.distance} km)\n\nVra iemand om jou te ry.`,
+          };
+          await sendWhatsAppMessage(from, hospitalMsg[lang] || hospitalMsg['en']);
+        }
+      }
+
+      await logTriage({
+        patient_id: patientId,
+        triage_level: session.lastTriage?.triage_level || 'ORANGE',
+        confidence: session.lastTriage?.confidence,
+        escalation: true,
+        pathway: 'ambulance_advised',
+        facility_name: null,
+        location: session.location || null,
+        symptoms: session.lastSymptoms
+      });
+      await scheduleFollowUp(patientId, from, 'ORANGE');
+      await sendWhatsAppMessage(from, msg('tips', lang));
+      await saveSession(patientId, session);
+      return;
+
+    } else {
+      // No transport — advise ambulance + alternatives
+      await sendWhatsAppMessage(from, msg('transport_none', lang));
+
+      await logTriage({
+        patient_id: patientId,
+        triage_level: session.lastTriage?.triage_level || 'ORANGE',
+        confidence: session.lastTriage?.confidence,
+        escalation: true,
+        pathway: 'transport_barrier',
+        facility_name: null,
+        location: session.location || null,
+        symptoms: session.lastSymptoms
+      });
+      await scheduleFollowUp(patientId, from, 'ORANGE');
+      await sendWhatsAppMessage(from, msg('tips', lang));
+      await saveSession(patientId, session);
+      return;
+    }
+  }
+
   // ==================== STEP: RETURNING VS NEW PATIENT ====================
   if (session.awaitingReturningPatient) {
     session.awaitingReturningPatient = false;
@@ -3917,6 +4104,20 @@ async function orchestrate(patientId, from, message, session) {
   // ==================== STEP 4: SEND TRIAGE RESULT ====================
   if (triage.triage_level === 'ORANGE') {
     await sendWhatsAppMessage(from, msg('triage_orange', lang));
+
+    // Time-aware routing message
+    if (!isClinicOpen()) {
+      await sendWhatsAppMessage(from, msg('triage_orange_hospital', lang));
+    }
+
+    // Ask transport safety question — critical for ORANGE
+    session.awaitingTransportSafety = true;
+    session.lastTriage = triage;
+    session.lastSymptoms = message;
+    await saveSession(patientId, session);
+    await sendWhatsAppMessage(from, msg('ask_transport_safety', lang));
+    return;
+
   } else if (triage.triage_level === 'YELLOW') {
     await sendWhatsAppMessage(from, msg('triage_yellow', lang));
   } else {
