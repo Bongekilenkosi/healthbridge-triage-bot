@@ -86,8 +86,8 @@ const CATEGORIES = [
 ];
 
 const T = {
-  en: {choose_lang:'Choose your language',welcome:'Welcome! Let\'s get you checked in.',name:'What is your first name?',surname:'What is your surname?',dob:'Date of birth (DD-MM-YYYY)',sex:'What is your sex?',male:'Male',female:'Female',whats_wrong:'What is your main problem today?',how_bad:'How bad is it?',mild:'Mild',moderate:'Moderate',severe:'Severe',describe:'Describe your symptoms (optional)',next:'Next',back:'Back',checking:'Checking your symptoms...',result_title:'Your Result',queue_msg:'You have been added to the queue.',show_reception:'Show this screen to reception:',ref:'Your reference number:',your_turn:'Have a seat. The nurse will call your name.',start_over:'Start Over (New Patient)',emergency:'EMERGENCY? Call 10177',mild_desc:'I can do my daily activities',mod_desc:'It\'s affecting my daily activities',sev_desc:'I can barely function'},
-  zu: {choose_lang:'Khetha ulimi lwakho',welcome:'Siyakwemukela! Masikubhalise.',name:'Ngubani igama lakho?',surname:'Yisiphi isibongo sakho?',dob:'Usuku lokuzalwa (DD-MM-YYYY)',sex:'Ubulili bakho?',male:'Owesilisa',female:'Owesifazane',whats_wrong:'Yini inkinga yakho enkulu namuhla?',how_bad:'Kumbi kangakanani?',mild:'Kancane',moderate:'Maphakathi',severe:'Kakhulu',describe:'Chaza izimpawu zakho (uma uthanda)',next:'Okulandelayo',back:'Emuva',checking:'Sihlola izimpawu zakho...',result_title:'Umphumela Wakho',queue_msg:'Usufakwe emgqeni.',show_reception:'Khombisa lesi sikrini e-reception:',ref:'Inombolo yakho:',your_turn:'Hlala phansi. Unesi uzokubiza ngegama.',start_over:'Qala Kabusha (Umuntu Omusha)',emergency:'KUPHUTHUMILE? Shaya 10177',mild_desc:'Ngingenza imisebenzi yami',mod_desc:'Kuthinta imisebenzi yami',sev_desc:'Angikwazi nhlobo'},
+  en: {choose_lang:'Choose your language',welcome:'Welcome! Let\'s get you checked in.',name:'What is your first name?',surname:'What is your surname?',dob:'Date of birth (DD-MM-YYYY)',sex:'What is your sex?',male:'Male',female:'Female',intersex:'Intersex',prefer_not:'Prefer not to say',whats_wrong:'What is your main problem today?',how_bad:'How bad is it?',mild:'Mild',moderate:'Moderate',severe:'Severe',describe:'Describe your symptoms (optional)',next:'Next',back:'Back',checking:'Checking your symptoms...',result_title:'Your Result',queue_msg:'You have been added to the queue.',show_reception:'Show this screen to reception:',ref:'Your reference number:',your_turn:'Have a seat. The nurse will call your name.',start_over:'Start Over (New Patient)',emergency:'EMERGENCY? Call 10177',mild_desc:'I can do my daily activities',mod_desc:'It\'s affecting my daily activities',sev_desc:'I can barely function'},
+  zu: {choose_lang:'Khetha ulimi lwakho',welcome:'Siyakwemukela! Masikubhalise.',name:'Ngubani igama lakho?',surname:'Yisiphi isibongo sakho?',dob:'Usuku lokuzalwa (DD-MM-YYYY)',sex:'Ubulili bakho?',male:'Owesilisa',female:'Owesifazane',intersex:'Intersex',prefer_not:'Angithandi ukusho',whats_wrong:'Yini inkinga yakho enkulu namuhla?',how_bad:'Kumbi kangakanani?',mild:'Kancane',moderate:'Maphakathi',severe:'Kakhulu',describe:'Chaza izimpawu zakho (uma uthanda)',next:'Okulandelayo',back:'Emuva',checking:'Sihlola izimpawu zakho...',result_title:'Umphumela Wakho',queue_msg:'Usufakwe emgqeni.',show_reception:'Khombisa lesi sikrini e-reception:',ref:'Inombolo yakho:',your_turn:'Hlala phansi. Unesi uzokubiza ngegama.',start_over:'Qala Kabusha (Umuntu Omusha)',emergency:'KUPHUTHUMILE? Shaya 10177',mild_desc:'Ngingenza imisebenzi yami',mod_desc:'Kuthinta imisebenzi yami',sev_desc:'Angikwazi nhlobo'},
 };
 
 function t(key){ return (T[state.language]||T.en)[key] || T.en[key] || key; }
@@ -188,6 +188,8 @@ function showDob(){
     '<div class="btn-grid cols-2">'+
     '<div class="btn" id="sex-m" onclick="selectSex(\'male\')">'+t('male')+'</div>'+
     '<div class="btn" id="sex-f" onclick="selectSex(\'female\')">'+t('female')+'</div>'+
+    '<div class="btn" id="sex-i" onclick="selectSex(\'intersex\')">'+t('intersex')+'</div>'+
+    '<div class="btn" id="sex-p" onclick="selectSex(\'prefer_not_to_say\')">'+t('prefer_not')+'</div>'+
     '</div>'+
     '<button class="btn-primary" id="dob-next" onclick="saveDob()" disabled>'+t('next')+'</button>'+
     '<div class="back-btn" onclick="showName()">'+t('back')+'</div></div>');
@@ -195,8 +197,10 @@ function showDob(){
 
 function selectSex(s){
   state.sex=s;
-  document.getElementById('sex-m').className='btn'+(s==='male'?' selected':'');
-  document.getElementById('sex-f').className='btn'+(s==='female'?' selected':'');
+  ['sex-m','sex-f','sex-i','sex-p'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el) el.className='btn'+(el.id==='sex-'+s[0]?' selected':'');
+  });
   document.getElementById('dob-next').disabled=false;
 }
 
