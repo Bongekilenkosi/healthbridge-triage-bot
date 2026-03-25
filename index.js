@@ -1080,6 +1080,28 @@ Uyavuma?
     nr: '🟡 *KUPHUTHUMA*\nVakatjhela ikliniki namhlanje. Ungalisi.'
   },
 
+  triage_yellow_after_hours: {
+    en: '⏰ Clinics are closed now. Here is what to do:\n\n1. *If your symptoms are manageable* — rest at home and go to the clinic first thing tomorrow morning (before 08:00 for the shortest wait)\n\n2. *If symptoms worsen tonight* — go to your nearest hospital emergency unit or call *10177*\n\nWe will send you a reminder tomorrow morning.',
+    zu: '⏰ Imitholampilo ivaliwe manje. Nanti okumele ukwenze:\n\n1. *Uma izimpawu zakho zibekezeleka* — phumula ekhaya bese uya emtholampilo ekuseni kakhulu kusasa (ngaphambi kuka-08:00)\n\n2. *Uma izimpawu ziba zimbi ebusuku* — yana esibhedlela esiseduze noma ushaye *10177*\n\nSizokuthumelela isikhumbuzo kusasa ekuseni.',
+    xh: '⏰ Iikliniki zivaliwe ngoku. Nantsi into omawuyenze:\n\n1. *Ukuba iimpawu zakho zinokumelana nazo* — phumla ekhaya uze uye ekliniki kwangethuba ngomso ekuseni (phambi kwe-08:00)\n\n2. *Ukuba iimpawu ziba mbi ebusuku* — yiya esibhedlele esikufutshane okanye utsalele *10177*\n\nSiza kukuthumela isikhumbuzo ngomso ekuseni.',
+    af: '⏰ Klinieke is nou gesluit. Hier is wat om te doen:\n\n1. *As jou simptome hanteerbaar is* — rus by die huis en gaan m\u00F4re vroeg na die kliniek (voor 08:00 vir die kortste wag)\n\n2. *As simptome vanaand vererger* — gaan na jou naaste hospitaal noodafdeling of bel *10177*\n\nOns sal jou m\u00F4reoggend \'n herinnering stuur.',
+    nso: '⏰ Dikiliniki di tswaletšwe bjale. Se o swanetšego go se dira ke se:\n\n1. *Ge dika tša gago di kgotlelega* — ikhutša ka gae o ye kiliniki gosasa ka pela (pele ga 08:00)\n\n2. *Ge dika di mpefala bošego* — ya sepetleleng sa kgauswi goba o leletše *10177*\n\nRe tla go romela sekhumbuzo gosasa ka mesa.',
+    tn: '⏰ Dikliniki di tswaletswe jaanong. Se o tshwanetseng go se dira ke se:\n\n1. *Fa matshwao a gago a kgotlelega* — ikhutsa kwa gae o ye kliniki mo mosong ka bonako (pele ga 08:00)\n\n2. *Fa matshwao a maswe bosigo* — ya bookelong jo bo gaufi kgotsa o leletse *10177*\n\nRe tla go romela sekgopotso kamoso mo mosong.',
+    st: '⏰ Dikliniki di koetswe joale. Seo o lokelang ho se etsa ke sena:\n\n1. *Haeba matshwao a hao a ka kgotlelwa* — ikhutse hae o ye kliniki hosane ka pela (pele ho 08:00)\n\n2. *Haeba matshwao a mpefala bosiu* — eya sepetlele se haufi kapa o letsetse *10177*\n\nRe tla o romella sekhumbutso hosane ka mesa.',
+    ts: '⏰ Tikliniki ti pfariwile sweswi. Hi leswi u faneleke ku swi endla:\n\n1. *Loko swikombiso swa wena swi koteka* — wisa ekaya u ya ekliniki mundzuku nimixo (pele ka 08:00)\n\n2. *Loko swikombiso swi tika nivusiku* — ya exibedlhele xa kusuhi kumbe u ringela *10177*\n\nHi ta ku rhumela xikhumbutso mundzuku nimixo.',
+    ss: '⏰ Tikliniki tivaliwe nyalo. Naku lokufanele ukwente:\n\n1. *Nangabe timphawu takho tiyabeketeleka* — phumula ekhaya uye ekliniki ekuseni kusasa (ngaphambi kwa-08:00)\n\n2. *Nangabe timphawu tiba timbi ebusuku* — ya esibhedlela leseduze noma ushayele *10177*\n\nSitakutfumelela sikhumbuzo kusasa ekuseni.',
+    ve: '⏰ Dikiliniki dzo valwa zwino. Ndi izwi zwine na tea u ita:\n\n1. *Arali zwiga zwaṋu zwi kona u konḓelelwa* — awelani hayani ni ye kiliniki matshelo nga u ṱavhanya (phanḓa ha 08:00)\n\n2. *Arali zwiga zwi tshi ṱavhanya vhusiku* — iyani sibadela tshi re tsini kana ni founele *10177*\n\nRi ḓo ni rumela tsivhudzo matshelo nga matsheloni.',
+    nr: '⏰ Iinkliniki zivaliwe nje. Naku okufanele ukwenze:\n\n1. *Uma iimpawu zakho zibekezeleka* — phumula ekhaya uye ekliniki kusasa ekuseni (ngaphambi kwe-08:00)\n\n2. *Uma iimpawu ziba zimbi ebusuku* — ya esibhedlela esiseduze namkha uringele *10177*\n\nSizakukuthumela isikhumbuzo kusasa ekuseni.'
+  },
+
+  // WhatsApp notification when patient is called from dashboard
+  queue_called: {
+    en: (assignedTo) => `📢 *You are being called!*\n\n${assignedTo ? 'Please go to *' + assignedTo + '* now.' : 'Please go to reception now.'}\n\nHave your ID and clinic card ready.`,
+    zu: (assignedTo) => `📢 *Uyabizwa!*\n\n${assignedTo ? 'Sicela uye ku-*' + assignedTo + '* manje.' : 'Sicela uye e-reception manje.'}\n\nLungisa i-ID nekhadi lakho lasemtholampilo.`,
+    xh: (assignedTo) => `📢 *Uyabizwa!*\n\n${assignedTo ? 'Nceda uye ku-*' + assignedTo + '* ngoku.' : 'Nceda uye e-reception ngoku.'}\n\nLungisa i-ID nekhadi lakho lasekliniki.`,
+    af: (assignedTo) => `📢 *Jy word geroep!*\n\n${assignedTo ? 'Gaan asseblief na *' + assignedTo + '* nou.' : 'Gaan asseblief na ontvangs nou.'}\n\nHou jou ID en kliniekkaart gereed.`,
+  },
+
   triage_green: {
     en: '🟢 *ROUTINE*\nMonitor your symptoms at home. Visit a pharmacy if needed. If symptoms worsen, contact us again.',
     zu: '🟢 *OKUJWAYELEKILE*\nQaphelisisa izimpawu zakho ekhaya. Vakashela ikhemisi uma kudingeka. Uma izimpawu ziba zimbi, sithinte futhi.',
@@ -4120,6 +4142,45 @@ async function orchestrate(patientId, from, message, session) {
 
   } else if (triage.triage_level === 'YELLOW') {
     await sendWhatsAppMessage(from, msg('triage_yellow', lang));
+
+    // After-hours: tell patient to come tomorrow morning + schedule reminder
+    if (!isClinicOpen()) {
+      await sendWhatsAppMessage(from, msg('triage_yellow_after_hours', lang));
+
+      // Schedule a morning reminder for 06:30 SAST next day
+      const now = new Date();
+      const sast = new Date(now.getTime() + (2 * 60 * 60 * 1000));
+      const tomorrow = new Date(sast);
+      tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
+      tomorrow.setUTCHours(4, 30, 0, 0); // 04:30 UTC = 06:30 SAST
+
+      try {
+        await supabase.from('follow_ups').insert({
+          patient_id: patientId,
+          phone: from,
+          triage_level: 'YELLOW',
+          scheduled_at: tomorrow,
+          status: 'pending',
+          type: 'morning_reminder'
+        });
+      } catch (e) {
+        console.error('[YELLOW_AFTER_HOURS] Failed to schedule morning reminder:', e.message);
+      }
+
+      await logTriage({
+        patient_id: patientId,
+        triage_level: 'YELLOW',
+        confidence: triage.confidence,
+        escalation: false,
+        pathway: 'clinic_visit_tomorrow',
+        facility_name: null,
+        location: session.location || null,
+        symptoms: message
+      });
+      await sendWhatsAppMessage(from, msg('tips', lang));
+      await saveSession(patientId, session);
+      return;
+    }
   } else {
     await sendWhatsAppMessage(from, msg('triage_green', lang));
     // GREEN = self-care, no facility routing needed
@@ -5365,7 +5426,15 @@ app.post('/api/clinic/queue', requireDashboardAuth, async (req, res) => {
 // PUT /api/clinic/queue/:id/call — Call patient (move to in_consultation)
 app.put('/api/clinic/queue/:id/call', requireDashboardAuth, async (req, res) => {
   try {
-    const { assigned_to } = req.body;
+    const { assigned_to, room } = req.body;
+
+    // Get patient details before updating
+    const { data: patient } = await supabase
+      .from('clinic_queue')
+      .select('patient_phone, patient_id')
+      .eq('id', req.params.id)
+      .single();
+
     const { error } = await supabase
       .from('clinic_queue')
       .update({
@@ -5376,6 +5445,23 @@ app.put('/api/clinic/queue/:id/call', requireDashboardAuth, async (req, res) => 
       .eq('id', req.params.id);
 
     if (error) throw error;
+
+    // Send WhatsApp notification to patient
+    if (patient && patient.patient_phone) {
+      try {
+        const session = await getSession(patient.patient_id);
+        const lang = session.language || 'en';
+        const displayName = room || assigned_to || null;
+        const calledMsg = typeof MESSAGES.queue_called[lang] === 'function'
+          ? MESSAGES.queue_called[lang](displayName)
+          : MESSAGES.queue_called['en'](displayName);
+        await sendWhatsAppMessage(patient.patient_phone, calledMsg);
+      } catch (e) {
+        console.error('[QUEUE_CALL] WhatsApp notification failed:', e.message);
+        // Don't fail the API call — notification is best-effort
+      }
+    }
+
     res.json({ success: true });
   } catch (e) {
     res.status(500).json({ error: e.message });
