@@ -224,7 +224,7 @@ a{color:#60a5fa;text-decoration:none}
         <div class="lookup-title">Patient Lookup</div>
         <div class="lookup-sub">Search by phone number or study code to view triage results and assign to a queue</div>
         <div class="lookup-row">
-          <input class="lookup-input" id="lookup-input" placeholder="Phone (e.g. 0612345678) or study code (e.g. BZ-4827)" onkeyup="if(event.key==='Enter')doLookup()">
+          <input class="lookup-input" id="lookup-input" placeholder="Phone, BZ code (BZ-4827), or Referral ID (REF-...)" onkeyup="if(event.key==='Enter')doLookup()">
           <button class="btn btn-primary" onclick="doLookup()" id="lookup-btn">Search</button>
         </div>
         <div id="lookup-result"></div>
@@ -435,6 +435,7 @@ function renderPatientCard(p,queueType){
   let btns='<button class="btn btn-call" onclick="callPatient(\''+p.id+'\')">✓ Call</button><button class="btn btn-noshow" onclick="noShow(\''+p.id+'\')">✕ No-show</button>';
   if(queueType!=='fast_track')btns+='<button class="btn btn-fast" onclick="reassign(\''+p.id+'\',\'fast_track\')">⚡ Fast-track</button>';
   if(queueType!=='routine')btns+='<button class="btn btn-routine" onclick="reassign(\''+p.id+'\',\'routine\')">→ Routine</button>';
+  btns+='<button class="btn btn-red" onclick="escalatePatient(\''+p.id+'\',\''+((p.patient_name||'Unknown').replace(/'/g,"\\\\\'"))+'\',\''+(p.triage_level||'')+'\',\''+((p.symptoms_summary||'').replace(/'/g,"\\\\\'").slice(0,120))+'\',\''+(p.study_code||'')+'\')">🏥 Escalate</button>';
 
   return '<div class="p-card" style="border-left:3px solid '+(urgent?'#ef4444':'transparent')+'"><div class="p-row"><div><div class="p-name">'+(p.patient_name||'Unknown patient')+(p.study_code?'<span class="p-code">'+p.study_code+'</span>':'')+ftBadge+'</div><div class="p-meta">'+triageBadge(p.triage_level)+' <span style="margin-left:6px">Waiting '+w+' min · Arrived '+fmtTime(p.checked_in_at)+'</span></div></div><div class="p-wait" style="color:'+waitColor(w)+'">'+w+'<span class="p-wait-unit">m</span></div></div>'+sym+'<div class="p-actions">'+btns+'</div></div>';
 }
@@ -474,6 +475,20 @@ async function doLookup(){
   const q=document.getElementById('lookup-input').value.trim();
   if(!q)return;
   document.getElementById('lookup-btn').textContent='Searching…';
+
+  // Check if it's a referral ID (REF-XXXX...)
+  if(q.toUpperCase().startsWith('REF-')){
+    const d=await api('/api/referral/'+encodeURIComponent(q));
+    document.getElementById('lookup-btn').textContent='Search';
+    const el=document.getElementById('lookup-result');
+    if(!d||!d.found){
+      el.innerHTML='<div class="result" style="text-align:center;color:#64748b"><div style="font-size:22px;margin-bottom:6px">🔍</div><div style="font-size:13px">Referral not found</div></div>';
+      return;
+    }
+    el.innerHTML='<div class="result"><div style="font-size:10px;font-weight:700;color:#ef4444;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">🏥 Hospital Referral</div><div class="result-header"><div><div class="result-name">'+(d.patient?.name||'Unknown patient')+'</div><div style="font-size:11px;color:#3b82f6;margin-top:2px">Referral: '+d.referral_id+(d.patient?.study_code?' · BZ Code: '+d.patient.study_code:'')+'</div><div class="result-detail">'+(d.patient?.dob?'DOB: '+d.patient.dob+' · ':'')+(d.patient?.sex||'')+'</div></div>'+triageBadge(d.triage?.level)+'</div><div class="result-triage" style="background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2)"><div class="result-triage-hdr"><span class="result-triage-label" style="color:#ef4444">Referred — '+d.triage?.level+'</span><span class="result-triage-meta">'+fmtTime(d.triage?.time)+'</span></div><div class="result-triage-symptoms">'+(d.triage?.symptoms||'No details')+'</div></div>'+(d.chronic_conditions&&d.chronic_conditions.length>0?'<div style="margin-top:8px"><span style="font-size:10px;color:#475569">Chronic: </span>'+d.chronic_conditions.map(c=>'<span class="chronic-pill">'+c+'</span>').join('')+'</div>':'')+'</div>';
+    return;
+  }
+
   const isCode=q.toUpperCase().startsWith('BZ-');
   const param=isCode?'study_code='+encodeURIComponent(q):'phone='+encodeURIComponent(q.replace(/^0/,'27'));
   const d=await api('/api/clinic/lookup?'+param);
@@ -593,6 +608,52 @@ function printExpected(){
   win.document.write('</body></html>');
   win.document.close();
   win.print();
+}
+
+// ==================== ESCALATE TO HOSPITAL (#referral) ====================
+async function escalatePatient(id, name, triageLevel, symptoms, studyCode){
+  // Step 1: Ask transport method
+  const transport = prompt(
+    'ESCALATE PATIENT TO HOSPITAL\n\n' +
+    'Patient: ' + name + '\n' +
+    'Triage: ' + triageLevel + '\n' +
+    'Symptoms: ' + (symptoms || 'Not recorded') + '\n\n' +
+    'How will the patient get to hospital?\n\n' +
+    '1 — Call ambulance (10177)\n' +
+    '2 — Patient can self-transport / family will drive\n' +
+    '3 — Cancel\n\n' +
+    'Enter 1, 2, or 3:', ''
+  );
+  if(!transport || transport==='3') return;
+
+  // Step 2: Ask nurse's clinical notes
+  const nurseNotes = prompt('Clinical reason for referral (brief notes for the hospital):', '');
+  if(nurseNotes===null) return;
+
+  // Step 3: Ask destination hospital (optional)
+  const hospital = prompt('Destination hospital (or leave blank for nearest):', '');
+
+  const isAmbulance = transport === '1';
+
+  // Step 4: Send to backend
+  const res = await api('/api/clinic/queue/'+id+'/escalate', {
+    method: 'PUT',
+    body: JSON.stringify({
+      transport_method: isAmbulance ? 'ambulance' : 'self_transport',
+      nurse_notes: nurseNotes || '',
+      destination_hospital: hospital || null,
+      nurse_name: UNAME,
+      study_code: studyCode || null,
+    })
+  });
+
+  if(res && res.success){
+    const method = isAmbulance ? 'Ambulance called' : 'Self-transport';
+    alert('✅ ' + name + ' escalated to hospital.\n\n' + method + '.\nReferral sent to patient on WhatsApp.\n\nReferral ID: ' + (res.referral_id || 'pending'));
+    refresh();
+  } else {
+    alert('Failed to escalate. Please try again or refer manually.');
+  }
 }
 
 // ==================== NURSE TRIAGE FEEDBACK (#4) ====================
