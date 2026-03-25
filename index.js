@@ -3946,27 +3946,90 @@ async function orchestrate(patientId, from, message, session) {
     return;
   }
 
-  // ==================== STEP: LANGUAGE CHANGE ====================
-  // Patient can type "language" (or equivalents) at any time to change their language.
-  // This preserves their entire profile — only the language preference changes.
-  const LANGUAGE_KEYWORDS = [
-    'language', 'lang',
-    'ulimi',           // isiZulu
-    'ulwimi',          // isiXhosa
-    'taal',            // Afrikaans
-    'polelo', 'puo',   // Sepedi / Setswana
-    'puo',             // Sesotho
-    'ririmi',          // Xitsonga
-    'lulwimi',         // siSwati
-    'luambo',          // Tshivenda
-    'ilimi',           // isiNdebele
-  ];
+  // ==================== SMART COMMAND DETECTOR ====================
+  // Fuzzy-matches commands (language, code, help) with misspelling tolerance.
+  // ONLY triggers when patient is NOT in an active input step — prevents
+  // intercepting names, symptoms, or other free-text the patient is typing.
+  const isInActiveInput = (
+    session.identityStep ||
+    session.awaitingSymptomDetail ||
+    session.awaitingSymptomFollowUp ||
+    session.awaitingFacilityConfirm ||
+    session.awaitingAlternativeChoice ||
+    session.awaitingTransportSafety ||
+    session.awaitingReturningPatient ||
+    session.pendingLanguageChange ||
+    session.ccmddStep ||
+    session.virtualConsultStep
+  );
 
-  if (LANGUAGE_KEYWORDS.includes(message)) {
-    session.pendingLanguageChange = true;
-    await saveSession(patientId, session);
-    await sendWhatsAppMessage(from, MESSAGES.language_menu._all);
-    return;
+  if (!isInActiveInput) {
+    // --- LANGUAGE CHANGE ---
+    const LANG_WORDS = [
+      'language','lang','langu','langua','languag','languages',
+      'ulimi','ulim','ulwimi','ulwim',
+      'taal','taa',
+      'polelo','polel','puo',
+      'ririmi','ririm',
+      'lulwimi','lulwim',
+      'luambo','luamb',
+      'ilimi','ilim',
+      'change language','change lang',
+      'shintsha ulimi','tshintsha ulwimi',
+      'verander taal','fetola puo',
+    ];
+    if (LANG_WORDS.includes(message) || (message.length <= 10 && (message.startsWith('lang') || message.startsWith('ulim') || message.startsWith('taa')))) {
+      session.pendingLanguageChange = true;
+      await saveSession(patientId, session);
+      await sendWhatsAppMessage(from, MESSAGES.language_menu._all);
+      return;
+    }
+
+    // --- REFERENCE CODE ---
+    const CODE_WORDS = [
+      'code','codes','cod','codr','cde','coed','codee',
+      'ikhodi','ikodi','ikhod','ikkodi',
+      'kode','kodes','koude',
+      'khoutu','khoudu','khout','khouto',
+      'khodi','khod','kodi',
+      'reference','ref','reff',
+      'number','my code','my number','my ref',
+      'inombolo','nombolo','inomboro','nomboro',
+    ];
+    if (CODE_WORDS.includes(message) || (message.length <= 12 && (message.startsWith('cod') || message.startsWith('khod') || message.startsWith('kho') || message.startsWith('ref')))) {
+      if (session.studyCode) {
+        const codeMsg = {
+          en: `🔢 Your reference number is: *${session.studyCode}*\n\nShow this number at reception when you arrive at the clinic.\n\nType "code" anytime to see it again.`,
+          zu: `🔢 Inombolo yakho yereferensi ithi: *${session.studyCode}*\n\nKhombisa le nombolo e-reception uma ufika emtholampilo.\n\nBhala "code" noma nini ukuyibona futhi.`,
+          xh: `🔢 Inombolo yakho yereferensi ithi: *${session.studyCode}*\n\nBonisa le nombolo e-reception xa ufika ekliniki.\n\nBhala "code" nanini na ukuyibona kwakhona.`,
+          af: `🔢 Jou verwysingsnommer is: *${session.studyCode}*\n\nWys hierdie nommer by ontvangs wanneer jy by die kliniek aankom.\n\nTik "code" enige tyd om dit weer te sien.`,
+        };
+        await sendWhatsAppMessage(from, codeMsg[lang] || codeMsg['en']);
+      } else {
+        const refCode = await generateStudyCode(patientId);
+        session.studyCode = refCode;
+        await saveSession(patientId, session);
+        const codeMsg = {
+          en: `🔢 Your reference number is: *${refCode}*\n\nShow this number at reception when you arrive at the clinic.`,
+          zu: `🔢 Inombolo yakho yereferensi ithi: *${refCode}*\n\nKhombisa le nombolo e-reception uma ufika emtholampilo.`,
+          xh: `🔢 Inombolo yakho yereferensi ithi: *${refCode}*\n\nBonisa le nombolo e-reception xa ufika ekliniki.`,
+          af: `🔢 Jou verwysingsnommer is: *${refCode}*\n\nWys hierdie nommer by ontvangs wanneer jy by die kliniek aankom.`,
+        };
+        await sendWhatsAppMessage(from, codeMsg[lang] || codeMsg['en']);
+      }
+      return;
+    }
+
+    // --- HELP / MENU ---
+    const HELP_WORDS = ['help','menu','start','hi','hello','hey','usizo','nceda','hulp','thusa','pfuna'];
+    if (HELP_WORDS.includes(message)) {
+      if (session.consent && session.identityDone && session.chronicScreeningDone && session.isStudyParticipant !== undefined) {
+        await sendWhatsAppMessage(from, msg('category_menu', lang));
+      } else {
+        await sendWhatsAppMessage(from, MESSAGES.language_menu._all);
+      }
+      return;
+    }
   }
 
   // Handle language selection after "language" command
@@ -3976,36 +4039,12 @@ async function orchestrate(patientId, from, message, session) {
       session.pendingLanguageChange = false;
       await saveSession(patientId, session);
       await sendWhatsAppMessage(from, msg('language_set', session.language));
-      // If they have a complete profile, show the category menu in the new language
-      if (session.consent && session.chronicScreeningDone && session.isStudyParticipant !== undefined) {
+      if (session.consent && session.identityDone && session.chronicScreeningDone && session.isStudyParticipant !== undefined) {
         await sendWhatsAppMessage(from, msg('category_menu', session.language));
       }
       return;
     }
-    // Invalid selection — re-show menu
     await sendWhatsAppMessage(from, MESSAGES.language_menu._all);
-    return;
-  }
-
-  // ==================== STEP: STUDY CODE RETRIEVAL ====================
-  if (message === 'code' || message === 'ikhodi' || message === 'kode' || message === 'khoutu' || message === 'khodi') {
-    if (session.isStudyParticipant) {
-      if (session.studyCode) {
-        await sendWhatsAppMessage(from, msg('study_code', lang, session.studyCode));
-      } else {
-        // Study participant without a code — generate one
-        const studyCode = await generateStudyCode(patientId);
-        session.studyCode = studyCode;
-        await saveSession(patientId, session);
-        await sendWhatsAppMessage(from, msg('study_code', lang, studyCode));
-      }
-    } else {
-      // Not a study participant — let them know
-      const notStudyMsg = lang === 'en'
-        ? 'Study codes are only for patients taking part in the BIZUSIZO research study at participating clinics. You can continue using BIZUSIZO normally.'
-        : 'Study codes are only for research study participants.';
-      await sendWhatsAppMessage(from, notStudyMsg);
-    }
     return;
   }
 
