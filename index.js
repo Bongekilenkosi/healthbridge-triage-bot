@@ -6371,7 +6371,7 @@ app.post('/api/kiosk/triage', async (req, res) => {
       .limit(1);
     const nextPos = (lastInQueue?.[0]?.position || 0) + 1;
 
-    const { data: queueEntry } = await supabase.from('clinic_queue').insert({
+    const { data: queueEntry, error: queueError } = await supabase.from('clinic_queue').insert({
       patient_id: kioskId,
       patient_name: firstName + (surname ? ' ' + surname : ''),
       patient_phone: null, // Kiosk patients have no phone
@@ -6381,9 +6381,22 @@ app.post('/api/kiosk/triage', async (req, res) => {
       status: 'waiting',
       checked_in_at: new Date(),
       symptoms_summary: symptomText.slice(0, 500),
-      study_code: refCode,
-      source: 'kiosk',
     }).select().single();
+
+    // If insert failed, try without optional columns (source/study_code may not exist yet)
+    if (queueError) {
+      console.error('[KIOSK] Queue insert error (trying minimal):', queueError.message);
+      await supabase.from('clinic_queue').insert({
+        patient_id: kioskId,
+        patient_name: firstName + (surname ? ' ' + surname : ''),
+        triage_level: triageLevel,
+        queue_type: queueType,
+        position: nextPos,
+        status: 'waiting',
+        checked_in_at: new Date(),
+        symptoms_summary: symptomText.slice(0, 500),
+      });
+    }
 
     console.log(`[KIOSK] ${firstName} ${surname || ''} → ${triageLevel} (${confidence}%) → Queue #${nextPos} (${queueType}) → ${refCode}`);
 
