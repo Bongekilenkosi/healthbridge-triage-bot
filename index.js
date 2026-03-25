@@ -1669,17 +1669,17 @@ Uyavuma?
   // ==================== HELPFUL TIPS ====================
   // Sent after triage results so the patient knows how to navigate
   tips: {
-    en: '\n💡 *Tips:*\nType *0* — new consultation\nType *language* — change language\nType *code* — show your study code',
-    zu: '\n💡 *Amathiphu:*\nBhala *0* — ukuxoxa okusha\nBhala *ulimi* — shintsha ulimi\nBhala *code* — khombisa ikhodi yakho',
-    xh: '\n💡 *Amathiphu:*\nBhala *0* — incoko entsha\nBhala *ulwimi* — tshintsha ulwimi\nBhala *code* — bonisa ikhowudi yakho',
-    af: '\n💡 *Wenke:*\nTik *0* — nuwe konsultasie\nTik *taal* — verander taal\nTik *code* — wys jou studiekode',
-    nso: '\n💡 *Maele:*\nNgwala *0* — poledišano ye mpsha\nNgwala *polelo* — fetola polelo\nNgwala *code* — bontšha khoutu ya gago',
-    tn: '\n💡 *Maele:*\nKwala *0* — puisano e ntšhwa\nKwala *puo* — fetola puo\nKwala *code* — bontsha khoutu ya gago',
-    st: '\n💡 *Maele:*\nNgola *0* — puisano e ncha\nNgola *puo* — fetola puo\nNgola *code* — bontsha khoutu ya hao',
-    ts: '\n💡 *Switsundzuxo:*\nTsala *0* — nkani leyintshwa\nTsala *ririmi* — cinca ririmi\nTsala *code* — kombisa khodi ya wena',
-    ss: '\n💡 *Ema-thiphu:*\nBhala *0* — ingcoco lensha\nBhala *lulwimi* — shintja lulwimi\nBhala *code* — khombisa ikhodi yakho',
-    ve: '\n💡 *Nyeletshedzo:*\nṄwalani *0* — nyambedzano ntswa\nṄwalani *luambo* — shandukani luambo\nṄwalani *code* — sumbedzani khoudu yaṋu',
-    nr: '\n💡 *Amathiphu:*\nTlola *0* — ingcoco etja\nTlola *ilimi* — tjhentjha ilimi\nTlola *code* — khombisa ikhodi yakho'
+    en: '\n💡 *Tips:*\nType *0* — new consultation\nType *language* — change language\nType *code* — show your reference number',
+    zu: '\n💡 *Amathiphu:*\nBhala *0* — ukuxoxa okusha\nBhala *ulimi* — shintsha ulimi\nBhala *code* — khombisa inombolo yakho',
+    xh: '\n💡 *Amathiphu:*\nBhala *0* — incoko entsha\nBhala *ulwimi* — tshintsha ulwimi\nBhala *code* — bonisa inombolo yakho',
+    af: '\n💡 *Wenke:*\nTik *0* — nuwe konsultasie\nTik *taal* — verander taal\nTik *code* — wys jou verwysingsnommer',
+    nso: '\n💡 *Maele:*\nNgwala *0* — poledišano ye mpsha\nNgwala *polelo* — fetola polelo\nNgwala *code* — bontšha nomoro ya gago',
+    tn: '\n💡 *Maele:*\nKwala *0* — puisano e ntšhwa\nKwala *puo* — fetola puo\nKwala *code* — bontsha nomoro ya gago',
+    st: '\n💡 *Maele:*\nNgola *0* — puisano e ncha\nNgola *puo* — fetola puo\nNgola *code* — bontsha nomoro ya hao',
+    ts: '\n💡 *Switsundzuxo:*\nTsala *0* — nkani leyintshwa\nTsala *ririmi* — cinca ririmi\nTsala *code* — kombisa nomboro ya wena',
+    ss: '\n💡 *Ema-thiphu:*\nBhala *0* — ingcoco lensha\nBhala *lulwimi* — shintja lulwimi\nBhala *code* — khombisa inombolo yakho',
+    ve: '\n💡 *Nyeletshedzo:*\nṄwalani *0* — nyambedzano ntswa\nṄwalani *luambo* — shandukani luambo\nṄwalani *code* — sumbedzani nomboro yaṋu',
+    nr: '\n💡 *Amathiphu:*\nTlola *0* — ingcoco etja\nTlola *ilimi* — tjhentjha ilimi\nTlola *code* — khombisa inomboro yakho'
   },
 
   // ==================== SYSTEM TIMEOUT / OUTAGE FALLBACK ====================
@@ -1865,6 +1865,50 @@ Return ONLY valid JSON: {"triage_level":"RED|ORANGE|YELLOW|GREEN","confidence":0
 }
 
 // ================== RULES ENGINE ==================
+// ================== SELF-CARE ADVICE (GREEN triage) ==================
+// Generates symptom-specific home care advice for GREEN patients.
+// Uses the same triage model for cost efficiency.
+// Advice is practical, SA-context-aware, and avoids medical jargon.
+async function generateSelfCareAdvice(symptomsText, lang) {
+  const langNames = {
+    en:'English', zu:'isiZulu', xh:'isiXhosa', af:'Afrikaans',
+    nso:'Sepedi', tn:'Setswana', st:'Sesotho', ts:'Xitsonga',
+    ss:'siSwati', ve:'Tshivenda', nr:'isiNdebele'
+  };
+
+  try {
+    const res = await anthropic.messages.create({
+      model: TRIAGE_MODEL,
+      max_tokens: 300,
+      system: `You are a South African community health advisor giving practical self-care advice via WhatsApp.
+
+The patient has been triaged as GREEN (routine/non-urgent). Give them specific, actionable home care advice.
+
+RULES:
+- Write in ${langNames[lang] || 'English'} (everyday spoken language, not textbook)
+- Keep it SHORT — max 5 bullet points, WhatsApp-friendly
+- Use practical SA advice (e.g. "drink rooibos tea", "take Panado from the pharmacy")
+- Reference affordable, available remedies (not expensive brands)
+- Include ONE clear warning sign that means they should come to the clinic
+- Do NOT diagnose — give care tips only
+- Start with "💊 *Self-care tips:*" 
+- End with "⚠️ Come to the clinic if: [one specific warning sign]"
+- No greetings, no disclaimers, just the tips`,
+      messages: [{ role: 'user', content: `Patient symptoms: ${symptomsText}` }]
+    });
+
+    const advice = res.content[0].text.trim();
+    // Safety check: don't send if it looks like a diagnosis or is too long
+    if (advice.length > 800 || advice.toLowerCase().includes('diagnos')) {
+      return null;
+    }
+    return advice;
+  } catch (e) {
+    console.error('[SELF-CARE] AI generation failed:', e.message);
+    return null;
+  }
+}
+
 function applyClinicalRules(text, triage) {
   const lower = text.toLowerCase();
 
@@ -4316,6 +4360,18 @@ async function orchestrate(patientId, from, message, session) {
     }
   } else {
     await sendWhatsAppMessage(from, msg('triage_green', lang));
+
+    // Generate symptom-specific self-care advice using AI
+    try {
+      const selfCareAdvice = await generateSelfCareAdvice(message, lang);
+      if (selfCareAdvice) {
+        await sendWhatsAppMessage(from, selfCareAdvice);
+      }
+    } catch (e) {
+      console.error('[SELF-CARE] Advice generation failed:', e.message);
+      // Non-critical — patient already has the GREEN triage message
+    }
+
     // GREEN = self-care, no facility routing needed
     await logTriage({
       patient_id: patientId,
