@@ -4604,7 +4604,9 @@ async function handleMessage(msgObj) {
   // Preserves: language, chronic conditions, study code, study participation
   // Clears: current triage state, facility routing, pending steps
   // This means returning patients don't have to redo onboarding
-  if (msgObj.type === 'text' && msgObj.text.body.trim() === '0') {
+  // ONLY triggers if onboarding is complete — during onboarding, "0" means "none" for chronic screening
+  const isOnboarded = session.consent && session.identityDone && session.chronicScreeningDone && session.isStudyParticipant !== undefined;
+  if (msgObj.type === 'text' && msgObj.text.body.trim() === '0' && isOnboarded) {
     const preserved = {
       language: session.language,
       consent: session.consent,
