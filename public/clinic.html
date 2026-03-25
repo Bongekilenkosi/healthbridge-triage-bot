@@ -419,12 +419,15 @@ async function refreshQueues(){
 
   // Queue columns
   const types=[
-    {key:'fast_track',label:'Fast-Track',icon:'⚡',color:'#ef4444'},
-    {key:'routine',label:'Routine',icon:'🕐',color:'#3b82f6'},
-    {key:'walk_in',label:'Walk-In',icon:'🚶',color:'#64748b'}
+    {key:'emergency',label:'Emergency',icon:'\uD83D\uDEA8',color:'#ef4444',match:['emergency','fast_track']},
+    {key:'acute',label:'Acute',icon:'\u26A1',color:'#f97316',match:['acute']},
+    {key:'maternal',label:'Maternal / Child',icon:'\uD83E\uDD30',color:'#a855f7',match:['maternal','child']},
+    {key:'chronic',label:'Chronic',icon:'\uD83D\uDC8A',color:'#3b82f6',match:['chronic']},
+    {key:'general',label:'General',icon:'\uD83D\uDD70',color:'#64748b',match:['general','routine']},
+    {key:'walk_in',label:'Walk-In',icon:'\uD83D\uDEB6',color:'#94a3b8',match:['walk_in','preventative']},
   ];
   document.getElementById('queue-columns').innerHTML=types.map(t=>{
-    const pts=waiting.filter(p=>p.queue_type===t.key);
+    const pts=waiting.filter(p=>t.match.includes(p.queue_type));
     return '<div class="q-col"><div class="q-hdr" style="border-bottom-color:'+t.color+'"><div class="q-hdr-title">'+t.icon+' '+t.label+'</div><span class="q-count" style="background:'+t.color+'22;color:'+t.color+';border:1px solid '+t.color+'44">'+pts.length+'</span></div>'+(pts.length===0?'<div class="q-empty">No patients waiting</div>':pts.map((p,i)=>renderPatientCard(p,t.key,i)).join(''))+'</div>';
   }).join('');
 }
@@ -464,9 +467,11 @@ async function refreshNurse(){
 
   // Next patients per queue
   const types=[
-    {key:'fast_track',data:d.fast_track||[],label:'Fast-Track',icon:'⚡',color:'#ef4444'},
-    {key:'routine',data:d.routine||[],label:'Routine',icon:'🕐',color:'#3b82f6'},
-    {key:'walk_in',data:d.walk_in||[],label:'Walk-In',icon:'🚶',color:'#64748b'}
+    {key:'fast_track',data:d.fast_track||[],label:'Emergency / Acute',icon:'\uD83D\uDEA8',color:'#ef4444'},
+    {key:'maternal',data:d.maternal||[],label:'Maternal / Child',icon:'\uD83E\uDD30',color:'#a855f7'},
+    {key:'chronic',data:d.chronic||[],label:'Chronic',icon:'\uD83D\uDC8A',color:'#3b82f6'},
+    {key:'routine',data:d.routine||[],label:'General',icon:'\uD83D\uDD70',color:'#64748b'},
+    {key:'walk_in',data:d.walk_in||[],label:'Walk-In',icon:'\uD83D\uDEB6',color:'#94a3b8'}
   ];
   document.getElementById('nurse-columns').innerHTML=types.map(t=>{
     return '<div class="q-col"><div class="q-hdr" style="border-bottom-color:'+t.color+'"><div class="q-hdr-title">'+t.icon+' Next in '+t.label+'</div></div>'+(t.data.length===0?'<div class="q-empty">Queue empty</div>':t.data.slice(0,5).map((p,i)=>{
