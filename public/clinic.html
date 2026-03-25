@@ -425,15 +425,16 @@ async function refreshQueues(){
   ];
   document.getElementById('queue-columns').innerHTML=types.map(t=>{
     const pts=waiting.filter(p=>p.queue_type===t.key);
-    return '<div class="q-col"><div class="q-hdr" style="border-bottom-color:'+t.color+'"><div class="q-hdr-title">'+t.icon+' '+t.label+'</div><span class="q-count" style="background:'+t.color+'22;color:'+t.color+';border:1px solid '+t.color+'44">'+pts.length+'</span></div>'+(pts.length===0?'<div class="q-empty">No patients waiting</div>':pts.map(p=>renderPatientCard(p,t.key)).join(''))+'</div>';
+    return '<div class="q-col"><div class="q-hdr" style="border-bottom-color:'+t.color+'"><div class="q-hdr-title">'+t.icon+' '+t.label+'</div><span class="q-count" style="background:'+t.color+'22;color:'+t.color+';border:1px solid '+t.color+'44">'+pts.length+'</span></div>'+(pts.length===0?'<div class="q-empty">No patients waiting</div>':pts.map((p,i)=>renderPatientCard(p,t.key,i)).join(''))+'</div>';
   }).join('');
 }
 
-function renderPatientCard(p,queueType){
+function renderPatientCard(p,queueType,idx){
   const w=waitMin(p.checked_in_at);
   const urgent=(p.triage_level==='RED'&&w>5)||(p.triage_level==='ORANGE'&&w>15);
   const isFastTracked=p.triage_level==='ORANGE'&&queueType==='fast_track';
-  const ftBadge=isFastTracked?'<span style="display:inline-block;padding:2px 7px;border-radius:3px;font-size:9px;font-weight:700;background:rgba(249,115,22,.15);color:#f97316;border:1px solid rgba(249,115,22,.3);margin-left:6px">BIZUSIZO FAST-TRACK</span>':'';
+  const ftBadge=isFastTracked?'<span style="display:inline-block;padding:2px 7px;border-radius:3px;font-size:9px;font-weight:700;background:rgba(249,115,22,.15);color:#f97316;border:1px solid rgba(249,115,22,.3);margin-left:6px">FAST-TRACK</span>':'';
+  const arrivedBadge=(p.notes||'').includes('ARRIVED')?'<span style="display:inline-block;padding:1px 5px;border-radius:3px;font-size:8px;font-weight:700;background:rgba(34,197,94,.12);color:#22c55e;border:1px solid rgba(34,197,94,.25);margin-left:5px">HERE</span>':'';
   const sym=p.symptoms_summary?'<div class="p-symptoms">'+((p.symptoms_summary||'').length>90?(p.symptoms_summary||'').slice(0,90)+'…':p.symptoms_summary)+'</div>':'';
   let btns='<button class="btn btn-call" onclick="callPatient(\''+p.id+'\')">✓ Call</button><button class="btn btn-noshow" onclick="noShow(\''+p.id+'\')">✕ No-show</button>';
   if(queueType!=='fast_track')btns+='<button class="btn btn-fast" onclick="reassign(\''+p.id+'\',\'fast_track\')">⚡ Fast-track</button>';
@@ -441,7 +442,8 @@ function renderPatientCard(p,queueType){
   btns+='<button class="btn btn-red" onclick="escalatePatient(\''+p.id+'\',\''+((p.patient_name||'Unknown').replace(/'/g,"\\\\\'"))+'\',\''+(p.triage_level||'')+'\',\''+((p.symptoms_summary||'').replace(/'/g,"\\\\\'").slice(0,120))+'\',\''+(p.study_code||'')+'\')">🏥 Escalate</button>';
   btns+='<button class="btn" style="color:#94a3b8;border-color:rgba(148,163,184,.3);background:rgba(148,163,184,.05);font-size:9px" onclick="leftWithout(\''+p.id+'\')">Left</button>';
 
-  return '<div class="p-card" style="border-left:3px solid '+(urgent?'#ef4444':'transparent')+'"><div class="p-row"><div><div class="p-name">'+(p.patient_name||'Unknown patient')+(p.study_code?'<span class="p-code">'+p.study_code+'</span>':'')+ftBadge+'</div><div class="p-meta">'+triageBadge(p.triage_level)+' <span style="margin-left:6px">Waiting '+w+' min · Arrived '+fmtTime(p.checked_in_at)+'</span></div></div><div class="p-wait" style="color:'+waitColor(w)+'">'+w+'<span class="p-wait-unit">m</span></div></div>'+sym+'<div class="p-actions">'+btns+'</div></div>';
+  const posNum=typeof idx==='number'?'<span style="font-size:16px;font-weight:800;color:#3b82f6;margin-right:8px;min-width:22px;display:inline-block">#'+(idx+1)+'</span>':'';
+  return '<div class="p-card" style="border-left:3px solid '+(urgent?'#ef4444':'transparent')+'"><div class="p-row"><div><div class="p-name" style="font-size:14px">'+posNum+(p.patient_name||'Unknown patient')+(p.study_code?'<span class="p-code">'+p.study_code+'</span>':'')+ftBadge+arrivedBadge+'</div><div class="p-meta">'+triageBadge(p.triage_level)+' <span style="margin-left:6px">Waiting '+w+' min · Arrived '+fmtTime(p.checked_in_at)+'</span></div></div><div class="p-wait" style="color:'+waitColor(w)+'">'+w+'<span class="p-wait-unit">m</span></div></div>'+sym+'<div class="p-actions">'+btns+'</div></div>';
 }
 
 // ==================== NURSE VIEW ====================
@@ -567,7 +569,10 @@ async function doLookup(){
 // ==================== ACTIONS ====================
 async function callPatient(id){
   const room=prompt('Room or nurse name (optional — patient will be notified on WhatsApp):','');
-  await api('/api/clinic/queue/'+id+'/call',{method:'PUT',body:JSON.stringify({assigned_to:UNAME,room:room||null})});
+  const res=await api('/api/clinic/queue/'+id+'/call',{method:'PUT',body:JSON.stringify({assigned_to:UNAME,room:room||null})});
+  if(res && !res.whatsapp_sent){
+    alert('Patient has been moved to consultation.\n\n⚠️ WhatsApp notification FAILED — the patient may not have data.\n\nPlease call them by name from the waiting area:\nLook for the patient name on the queue board.');
+  }
   refresh();
 }
 async function pausePatient(id){
