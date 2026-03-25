@@ -4441,6 +4441,71 @@ async function orchestrate(patientId, from, message, session) {
   await saveSession(patientId, session);
 
   await sendWhatsAppMessage(from, msg('facility_suggest', lang, nearest.name, nearest.distance));
+
+  // ==================== FALLBACK: UNRECOGNIZED INPUT ====================
+  // If we reach here, the patient sent text that didn't match any step.
+  // This is unreachable in normal flow (facility_suggest is the last action),
+  // but the fallback below catches cases where the orchestrate function
+  // falls through without hitting any handler.
+}
+
+// Wrapper that adds a fallback to orchestrate for unrecognized input
+const _originalOrchestrate = orchestrate;
+async function orchestrateWithFallback(patientId, from, message, session) {
+  const lang = session.language || 'en';
+
+  // Track if orchestrate sent any message by wrapping sendWhatsAppMessage
+  let messageSent = false;
+  const originalSend = sendWhatsAppMessage;
+  const trackingSend = async (to, text) => {
+    messageSent = true;
+    return originalSend(to, text);
+  };
+
+  // We can't easily wrap sendWhatsAppMessage globally, so instead
+  // we detect the fallback case: if the patient has completed onboarding
+  // and their message doesn't match a category number or known command,
+  // show them the category menu.
+  
+  // Check if message would fall through all handlers
+  const isOnboarded = session.consent && session.identityDone && 
+    session.chronicScreeningDone && session.isStudyParticipant !== undefined;
+  const isActiveStep = session.identityStep || session.awaitingSymptomDetail || 
+    session.awaitingSymptomFollowUp || session.awaitingFacilityConfirm || 
+    session.awaitingAlternativeChoice || session.awaitingTransportSafety || 
+    session.awaitingReturningPatient || session.pendingLanguageChange || 
+    session.pendingTriage || session.ccmddStep || session.virtualConsultStep;
+  const isCategory = /^([1-9]|1[0-3])$/.test(message);
+  const isReset = message === '0';
+
+  // Run normal orchestration
+  await _originalOrchestrate(patientId, from, message, session);
+
+  // If the patient is onboarded, not in an active step, and didn't type
+  // a category number or reset command, they probably typed something
+  // unrecognized. After orchestrate runs, check if we should show help.
+  // We detect this by checking if session state changed (crude but effective).
+  if (isOnboarded && !isActiveStep && !isCategory && !isReset) {
+    const updatedSession = await getSession(patientId);
+    // If no step was activated, show the menu
+    if (!updatedSession.awaitingSymptomDetail && !updatedSession.awaitingFacilityConfirm &&
+        !updatedSession.awaitingAlternativeChoice && !updatedSession.awaitingTransportSafety &&
+        !updatedSession.awaitingReturningPatient && !updatedSession.pendingLanguageChange &&
+        !updatedSession.awaitingSymptomFollowUp && !updatedSession.pendingTriage) {
+      // Check if this was already handled (triage was run, facility was suggested, etc.)
+      // by seeing if lastTriage changed
+      if (JSON.stringify(updatedSession.lastTriage) === JSON.stringify(session.lastTriage)) {
+        const fallbackMsg = {
+          en: 'I didn\'t understand that. Here\'s what you can do:\n\nChoose a number from the menu below, or type:\n*0* — new consultation\n*code* — your reference number\n*language* — change language\n*help* — show menu',
+          zu: 'Angikuzwanga lokho. Nanti ongakwenza:\n\nKhetha inombolo kumenyu engezansi, noma bhala:\n*0* — ukuxoxa okusha\n*code* — inombolo yakho\n*ulimi* — shintsha ulimi\n*help* — khombisa imenyu',
+          xh: 'Andikuqondanga oko. Nantsi into onokuyenza:\n\nKhetha inombolo kwimenyu engezantsi, okanye bhala:\n*0* — incoko entsha\n*code* — inombolo yakho\n*ulwimi* — tshintsha ulwimi\n*help* — bonisa imenyu',
+          af: 'Ek het dit nie verstaan nie. Hier is wat jy kan doen:\n\nKies \'n nommer uit die spyskaart hieronder, of tik:\n*0* — nuwe konsultasie\n*code* — jou verwysingsnommer\n*taal* — verander taal\n*help* — wys spyskaart',
+        };
+        await sendWhatsAppMessage(from, fallbackMsg[lang] || fallbackMsg['en']);
+        await sendWhatsAppMessage(from, msg('category_menu', lang));
+      }
+    }
+  }
 }
 
 // ================== MESSAGE DEDUP ==================
@@ -4635,9 +4700,9 @@ async function handleMessage(msgObj) {
         const enrichedText = `Category: ${categoryContext}. Patient says: ${transcription}`;
         session.awaitingSymptomDetail = false;
         await saveSession(patientId, session);
-        await orchestrate(patientId, from, enrichedText, session);
+        await orchestrateWithFallback(patientId, from, enrichedText, session);
       } else {
-        await orchestrate(patientId, from, transcription, session);
+        await orchestrateWithFallback(patientId, from, transcription, session);
       }
     } catch (e) {
       console.error('[VOICE] Error handling voice note:', e.message);
@@ -4648,8 +4713,18 @@ async function handleMessage(msgObj) {
     return;
   }
 
-  // TEXT MESSAGE
-  if (msgObj.type !== 'text') return;
+  // UNSUPPORTED MESSAGE TYPES (stickers, images, videos, contacts, documents)
+  if (msgObj.type !== 'text') {
+    const lang = session.language || 'en';
+    const unsupportedMsg = {
+      en: 'Sorry, I can only read text messages and voice notes. Please type your message or send a voice note 🎤\n\nType *0* to start over or *help* for the menu.',
+      zu: 'Siyaxolisa, ngifunda imiyalezo yombhalo namavoice note kuphela. Sicela ubhale umyalezo noma uthumele ivoice note 🎤\n\nBhala *0* ukuqala kabusha noma *help* ukubona imenyu.',
+      xh: 'Siyaxolisa, ndifunda imiyalezo yombhalo neevoice note kuphela. Nceda ubhale umyalezo okanye uthumele ivoice note 🎤\n\nBhala *0* ukuqala kwakhona okanye *help* ukubona imenyu.',
+      af: 'Jammer, ek kan net teksboodskappe en stemnota\'s lees. Tik asseblief jou boodskap of stuur \'n stemnota 🎤\n\nTik *0* om oor te begin of *help* vir die spyskaart.',
+    };
+    await sendWhatsAppMessage(from, unsupportedMsg[lang] || unsupportedMsg['en']);
+    return;
+  }
   const text = msgObj.text.body.trim().toLowerCase();
 
   // ==================== FOLLOW-UP RESPONSE HANDLING ====================
@@ -4691,7 +4766,7 @@ async function handleMessage(msgObj) {
   }
 
   // NORMAL ORCHESTRATION
-  await orchestrate(patientId, from, text, session);
+  await orchestrateWithFallback(patientId, from, text, session);
 }
 
 // ================== FOLLOW-UP AGENT ==================
