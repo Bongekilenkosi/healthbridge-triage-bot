@@ -5537,11 +5537,11 @@ app.get('/api/clinic/queue', requireDashboardAuth, async (req, res) => {
       .select('*')
       .gte('checked_in_at', todayStart.toISOString());
 
-    // Filter by status (default: waiting + in_consultation)
+    // Filter by status (default: waiting + in_consultation + paused)
     if (req.query.status) {
       query = query.eq('status', req.query.status);
     } else {
-      query = query.in('status', ['waiting', 'in_consultation']);
+      query = query.in('status', ['waiting', 'in_consultation', 'paused']);
     }
 
     query = query.order('queue_type', { ascending: true })
@@ -6099,6 +6099,90 @@ app.put('/api/clinic/queue/:id/no-show', requireDashboardAuth, async (req, res) 
       .update({
         status: 'no_show',
         completed_at: new Date(),
+      })
+      .eq('id', req.params.id);
+
+    if (error) throw error;
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// PUT /api/clinic/queue/:id/pause — Pause consultation (nurse handling emergency)
+app.put('/api/clinic/queue/:id/pause', requireDashboardAuth, async (req, res) => {
+  try {
+    const { nurse_name } = req.body;
+    const { error } = await supabase
+      .from('clinic_queue')
+      .update({
+        status: 'paused',
+        notes: supabase.raw ? undefined : null, // Append handled below
+      })
+      .eq('id', req.params.id);
+
+    // Append note
+    const { data: entry } = await supabase.from('clinic_queue').select('notes').eq('id', req.params.id).single();
+    await supabase.from('clinic_queue').update({
+      notes: ((entry?.notes || '') + ' | PAUSED by ' + (nurse_name || 'nurse') + ' at ' + new Date().toLocaleTimeString('en-ZA')).trim()
+    }).eq('id', req.params.id);
+
+    if (error) throw error;
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// PUT /api/clinic/queue/:id/resume — Resume paused consultation
+app.put('/api/clinic/queue/:id/resume', requireDashboardAuth, async (req, res) => {
+  try {
+    const { nurse_name } = req.body;
+
+    const { data: entry } = await supabase.from('clinic_queue').select('notes, patient_phone, patient_id').eq('id', req.params.id).single();
+
+    const { error } = await supabase
+      .from('clinic_queue')
+      .update({
+        status: 'in_consultation',
+        notes: ((entry?.notes || '') + ' | RESUMED by ' + (nurse_name || 'nurse') + ' at ' + new Date().toLocaleTimeString('en-ZA')).trim()
+      })
+      .eq('id', req.params.id);
+
+    // Notify patient on WhatsApp that they're being called back
+    if (entry?.patient_phone) {
+      try {
+        const session = entry.patient_id ? await getSession(entry.patient_id) : {};
+        const lang = session.language || 'en';
+        const resumeMsg = {
+          en: '📢 *You are being called back!* Please return to the consultation room now.',
+          zu: '📢 *Uyabizwa futhi!* Sicela ubuyele egumbini lokubonana manje.',
+          xh: '📢 *Uyabizwa kwakhona!* Nceda ubuyele kwigumbi lokubonana ngoku.',
+          af: '📢 *Jy word weer geroep!* Keer asseblief nou terug na die spreekkamer.',
+        };
+        await sendWhatsAppMessage(entry.patient_phone, resumeMsg[lang] || resumeMsg['en']);
+      } catch (e) {
+        console.error('[RESUME] WhatsApp notification failed:', e.message);
+      }
+    }
+
+    if (error) throw error;
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// PUT /api/clinic/queue/:id/left — Left Without Being Seen (LWBS)
+app.put('/api/clinic/queue/:id/left', requireDashboardAuth, async (req, res) => {
+  try {
+    const { nurse_name } = req.body;
+    const { error } = await supabase
+      .from('clinic_queue')
+      .update({
+        status: 'left_without_seen',
+        completed_at: new Date(),
+        notes: 'LEFT WITHOUT BEING SEEN — recorded by ' + (nurse_name || 'staff'),
       })
       .eq('id', req.params.id);
 
