@@ -1883,6 +1883,137 @@ async function findNearestFacilities(patientLocation, type, limit = 3) {
 }
 
 // ================== ROUTING ==================
+// ================================================================
+// AUTO-QUEUE: Add patient to clinic queue after facility confirmation
+// ================================================================
+// Maps triage level to queue type:
+//   RED/ORANGE → fast_track
+//   YELLOW → routine
+//   GREEN → routine
+//   UNKNOWN → walk_in
+
+function triageToQueueType(triageLevel) {
+  switch (triageLevel) {
+    case 'RED': case 'ORANGE': return 'fast_track';
+    case 'YELLOW': case 'GREEN': return 'routine';
+    default: return 'walk_in';
+  }
+}
+
+async function autoAddToQueue(patientId, from, session) {
+  const triageLevel = session.lastTriage?.triage_level || 'UNKNOWN';
+  const queueType = triageToQueueType(triageLevel);
+  const facility = session.confirmedFacility;
+  const lang = session.language || 'en';
+
+  try {
+    // Check if already in queue today
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const { data: existing } = await supabase
+      .from('clinic_queue')
+      .select('id')
+      .eq('patient_id', patientId)
+      .gte('checked_in_at', todayStart.toISOString())
+      .in('status', ['waiting', 'in_consultation'])
+      .limit(1);
+
+    if (existing && existing.length > 0) {
+      // Already in queue — don't add again
+      return;
+    }
+
+    // Get next position in this queue
+    const { data: lastInQueue } = await supabase
+      .from('clinic_queue')
+      .select('position')
+      .eq('queue_type', queueType)
+      .eq('status', 'waiting')
+      .order('position', { ascending: false })
+      .limit(1);
+
+    const position = (lastInQueue && lastInQueue.length > 0)
+      ? lastInQueue[0].position + 1
+      : 1;
+
+    // Build patient name from session
+    const patientName = (session.firstName && session.surname)
+      ? `${session.firstName} ${session.surname}`
+      : null;
+
+    // Add to queue
+    await supabase.from('clinic_queue').insert({
+      patient_id: patientId,
+      patient_phone: from,
+      patient_name: patientName,
+      triage_level: triageLevel,
+      triage_confidence: session.lastTriage?.confidence || null,
+      symptoms_summary: session.lastSymptoms ? session.lastSymptoms.slice(0, 200) : null,
+      queue_type: queueType,
+      status: 'waiting',
+      checked_in_at: new Date(),
+      position,
+      study_code: session.studyCode || null,
+      notes: facility ? `Facility: ${facility.name}` : null,
+      created_at: new Date(),
+    });
+
+    // Calculate estimated wait time
+    const patientsAhead = position - 1;
+    let estMinutes = null;
+
+    // Get average wait from today's completed patients in same queue type
+    const { data: completed } = await supabase
+      .from('clinic_queue')
+      .select('checked_in_at, called_at')
+      .eq('queue_type', queueType)
+      .eq('status', 'completed')
+      .gte('checked_in_at', todayStart.toISOString())
+      .not('called_at', 'is', null);
+
+    if (completed && completed.length >= 2) {
+      const waits = completed.map(p => {
+        return (new Date(p.called_at) - new Date(p.checked_in_at)) / 60000;
+      }).filter(w => w > 0 && w < 480); // Exclude outliers
+
+      if (waits.length > 0) {
+        const avgWait = Math.round(waits.reduce((a, b) => a + b, 0) / waits.length);
+        estMinutes = patientsAhead * avgWait;
+      }
+    }
+
+    // Fallback estimates if no data yet
+    if (estMinutes === null) {
+      const fallbackMinutes = { fast_track: 10, routine: 30, walk_in: 45 };
+      estMinutes = patientsAhead * (fallbackMinutes[queueType] || 30);
+    }
+
+    // Send WhatsApp queue notification
+    const queueNames = {
+      fast_track: { en: 'Fast-Track (urgent)', zu: 'Esheshayo (kuphuthuma)', xh: 'Ekhawulezayo (kungxamisekile)', af: 'Spoedlyn (dringend)' },
+      routine: { en: 'Routine', zu: 'Ejwayelekile', xh: 'Eqhelekileyo', af: 'Roetine' },
+      walk_in: { en: 'Walk-In', zu: 'Ungena nje', xh: 'Ungena nje', af: 'Instap' },
+    };
+
+    const queueLabel = queueNames[queueType]?.[lang] || queueNames[queueType]?.['en'] || queueType;
+
+    const waitMsg = {
+      en: `📋 You have been added to the clinic queue.\n\n🏥 *${facility?.name || 'Clinic'}*\n📊 Queue: *${queueLabel}*\n👥 Position: *#${position}*${estMinutes > 0 ? `\n⏱️ Estimated wait: *~${estMinutes} minutes*` : ''}\n\nPlease arrive at the clinic. You will be called based on your position.\n\nThe clinic has your name and file information ready.`,
+      zu: `📋 Usufakwe emugqeni wasemtholampilo.\n\n🏥 *${facility?.name || 'Umtholampilo'}*\n📊 Umugqa: *${queueLabel}*\n👥 Isikhundla: *#${position}*${estMinutes > 0 ? `\n⏱️ Isikhathi esilindelekile: *~${estMinutes} imizuzu*` : ''}\n\nSicela ufike emtholampilo. Uzobizwa ngokwesikhundla sakho.\n\nUmtholampilo unegama lakho nemininingwane yefayela lakho.`,
+      xh: `📋 Ufakiwe kumgca wekliniki.\n\n🏥 *${facility?.name || 'Ikliniki'}*\n📊 Umgca: *${queueLabel}*\n👥 Indawo: *#${position}*${estMinutes > 0 ? `\n⏱️ Ixesha elilindelekileyo: *~${estMinutes} imizuzu*` : ''}\n\nNceda ufike ekliniki. Uya kubizwa ngokwendawo yakho.\n\nIkliniki inegama lakho nolwazi lwefayile yakho.`,
+      af: `📋 Jy is by die kliniek se tou gevoeg.\n\n🏥 *${facility?.name || 'Kliniek'}*\n📊 Tou: *${queueLabel}*\n👥 Posisie: *#${position}*${estMinutes > 0 ? `\n⏱️ Geskatte wagtyd: *~${estMinutes} minute*` : ''}\n\nKom asseblief by die kliniek aan. Jy sal geroep word volgens jou posisie.\n\nDie kliniek het jou naam en lêerinligting gereed.`,
+    };
+
+    await sendWhatsAppMessage(from, waitMsg[lang] || waitMsg['en']);
+
+    console.log(`[AUTO-QUEUE] Patient ${patientId} added to ${queueType} queue at position ${position} (est. ${estMinutes} min)`);
+
+  } catch (e) {
+    console.error('[AUTO-QUEUE] Failed to add patient to queue:', e.message);
+    // Don't fail the flow — queue is a nice-to-have, not critical
+  }
+}
+
 function getTriagePathway(triageLevel) {
   switch (triageLevel) {
     case 'RED': return { pathway: 'ambulance', facilityType: 'hospital' };
@@ -3455,7 +3586,9 @@ async function orchestrate(patientId, from, message, session) {
         return;
       }
 
-      // For RED/ORANGE — skip, every second counts
+      // For RED/ORANGE — skip returning question, every second counts
+      // But still auto-add to fast-track queue
+      await autoAddToQueue(patientId, from, session);
       await scheduleFollowUp(patientId, from, session.lastTriage?.triage_level);
       await sendWhatsAppMessage(from, msg('tips', lang));
       return;
@@ -3506,6 +3639,16 @@ async function orchestrate(patientId, from, message, session) {
         symptoms: session.lastSymptoms
       });
 
+      // Ask returning vs new (YELLOW/GREEN only)
+      if (session.lastTriage?.triage_level === 'YELLOW' || session.lastTriage?.triage_level === 'GREEN') {
+        session.awaitingReturningPatient = true;
+        await saveSession(patientId, session);
+        await sendWhatsAppMessage(from, msg('ask_returning', lang, facility.name));
+        return;
+      }
+
+      // RED/ORANGE — auto-queue immediately
+      await autoAddToQueue(patientId, from, session);
       await scheduleFollowUp(patientId, from, session.lastTriage?.triage_level);
       await sendWhatsAppMessage(from, msg('tips', lang));
       return;
@@ -3532,6 +3675,9 @@ async function orchestrate(patientId, from, message, session) {
       await saveSession(patientId, session);
       await sendWhatsAppMessage(from, msg('returning_unsure', lang));
     }
+
+    // Auto-add to clinic queue and send wait time estimate
+    await autoAddToQueue(patientId, from, session);
 
     await scheduleFollowUp(patientId, from, session.lastTriage?.triage_level);
     await sendWhatsAppMessage(from, msg('tips', lang));
