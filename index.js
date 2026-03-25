@@ -2016,17 +2016,35 @@ async function findNearestFacilities(patientLocation, type, limit = 3) {
 //   GREEN → routine
 //   UNKNOWN → walk_in
 
-function triageToQueueType(triageLevel) {
-  switch (triageLevel) {
-    case 'RED': case 'ORANGE': return 'fast_track';
-    case 'YELLOW': case 'GREEN': return 'routine';
-    default: return 'walk_in';
-  }
+// DoH-aligned patient streams:
+// emergency    = RED triage (stabilise + transfer)
+// acute        = ORANGE/YELLOW acute care (infections, injuries, asthma)
+// chronic      = Medication/Chronic category (stable = fast-track meds, unstable = clinician)
+// maternal     = Pregnancy category (priority even if stable)
+// child        = Child illness category (priority, fast-track to reduce exposure)
+// preventative = Screening walk-ins (HIV test, BP, diabetes — bypass consult if normal)
+// general      = Everything else in routine queue
+function triageToQueueType(triageLevel, category) {
+  // RED always goes to emergency fast-track
+  if (triageLevel === 'RED') return 'emergency';
+
+  // Category-based streaming (DoH PHC clinic flow)
+  if (category === '3') return 'maternal';    // Pregnancy related
+  if (category === '7') return 'child';       // Child illness
+  if (category === '8') return 'chronic';     // Medication / Chronic
+
+  // Urgency-based for remaining categories
+  if (triageLevel === 'ORANGE') return 'acute';
+  if (triageLevel === 'YELLOW') return 'general';
+  if (triageLevel === 'GREEN') return 'general';
+
+  return 'general';
 }
 
 async function autoAddToQueue(patientId, from, session) {
   const triageLevel = session.lastTriage?.triage_level || 'UNKNOWN';
-  const queueType = triageToQueueType(triageLevel);
+  const category = session.selectedCategory || null;
+  const queueType = triageToQueueType(triageLevel, category);
   const facility = session.confirmedFacility;
   const lang = session.language || 'en';
 
@@ -4207,6 +4225,37 @@ async function orchestrate(patientId, from, message, session) {
     };
     const severityText = SEVERITY_MAP[message.trim()];
     let enrichedMessage;
+
+    // DoH CHRONIC BYPASS: Stable chronic patients (category 8 + mild) bypass full AI triage
+    // They go straight to the chronic stream for medication collection
+    if (session.selectedCategory === '8' && message.trim() === '1') {
+      session.lastTriage = { triage_level: 'GREEN', confidence: 95, source: 'chronic_bypass' };
+      session.lastSymptoms = 'Stable chronic patient — medication collection (DoH fast-track bypass)';
+      await saveSession(patientId, session);
+
+      const chronicBypassMsg = {
+        en: '\uD83D\uDC8A *Chronic Medication Collection*\n\nYou are stable \u2014 you have been added to the *chronic care stream* for fast-track medication collection.\n\nBring your clinic card and ID. If your symptoms change, tell the nurse on arrival.',
+        zu: '\uD83D\uDC8A *Ukuthatha Umuthi Wamahlalakhona*\n\nUzinzile \u2014 usufakwe *emgqeni wezempilo zamahlalakhona* ukuze uthathe umuthi ngokushesha.\n\nLetha ikhadi lakho lasekliniki ne-ID. Uma izimpawu zakho zishintsha, tshela unesi uma ufika.',
+        xh: '\uD83D\uDC8A *Ukuthatha Amayeza Aqhelekileyo*\n\nUzinzile \u2014 ufakwe *kwimigca yezempilo eqhelekileyo* ukuze ufumane amayeza ngokukhawuleza.\n\nZisa ikhadi lakho lasekliniki ne-ID. Ukuba iimpawu zakho zitshintsha, xelela umongikazi xa ufika.',
+        af: '\uD83D\uDC8A *Chroniese Medikasie Afhaal*\n\nJy is stabiel \u2014 jy is by die *chroniese sorg stroom* gevoeg vir vinnige medikasie afhaal.\n\nBring jou kliniekkaart en ID. As jou simptome verander, s\u00EA vir die verpleegster by aankoms.',
+      };
+      await sendWhatsAppMessage(from, chronicBypassMsg[lang] || chronicBypassMsg['en']);
+
+      // Auto-add to chronic queue
+      await autoAddToQueue(patientId, from, session);
+      await sendWhatsAppMessage(from, msg('tips', lang));
+
+      await logTriage({
+        patient_id: patientId,
+        triage_level: 'GREEN',
+        confidence: 95,
+        escalation: false,
+        pathway: 'chronic_bypass_stable',
+        symptoms: 'Stable chronic patient — medication collection (DoH fast-track)',
+      });
+      return;
+    }
+
     if (severityText) {
       enrichedMessage = `Category: ${categoryContext}. ${severityText}`;
       // If they just picked a severity number, ask for a brief description too
@@ -6255,9 +6304,11 @@ app.get('/api/clinic/nurse-view', requireDashboardAuth, async (req, res) => {
 
     if (error) throw error;
 
-    const fastTrack = (waiting || []).filter(p => p.queue_type === 'fast_track');
-    const routine = (waiting || []).filter(p => p.queue_type === 'routine');
-    const walkIn = (waiting || []).filter(p => p.queue_type === 'walk_in');
+    const fastTrack = (waiting || []).filter(p => p.queue_type === 'emergency' || p.queue_type === 'acute' || p.queue_type === 'fast_track');
+    const routine = (waiting || []).filter(p => p.queue_type === 'general' || p.queue_type === 'routine');
+    const maternal = (waiting || []).filter(p => p.queue_type === 'maternal' || p.queue_type === 'child');
+    const chronic = (waiting || []).filter(p => p.queue_type === 'chronic');
+    const walkIn = (waiting || []).filter(p => p.queue_type === 'walk_in' || p.queue_type === 'preventative');
 
     const now = Date.now();
     const alerts = (waiting || []).filter(p => {
@@ -6275,11 +6326,26 @@ app.get('/api/clinic/nurse-view', requireDashboardAuth, async (req, res) => {
         : 'YELLOW patient waiting > 60 min',
     }));
 
+    // Reassessment alerts (DoH requirement)
+    const reassessAlerts = (waiting || []).filter(p => {
+      const waitMin = (now - new Date(p.checked_in_at).getTime()) / 60000;
+      return (
+        (p.triage_level === 'ORANGE' && waitMin > 15 && Math.floor(waitMin) % 15 < 2) ||
+        (p.triage_level === 'YELLOW' && waitMin > 60 && Math.floor(waitMin) % 60 < 2)
+      );
+    }).map(p => ({
+      ...p,
+      wait_minutes: Math.round((now - new Date(p.checked_in_at).getTime()) / 60000),
+      alert_reason: p.triage_level === 'ORANGE' ? 'REASSESS: ORANGE patient (every 15 min)' : 'REASSESS: YELLOW patient (every 60 min)',
+    }));
+
     res.json({
       fast_track: fastTrack.slice(0, 10),
       routine: routine.slice(0, 10),
+      maternal: maternal.slice(0, 10),
+      chronic: chronic.slice(0, 10),
       walk_in: walkIn.slice(0, 10),
-      alerts,
+      alerts: [...alerts, ...reassessAlerts],
     });
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -6361,8 +6427,8 @@ app.post('/api/kiosk/triage', async (req, res) => {
       symptoms: symptomText,
     });
 
-    // Add to clinic queue
-    const queueType = ['RED', 'ORANGE'].includes(triageLevel) ? 'fast_track' : 'routine';
+    // Add to clinic queue — use DoH-aligned streaming
+    const queueType = triageToQueueType(triageLevel, category);
 
     const { data: lastInQueue } = await supabase
       .from('clinic_queue')
