@@ -1446,17 +1446,17 @@ Uyavuma?
   },
 
   ask_sex: {
-    en: 'What is your sex?\n\n1 — Male\n2 — Female',
-    zu: 'Ubulili bakho yini?\n\n1 — Owesilisa\n2 — Owesifazane',
-    xh: 'Isini sakho siyintoni?\n\n1 — Indoda\n2 — Ibhinqa',
-    af: 'Wat is jou geslag?\n\n1 — Manlik\n2 — Vroulik',
-    nso: 'Bong ba gago ke eng?\n\n1 — Monna\n2 — Mosadi',
-    tn: 'Bong jwa gago ke eng?\n\n1 — Monna\n2 — Mosadi',
-    st: 'Boleng ba hao ke eng?\n\n1 — Monna\n2 — Mosadi',
-    ts: 'Rimbewu ra wena i yini?\n\n1 — Wanuna\n2 — Wansati',
-    ss: 'Bulili bakho buyini?\n\n1 — Lomdvuna\n2 — Lomfati',
-    ve: 'Mbeu yaṋu ndi ifhio?\n\n1 — Munna\n2 — Musadzi',
-    nr: 'Ubulili bakho buyini?\n\n1 — Indoda\n2 — Umfazi',
+    en: 'What is your sex?\n\n1 — Male\n2 — Female\n3 — Intersex\n4 — Prefer not to say',
+    zu: 'Ubulili bakho yini?\n\n1 — Owesilisa\n2 — Owesifazane\n3 — Intersex\n4 — Angithandi ukusho',
+    xh: 'Isini sakho siyintoni?\n\n1 — Indoda\n2 — Ibhinqa\n3 — Intersex\n4 — Andifuni ukutsho',
+    af: 'Wat is jou geslag?\n\n1 — Manlik\n2 — Vroulik\n3 — Interseks\n4 — Verkies om nie te sê nie',
+    nso: 'Bong ba gago ke eng?\n\n1 — Monna\n2 — Mosadi\n3 — Intersex\n4 — Ga ke nyake go bolela',
+    tn: 'Bong jwa gago ke eng?\n\n1 — Monna\n2 — Mosadi\n3 — Intersex\n4 — Ga ke batle go bolela',
+    st: 'Boleng ba hao ke eng?\n\n1 — Monna\n2 — Mosadi\n3 — Intersex\n4 — Ha ke batle ho bolela',
+    ts: 'Rimbewu ra wena i yini?\n\n1 — Wanuna\n2 — Wansati\n3 — Intersex\n4 — A ndzi lavi ku vula',
+    ss: 'Bulili bakho buyini?\n\n1 — Lomdvuna\n2 — Lomfati\n3 — Intersex\n4 — Angitsandzi kusho',
+    ve: 'Mbeu yaṋu ndi ifhio?\n\n1 — Munna\n2 — Musadzi\n3 — Intersex\n4 — A thi ṱoḓi u amba',
+    nr: 'Ubulili bakho buyini?\n\n1 — Indoda\n2 — Umfazi\n3 — Intersex\n4 — Angifuni ukutjho',
   },
 
   identity_confirmed: {
@@ -3616,8 +3616,9 @@ async function orchestrate(patientId, from, message, session) {
 
     // Step 1.2d: Sex
     if (session.identityStep === 'ask_sex') {
-      if (message === '1' || message === '2') {
-        session.sex = message === '1' ? 'male' : 'female';
+      const SEX_MAP = { '1': 'male', '2': 'female', '3': 'intersex', '4': 'prefer_not_to_say' };
+      if (SEX_MAP[message]) {
+        session.sex = SEX_MAP[message];
         session.identityDone = true;
         session.identityStep = null;
 
