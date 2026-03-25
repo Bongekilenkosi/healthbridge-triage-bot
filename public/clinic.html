@@ -199,8 +199,8 @@ a{color:#60a5fa;text-decoration:none}
     <!-- TAB: EXPECTED PATIENTS -->
     <div id="tab-expected" class="tab-content active">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-        <div><span style="font-size:14px;font-weight:700;color:#e2e8f0">Today's Expected Patients</span><br><span style="font-size:11px;color:#475569">Pre-pull files before patients arrive</span></div>
-        <div style="font-size:11px;color:#475569" id="exp-count">Loading...</div>
+        <div><span style="font-size:14px;font-weight:700;color:#e2e8f0">Today's Expected Patients</span><br><span style="font-size:11px;color:#94a3b8">Pre-pull files before patients arrive</span></div>
+        <div style="display:flex;align-items:center;gap:12px"><span style="font-size:11px;color:#475569" id="exp-count">Loading...</span><button class="btn btn-primary" style="padding:6px 14px;font-size:11px" onclick="printExpected()">Print List</button></div>
       </div>
       <div style="background:#0a1120;border:1px solid #131b2e;border-radius:10px;overflow:auto;max-height:70vh">
         <table class="exp-table">
@@ -495,7 +495,8 @@ async function doLookup(){
 
 // ==================== ACTIONS ====================
 async function callPatient(id){
-  await api('/api/clinic/queue/'+id+'/call',{method:'PUT',body:JSON.stringify({assigned_to:UNAME})});
+  const room=prompt('Room or nurse name (optional — patient will be notified on WhatsApp):','');
+  await api('/api/clinic/queue/'+id+'/call',{method:'PUT',body:JSON.stringify({assigned_to:UNAME,room:room||null})});
   refresh();
 }
 async function completePatient(id){
@@ -521,7 +522,25 @@ async function addToQueue(patientId,name,queueType){
     added_by:UNAME
   })});
   refresh();
-  doLookup(); // Re-run lookup to show "already in queue"
+  doLookup();
+}
+
+function printExpected(){
+  const table=document.querySelector('#tab-expected .exp-table');
+  if(!table)return;
+  const win=window.open('','_blank');
+  win.document.write('<html><head><title>BIZUSIZO Expected Patients - '+new Date().toLocaleDateString('en-ZA')+'</title>');
+  win.document.write('<style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:Arial,sans-serif;font-size:11px;padding:16px;color:#000}h1{font-size:16px;margin-bottom:2px}h2{font-size:12px;color:#666;margin-bottom:12px;font-weight:normal}table{width:100%;border-collapse:collapse}th{text-align:left;padding:6px 8px;background:#f0f0f0;border:1px solid #ccc;font-size:10px;text-transform:uppercase}td{padding:5px 8px;border:1px solid #ddd;font-size:11px}tr:nth-child(even){background:#f9f9f9}.ft{color:#e65100;font-weight:bold}.new{color:#d32f2f;font-weight:bold}@media print{@page{size:landscape;margin:10mm}}</style>');
+  win.document.write('</head><body>');
+  win.document.write('<h1>BIZUSIZO — Expected Patients</h1>');
+  win.document.write('<h2>'+new Date().toLocaleDateString('en-ZA',{weekday:'long',year:'numeric',month:'long',day:'numeric'})+' | Printed by: '+UNAME+' at '+new Date().toLocaleTimeString('en-ZA')+'</h2>');
+  const clone=table.cloneNode(true);
+  clone.querySelectorAll('.t-badge,.file-hint,.file-status,.chronic-pill').forEach(el=>{el.style.cssText='font-size:10px;padding:1px 4px;border:1px solid #999;border-radius:2px;display:inline-block;margin:1px'});
+  win.document.write(clone.outerHTML);
+  win.document.write('<div style="margin-top:16px;font-size:9px;color:#999;border-top:1px solid #ddd;padding-top:8px">BIZUSIZO v2.3 Clinic Queue Management | File preparation checklist</div>');
+  win.document.write('</body></html>');
+  win.document.close();
+  win.print();
 }
 
 setInterval(refresh,15000);
