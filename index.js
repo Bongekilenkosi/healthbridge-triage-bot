@@ -5804,6 +5804,146 @@ app.put('/api/clinic/queue/:id/call', requireDashboardAuth, async (req, res) => 
   }
 });
 
+// PUT /api/clinic/queue/:id/escalate — Escalate patient to hospital (referral)
+// Creates a referral record, updates queue, sends referral to patient on WhatsApp
+// If the hospital uses BIZUSIZO, they can look up the patient by referral_id or study_code
+app.put('/api/clinic/queue/:id/escalate', requireDashboardAuth, async (req, res) => {
+  try {
+    const { transport_method, nurse_notes, destination_hospital, nurse_name, study_code } = req.body;
+
+    // Get patient details
+    const { data: patient } = await supabase
+      .from('clinic_queue')
+      .select('*')
+      .eq('id', req.params.id)
+      .single();
+
+    if (!patient) return res.status(404).json({ error: 'Patient not found' });
+
+    // Get session for full patient info
+    const session = patient.patient_id ? await getSession(patient.patient_id) : {};
+
+    // Generate referral ID
+    const referralId = 'REF-' + Date.now().toString(36).toUpperCase() + '-' + Math.random().toString(36).slice(2, 6).toUpperCase();
+
+    // Create referral record in triage_logs (reuse existing table for now)
+    await supabase.from('triage_logs').insert({
+      patient_id: patient.patient_id,
+      triage_level: patient.triage_level || 'RED',
+      confidence: 100,
+      escalation: true,
+      pathway: transport_method === 'ambulance' ? 'hospital_referral_ambulance' : 'hospital_referral_self_transport',
+      facility_name: destination_hospital || 'Nearest hospital',
+      symptoms: `REFERRAL ${referralId} | Nurse: ${nurse_name || 'unknown'} | Reason: ${nurse_notes || 'Clinical escalation'} | Transport: ${transport_method} | Original symptoms: ${patient.symptoms_summary || 'N/A'}`,
+    });
+
+    // Update queue status
+    await supabase.from('clinic_queue').update({
+      status: 'completed',
+      completed_at: new Date(),
+      notes: (patient.notes ? patient.notes + ' | ' : '') + `REFERRED TO HOSPITAL: ${referralId} by ${nurse_name || 'nurse'} via ${transport_method}. ${nurse_notes || ''}`,
+    }).eq('id', req.params.id);
+
+    // Build referral summary for WhatsApp
+    const lang = session.language || 'en';
+    const patientName = patient.patient_name || session.firstName || 'Patient';
+    const dob = session.dob?.dob_string || 'Unknown';
+    const sex = session.sex || 'Unknown';
+    const chronic = (session.chronicConditions || []).map(c => c.label_en || c.key).join(', ') || 'None';
+
+    const referralMsg = {
+      en: `🏥 *HOSPITAL REFERRAL*\n\n` +
+        `You are being referred to ${destination_hospital || 'the nearest hospital'}.\n\n` +
+        `📋 *Referral Summary* (show this to the hospital):\n` +
+        `━━━━━━━━━━━━━━━━━━━━\n` +
+        `Referral ID: *${referralId}*\n` +
+        `Patient: *${patientName}*\n` +
+        `DOB: ${dob} | Sex: ${sex}\n` +
+        `BZ Code: *${study_code || session.studyCode || 'N/A'}*\n` +
+        `Triage: *${patient.triage_level}*\n` +
+        `Symptoms: ${patient.symptoms_summary || 'See nurse notes'}\n` +
+        `Chronic: ${chronic}\n` +
+        `Referred by: ${nurse_name || 'Nurse'}\n` +
+        `Reason: ${nurse_notes || 'Clinical escalation'}\n` +
+        `Time: ${new Date().toLocaleString('en-ZA', { timeZone: 'Africa/Johannesburg' })}\n` +
+        `━━━━━━━━━━━━━━━━━━━━\n\n` +
+        (transport_method === 'ambulance'
+          ? '🚑 An ambulance has been requested. Wait for the ambulance or ask the nurse for updates.'
+          : '🚗 Please go to the hospital now. Show this message to the hospital reception.'),
+
+      zu: `🏥 *UKUDLULISELWA ESIBHEDLELA*\n\n` +
+        `Udluliselwa ${destination_hospital || 'esibhedlela esiseduze'}.\n\n` +
+        `📋 *Isifinyezo sokudluliselwa* (khombisa loku esibhedlela):\n` +
+        `━━━━━━━━━━━━━━━━━━━━\n` +
+        `I-Referral ID: *${referralId}*\n` +
+        `Isiguli: *${patientName}*\n` +
+        `Usuku lokuzalwa: ${dob} | Ubulili: ${sex}\n` +
+        `Ikhodi ye-BZ: *${study_code || session.studyCode || 'N/A'}*\n` +
+        `Isimo: *${patient.triage_level}*\n` +
+        `Izimpawu: ${patient.symptoms_summary || 'Bheka amanothi kanesi'}\n` +
+        `Esingamahlalakhona: ${chronic}\n` +
+        `Udluliselwe ngu: ${nurse_name || 'Unesi'}\n` +
+        `Isizathu: ${nurse_notes || 'Ukudluliselwa kwezempilo'}\n` +
+        `Isikhathi: ${new Date().toLocaleString('en-ZA', { timeZone: 'Africa/Johannesburg' })}\n` +
+        `━━━━━━━━━━━━━━━━━━━━\n\n` +
+        (transport_method === 'ambulance'
+          ? '🚑 I-ambulensi iceliwe. Linda i-ambulensi noma ubuze unesi.'
+          : '🚗 Yana esibhedlela manje. Khombisa lo myalezo e-reception yesibhedlela.'),
+
+      xh: `🏥 *UKUDLULISELWA ESIBHEDLELE*\n\n` +
+        `Udluliselwa ${destination_hospital || 'esibhedlele esikufutshane'}.\n\n` +
+        `📋 *Isishwankathelo sokudluliselwa* (bonisa oku esibhedlele):\n` +
+        `━━━━━━━━━━━━━━━━━━━━\n` +
+        `I-Referral ID: *${referralId}*\n` +
+        `Isigulana: *${patientName}*\n` +
+        `Umhla wokuzalwa: ${dob} | Isini: ${sex}\n` +
+        `Ikhowudi ye-BZ: *${study_code || session.studyCode || 'N/A'}*\n` +
+        `Inqanaba: *${patient.triage_level}*\n` +
+        `Iimpawu: ${patient.symptoms_summary || 'Jonga amanqaku omongikazi'}\n` +
+        `Ezinganyangekiyo: ${chronic}\n` +
+        `Udluliselwe ngu: ${nurse_name || 'Umongikazi'}\n` +
+        `Isizathu: ${nurse_notes || 'Ukudluliselwa kwezempilo'}\n` +
+        `Ixesha: ${new Date().toLocaleString('en-ZA', { timeZone: 'Africa/Johannesburg' })}\n` +
+        `━━━━━━━━━━━━━━━━━━━━\n\n` +
+        (transport_method === 'ambulance'
+          ? '🚑 I-ambulensi iceliwe. Linda i-ambulensi okanye ubuze umongikazi.'
+          : '🚗 Yiya esibhedlele ngoku. Bonisa lo myalezo e-reception yesibhedlele.'),
+
+      af: `🏥 *HOSPITAALVERWYSING*\n\n` +
+        `Jy word verwys na ${destination_hospital || 'die naaste hospitaal'}.\n\n` +
+        `📋 *Verwysingsopsomming* (wys dit by die hospitaal):\n` +
+        `━━━━━━━━━━━━━━━━━━━━\n` +
+        `Verwysing ID: *${referralId}*\n` +
+        `Pasiënt: *${patientName}*\n` +
+        `Geboortedatum: ${dob} | Geslag: ${sex}\n` +
+        `BZ Kode: *${study_code || session.studyCode || 'N/A'}*\n` +
+        `Triage: *${patient.triage_level}*\n` +
+        `Simptome: ${patient.symptoms_summary || 'Sien verpleegster notas'}\n` +
+        `Chronies: ${chronic}\n` +
+        `Verwys deur: ${nurse_name || 'Verpleegster'}\n` +
+        `Rede: ${nurse_notes || 'Kliniese verwysing'}\n` +
+        `Tyd: ${new Date().toLocaleString('en-ZA', { timeZone: 'Africa/Johannesburg' })}\n` +
+        `━━━━━━━━━━━━━━━━━━━━\n\n` +
+        (transport_method === 'ambulance'
+          ? '🚑 \'n Ambulans is versoek. Wag vir die ambulans of vra die verpleegster.'
+          : '🚗 Gaan nou na die hospitaal. Wys hierdie boodskap by die hospitaal ontvangs.'),
+    };
+
+    // Send referral to patient on WhatsApp
+    if (patient.patient_phone) {
+      await sendWhatsAppMessage(patient.patient_phone, referralMsg[lang] || referralMsg['en']);
+    }
+
+    // Log for governance
+    console.log(`[REFERRAL] ${referralId}: ${patientName} → ${destination_hospital || 'nearest hospital'} by ${nurse_name} (${transport_method})`);
+
+    res.json({ success: true, referral_id: referralId });
+  } catch (e) {
+    console.error('[REFERRAL] Error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // PUT /api/clinic/queue/:id/feedback — Nurse triage feedback (agree/disagree)
 app.put('/api/clinic/queue/:id/feedback', requireDashboardAuth, async (req, res) => {
   try {
@@ -5848,6 +5988,62 @@ app.put('/api/clinic/queue/:id/feedback', requireDashboardAuth, async (req, res)
     });
 
     res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /api/referral/:id — Lookup a referral by ID (for hospitals using BIZUSIZO)
+// Hospital reception types the referral ID → gets full patient summary
+app.get('/api/referral/:id', requireDashboardAuth, async (req, res) => {
+  try {
+    const refId = req.params.id.toUpperCase().trim();
+
+    // Find the referral in triage_logs by searching symptoms field for the referral ID
+    const { data: logs } = await supabase
+      .from('triage_logs')
+      .select('*')
+      .like('symptoms', `%${refId}%`)
+      .eq('escalation', true)
+      .order('created_at', { ascending: false })
+      .limit(1);
+
+    if (!logs || logs.length === 0) {
+      return res.json({ found: false, message: 'Referral not found' });
+    }
+
+    const log = logs[0];
+    const patientId = log.patient_id;
+
+    // Get full session data
+    const session = await getSession(patientId);
+
+    // Get study code
+    const { data: codeData } = await supabase
+      .from('study_codes')
+      .select('study_code')
+      .eq('patient_id', patientId)
+      .limit(1);
+
+    res.json({
+      found: true,
+      referral_id: refId,
+      patient: {
+        name: (session.firstName && session.surname) ? `${session.firstName} ${session.surname}` : null,
+        dob: session.dob?.dob_string || null,
+        sex: session.sex || null,
+        study_code: codeData?.[0]?.study_code || session.studyCode || null,
+        language: session.language || 'en',
+      },
+      triage: {
+        level: log.triage_level,
+        symptoms: log.symptoms,
+        pathway: log.pathway,
+        facility: log.facility_name,
+        time: log.created_at,
+      },
+      chronic_conditions: (session.chronicConditions || []).map(c => c.label_en || c.key),
+    });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
