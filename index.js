@@ -3501,8 +3501,10 @@ async function orchestrate(patientId, from, message, session) {
       session.consent = true;
       await saveSession(patientId, session);
       await sendWhatsAppMessage(from, msg('consent_yes', lang));
-      // Route to chronic screening (not straight to category menu)
-      await sendWhatsAppMessage(from, msg('chronic_screening', lang));
+      // Route to identity capture (Step 1.2) — not chronic screening
+      await sendWhatsAppMessage(from, msg('ask_first_name', lang));
+      session.identityStep = 'ask_first_name';
+      await saveSession(patientId, session);
       return;
     }
     if (message === '2') {
