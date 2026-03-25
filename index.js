@@ -1,8 +1,12 @@
 // ============================================================
-// BIZUSIZO — PRODUCTION READY v2.2
+// BIZUSIZO — PRODUCTION READY v2.3
 // + Hardcoded 11-language messages
 // + Smart facility routing with patient confirmation
 // + Four-Pillar Governance Framework (Stanford-adapted)
+// + Patient identity capture (name, surname, DOB, sex)
+// + Pre-arrival file preparation system
+// + Clinic queue management API
+// + Returning vs new patient detection
 // + Bug fixes
 // Railway + Meta WhatsApp + Supabase + Anthropic
 // March 2026
@@ -390,6 +394,53 @@ governance = new GovernanceOrchestrator(supabase, {
 
 function hashPhone(phone) {
   return crypto.createHash('sha256').update(phone).digest('hex').slice(0, 16);
+}
+
+// ================== IDENTITY HELPERS ==================
+// DOB parsing handles common SA input patterns:
+// "15-03-1992", "15/03/1992", "15 03 1992", "1992-03-15", "15031992"
+function parseDOB(input) {
+  const cleaned = (input || '').trim();
+  let match = cleaned.match(/^(\d{1,2})[\/\-\s](\d{1,2})[\/\-\s](\d{4})$/);
+  if (match) {
+    const [, d, m, y] = match;
+    return validateDOB(parseInt(d), parseInt(m), parseInt(y));
+  }
+  match = cleaned.match(/^(\d{4})[\/\-\s](\d{1,2})[\/\-\s](\d{1,2})$/);
+  if (match) {
+    const [, y, m, d] = match;
+    return validateDOB(parseInt(d), parseInt(m), parseInt(y));
+  }
+  match = cleaned.match(/^(\d{2})(\d{2})(\d{4})$/);
+  if (match) {
+    const [, d, m, y] = match;
+    return validateDOB(parseInt(d), parseInt(m), parseInt(y));
+  }
+  return { valid: false };
+}
+
+function validateDOB(day, month, year) {
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  if (year < 1900 || year > currentYear) return { valid: false };
+  if (month < 1 || month > 12) return { valid: false };
+  if (day < 1 || day > 31) return { valid: false };
+  const dob = new Date(year, month - 1, day);
+  if (dob > now) return { valid: false };
+  const age = Math.floor((now - dob) / (365.25 * 24 * 60 * 60 * 1000));
+  return {
+    valid: true, day, month, year,
+    dob_string: `${String(day).padStart(2, '0')}-${String(month).padStart(2, '0')}-${year}`,
+    dob_iso: dob.toISOString().split('T')[0],
+    age,
+  };
+}
+
+function capitalizeName(name) {
+  return (name || '').trim()
+    .split(/\s+/)
+    .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .join(' ');
 }
 
 // ================== STUDY CODE GENERATOR ==================
@@ -1260,6 +1311,134 @@ Uyavuma?
     ss: '✅ Siyabonga. Loku kusisita sikunikete teluleko lencono.',
     ve: '✅ Ri a livhuwa. Izwi ḽi ri thusa u ni ṋea vhulivhisi ha khwine.',
     nr: '✅ Siyathokoza. Lokhu kusisiza sikunikele isinqophiso esingcono.'
+  },
+
+  // ==================== IDENTITY CAPTURE ====================
+  ask_first_name: {
+    en: 'What is your first name? (As it appears on your ID)\n\nType your name:',
+    zu: 'Ubani igama lakho? (Njengoba libhalwe ku-ID yakho)\n\nBhala igama lakho:',
+    xh: 'Ngubani igama lakho? (Njengoko libhalwe kwi-ID yakho)\n\nBhala igama lakho:',
+    af: 'Wat is jou voornaam? (Soos op jou ID)\n\nTik jou naam:',
+    nso: 'Leina la gago ke mang? (Bjalo ka ge le ngwadilwe go ID ya gago)\n\nNgwala leina la gago:',
+    tn: 'Leina la gago ke mang? (Jaaka le kwadilwe mo go ID ya gago)\n\nKwala leina la gago:',
+    st: 'Lebitso la hao ke mang? (Jwaleka ha le ngotsweng ho ID ya hao)\n\nNgola lebitso la hao:',
+    ts: 'Vito ra wena i mani? (Tanihileswi ri ngwaleke eka ID ya wena)\n\nTsala vito ra wena:',
+    ss: 'Ngubani libito lakho? (Njengoba libhaliwe ku-ID yakho)\n\nBhala libito lakho:',
+    ve: 'Dzina \u1e3daṋu ndi \u1e3difhio? (Sa zwine \u1e3da vha \u1e3do ṅwalwa kha ID yaṋu)\n\nṄwalani dzina \u1e3daṋu:',
+    nr: 'Ngubani ibizo lakho? (Njengoba libhaliwe ku-ID yakho)\n\nTlola ibizo lakho:',
+  },
+
+  ask_surname: {
+    en: (firstName) => `Thank you, *${firstName}*.\n\nWhat is your surname / family name?\n\nType your surname:`,
+    zu: (firstName) => `Siyabonga, *${firstName}*.\n\nIsibongo sakho ubani?\n\nBhala isibongo sakho:`,
+    xh: (firstName) => `Enkosi, *${firstName}*.\n\nFani yakho ngubani?\n\nBhala ifani yakho:`,
+    af: (firstName) => `Dankie, *${firstName}*.\n\nWat is jou van?\n\nTik jou van:`,
+    nso: (firstName) => `Re a leboga, *${firstName}*.\n\nSefane sa gago ke mang?\n\nNgwala sefane sa gago:`,
+    tn: (firstName) => `Re a leboga, *${firstName}*.\n\nSefane sa gago ke mang?\n\nKwala sefane sa gago:`,
+    st: (firstName) => `Re a leboha, *${firstName}*.\n\nFane ya hao ke mang?\n\nNgola fane ya hao:`,
+    ts: (firstName) => `Hi khensa, *${firstName}*.\n\nXivongo xa wena i mani?\n\nTsala xivongo xa wena:`,
+    ss: (firstName) => `Siyabonga, *${firstName}*.\n\nSibongo sakho ngubani?\n\nBhala sibongo sakho:`,
+    ve: (firstName) => `Ri a livhuwa, *${firstName}*.\n\nTshina tsha haṋu ndi tshifhio?\n\nṄwalani tshina tsha haṋu:`,
+    nr: (firstName) => `Siyathokoza, *${firstName}*.\n\nIsibongo sakho ngubani?\n\nTlola isibongo sakho:`,
+  },
+
+  ask_dob: {
+    en: 'What is your date of birth?\n\nType it like this: *DD-MM-YYYY*\nExample: *15-03-1992*',
+    zu: 'Usuku lwakho lokuzalwa luyini?\n\nBhala kanje: *DD-MM-YYYY*\nIsibonelo: *15-03-1992*',
+    xh: 'Umhla wakho wokuzalwa ngowuphi?\n\nBhala ngolu hlobo: *DD-MM-YYYY*\nUmzekelo: *15-03-1992*',
+    af: 'Wat is jou geboortedatum?\n\nTik dit so: *DD-MM-YYYY*\nVoorbeeld: *15-03-1992*',
+    nso: 'Letšatšikgwedi la gago la matswalo ke lefe?\n\nNgwala ka tsela ye: *DD-MM-YYYY*\nMohlala: *15-03-1992*',
+    tn: 'Letsatsi la gago la matsalo ke lefe?\n\nKwala ka tsela e: *DD-MM-YYYY*\nSekai: *15-03-1992*',
+    st: 'Letsatsi la hao la tswalo ke lefe?\n\nNgola ka tsela ena: *DD-MM-YYYY*\nMohlala: *15-03-1992*',
+    ts: 'Siku ra wena ro velekiwa hi rini?\n\nTsala hi ndlela leyi: *DD-MM-YYYY*\nXikombiso: *15-03-1992*',
+    ss: 'Lusuku lwakho lwekutalwa luyini?\n\nBhala kanje: *DD-MM-YYYY*\nSibonelo: *15-03-1992*',
+    ve: 'Ḓuvha \u1e3daṋu \u1e3da mabebo ndi \u1e3difhio?\n\nṄwalani nga nḓila iyi: *DD-MM-YYYY*\nTsumbo: *15-03-1992*',
+    nr: 'Ilanga lakho lokubelethwa liyini?\n\nTlola ngalendlela: *DD-MM-YYYY*\nIsibonelo: *15-03-1992*',
+  },
+
+  ask_sex: {
+    en: 'What is your sex?\n\n1 — Male\n2 — Female',
+    zu: 'Ubulili bakho yini?\n\n1 — Owesilisa\n2 — Owesifazane',
+    xh: 'Isini sakho siyintoni?\n\n1 — Indoda\n2 — Ibhinqa',
+    af: 'Wat is jou geslag?\n\n1 — Manlik\n2 — Vroulik',
+    nso: 'Bong ba gago ke eng?\n\n1 — Monna\n2 — Mosadi',
+    tn: 'Bong jwa gago ke eng?\n\n1 — Monna\n2 — Mosadi',
+    st: 'Boleng ba hao ke eng?\n\n1 — Monna\n2 — Mosadi',
+    ts: 'Rimbewu ra wena i yini?\n\n1 — Wanuna\n2 — Wansati',
+    ss: 'Bulili bakho buyini?\n\n1 — Lomdvuna\n2 — Lomfati',
+    ve: 'Mbeu yaṋu ndi ifhio?\n\n1 — Munna\n2 — Musadzi',
+    nr: 'Ubulili bakho buyini?\n\n1 — Indoda\n2 — Umfazi',
+  },
+
+  identity_confirmed: {
+    en: (name, surname) => `✅ Thank you, *${name} ${surname}*. This helps the clinic prepare your file before you arrive.`,
+    zu: (name, surname) => `✅ Siyabonga, *${name} ${surname}*. Lokhu kusiza umtholampilo ulungise ifayela lakho ngaphambi kokuthi ufike.`,
+    xh: (name, surname) => `✅ Enkosi, *${name} ${surname}*. Oku kunceda ikliniki ilungise ifayile yakho phambi kokuba ufike.`,
+    af: (name, surname) => `✅ Dankie, *${name} ${surname}*. Dit help die kliniek om jou l\u00EAer voor te berei voor jy aankom.`,
+    nso: (name, surname) => `✅ Re a leboga, *${name} ${surname}*. Se se thuša kiliniki go lokišetša faele ya gago pele o fihla.`,
+    tn: (name, surname) => `✅ Re a leboga, *${name} ${surname}*. Se se thusa kliniki go baakanya faele ya gago pele o goroga.`,
+    st: (name, surname) => `✅ Re a leboha, *${name} ${surname}*. Sena se thusa kliniki ho lokisetsa faele ya hao pele o fihla.`,
+    ts: (name, surname) => `✅ Hi khensa, *${name} ${surname}*. Leswi swi pfuna kliniki ku lulamisa fayili ya wena u nga si fika.`,
+    ss: (name, surname) => `✅ Siyabonga, *${name} ${surname}*. Loku kusita ikliniki ilungise ifayili yakho ungakefiki.`,
+    ve: (name, surname) => `✅ Ri a livhuwa, *${name} ${surname}*. Izwi \u1e3di thusa kiliniki u lugisa faela yaṋu ni sa athu u swika.`,
+    nr: (name, surname) => `✅ Siyathokoza, *${name} ${surname}*. Lokhu kusiza ikliniki ilungiselele ifayili yakho ungakafiki.`,
+  },
+
+  // ==================== RETURNING VS NEW PATIENT ====================
+  ask_returning: {
+    en: (facilityName) => `Have you been to *${facilityName}* before?\n\n1 — Yes, I have a file there\n2 — No, this is my first visit\n3 — I'm not sure`,
+    zu: (facilityName) => `Ingabe uke waya ku-*${facilityName}* ngaphambili?\n\n1 — Yebo, nginefayela khona\n2 — Cha, ngivakashela okokuqala\n3 — Angiqiniseki`,
+    xh: (facilityName) => `Ingaba ukhe waya ku-*${facilityName}* ngaphambili?\n\n1 — Ewe, ndinefayile apho\n2 — Hayi, yindwendwelo yam yokuqala\n3 — Andiqinisekanga`,
+    af: (facilityName) => `Was jy al voorheen by *${facilityName}*?\n\n1 — Ja, ek het 'n l\u00EAer daar\n2 — Nee, dit is my eerste besoek\n3 — Ek is nie seker nie`,
+    nso: (facilityName) => `A o kile wa ya go *${facilityName}* peleng?\n\n1 — Ee, ke na le faele moo\n2 — Aowa, ke ketelo ya ka ya mathomo\n3 — Ga ke na bonnete`,
+    tn: (facilityName) => `A o kile wa ya kwa *${facilityName}* pele?\n\n1 — Ee, ke na le faele koo\n2 — Nnyaa, ke ketelo ya me ya ntlha\n3 — Ga ke na bonnete`,
+    st: (facilityName) => `Na o kile wa ya ho *${facilityName}* pele?\n\n1 — E, ke na le faele moo\n2 — Tjhe, ke ketelo ya ka ya pele\n3 — Ha ke na bonnete`,
+    ts: (facilityName) => `Xana u tshame u ya eka *${facilityName}* khale?\n\n1 — Ina, ndzi na fayili kwalaho\n2 — Ee-ee, ku endzela ka mina ko sungula\n3 — A ndzi tiyiseki`,
+    ss: (facilityName) => `Sewuke waya ku-*${facilityName}* ngaphambilini?\n\n1 — Yebo, nginefayili lapho\n2 — Cha, kuvakashela kwami kwekucala\n3 — Angikacini`,
+    ve: (facilityName) => `Naa no ṱalela kha *${facilityName}* kale?\n\n1 — Ee, ndi na faela henefho\n2 — Hai, ndi u dalela hanga ha u thoma\n3 — A thi na vhungoho`,
+    nr: (facilityName) => `Sewuke waya ku-*${facilityName}* ngaphambilini?\n\n1 — Iye, nginefayili lapho\n2 — Awa, kuvakathela kwami kokuthoma\n3 — Angikaqiniseki`,
+  },
+
+  returning_yes: {
+    en: '📁 Good — the clinic will look for your file before you arrive.',
+    zu: '📁 Kuhle — umtholampilo uzofuna ifayela lakho ngaphambi kokuthi ufike.',
+    xh: '📁 Kulungile — ikliniki iza kukhangela ifayile yakho phambi kokuba ufike.',
+    af: '📁 Goed — die kliniek sal jou l\u00EAer soek voor jy aankom.',
+    nso: '📁 Go botse — kiliniki e tla nyaka faele ya gago pele o fihla.',
+    tn: '📁 Go siame — kliniki e tla batla faele ya gago pele o goroga.',
+    st: '📁 Ho lokile — kliniki e tla batla faele ya hao pele o fihla.',
+    ts: '📁 Swa saseka — kliniki yi ta lava fayili ya wena u nga si fika.',
+    ss: '📁 Kuhle — ikliniki itawufuna ifayili yakho ungakefiki.',
+    ve: '📁 Ndi zwavhuḓi — kiliniki i ḓo ṱoḓa faela yaṋu ni sa athu u swika.',
+    nr: '📁 Kuhle — ikliniki izakufuna ifayili yakho ungakafiki.',
+  },
+
+  returning_new: {
+    en: '🆕 No problem — the clinic will create a new file for you. This saves time when you arrive.',
+    zu: '🆕 Akukho nkinga — umtholampilo uzokwenza ifayela elisha. Lokhu kongela isikhathi uma ufika.',
+    xh: '🆕 Akukho ngxaki — ikliniki iza kwenza ifayile entsha. Oku kongela ixesha xa ufika.',
+    af: '🆕 Geen probleem — die kliniek sal \'n nuwe l\u00EAer skep. Dit bespaar tyd wanneer jy aankom.',
+    nso: '🆕 Ga go bothata — kiliniki e tla dira faele ye mpsha. Se se boloka nako ge o fihla.',
+    tn: '🆕 Ga go bothata — kliniki e tla dira faele e ntšhwa. Se se boloka nako fa o goroga.',
+    st: '🆕 Ha ho bothata — kliniki e tla etsa faele e ncha. Sena se boloka nako ha o fihla.',
+    ts: '🆕 Ku hava xiphiqo — kliniki yi ta endla fayili leyintshwa. Leswi swi hlayisa nkarhi loko u fika.',
+    ss: '🆕 Kute inkinga — ikliniki itakwenta ifayili lensha. Loku kongela sikhatsi nawufika.',
+    ve: '🆕 A hu na thaidzo — kiliniki i ḓo ita faela ntswa. Izwi \u1e3di vhulungela tshifhinga musi ni tshi swika.',
+    nr: '🆕 Akukho ikinga — ikliniki izakwenza ifayili etja. Lokhu kusindisa isikhathi nawufika.',
+  },
+
+  returning_unsure: {
+    en: '📋 No problem. The clinic will check when you arrive. Your name and date of birth will help them find your file quickly.',
+    zu: '📋 Akukho nkinga. Umtholampilo uzohlola uma ufika. Igama lakho nosuku lokuzalwa kuzosiza bakuthole ifayela ngokushesha.',
+    xh: '📋 Akukho ngxaki. Ikliniki iza kukhangela xa ufika. Igama lakho nomhla wokuzalwa kuya kunceda bafumane ifayile ngokukhawuleza.',
+    af: '📋 Geen probleem. Die kliniek sal kontroleer wanneer jy aankom. Jou naam en geboortedatum sal hulle help om jou l\u00EAer vinnig te vind.',
+    nso: '📋 Ga go bothata. Kiliniki e tla lekola ge o fihla. Leina la gago le letšatšikgwedi la matswalo di tla ba thuša go hwetša faele ya gago ka pela.',
+    tn: '📋 Ga go bothata. Kliniki e tla tlhola fa o goroga. Leina la gago le letsatsi la matsalo di tla ba thusa go bona faele ya gago ka bonako.',
+    st: '📋 Ha ho bothata. Kliniki e tla hlahloba ha o fihla. Lebitso la hao le letsatsi la tswalo di tla ba thusa ho fumana faele ya hao kapele.',
+    ts: '📋 Ku hava xiphiqo. Kliniki yi ta kambela loko u fika. Vito ra wena na siku ro velekiwa swi ta va pfuna ku kuma fayili ya wena hi ku hatlisa.',
+    ss: '📋 Kute inkinga. Ikliniki itahlola nawufika. Libito lakho nelusuku lwekutalwa kutawubasita batfole ifayili yakho masinyane.',
+    ve: '📋 A hu na thaidzo. Kiliniki i ḓo sedza musi ni tshi swika. Dzina \u1e3daṋu na ḓuvha \u1e3da mabebo zwi ḓo vha thusa u wana faela yaṋu nga u ṱavhanya.',
+    nr: '📋 Akukho ikinga. Ikliniki izakuhlola nawufika. Ibizo lakho nelanga lokubelethwa kuzabasiza bafumane ifayili yakho msinyana.',
   },
 
   // ==================== STUDY PARTICIPATION ====================
@@ -3096,6 +3275,74 @@ async function orchestrate(patientId, from, message, session) {
     return;
   }
 
+  // ==================== STEP 1.2: IDENTITY CAPTURE ====================
+  // Runs once after consent, before chronic screening.
+  // Four sequential steps: name → surname → DOB → sex
+  if (session.consent && !session.identityDone) {
+
+    // Step 1.2a: First name
+    if (!session.identityStep || session.identityStep === 'ask_first_name') {
+      if (session.identityStep === 'ask_first_name' && message.length >= 1) {
+        const name = capitalizeName(message);
+        if (name.length >= 1 && !/\d/.test(name)) {
+          session.firstName = name;
+          session.identityStep = 'ask_surname';
+          await saveSession(patientId, session);
+          await sendWhatsAppMessage(from, msg('ask_surname', lang, name));
+          return;
+        }
+      }
+      session.identityStep = 'ask_first_name';
+      await saveSession(patientId, session);
+      await sendWhatsAppMessage(from, msg('ask_first_name', lang));
+      return;
+    }
+
+    // Step 1.2b: Surname
+    if (session.identityStep === 'ask_surname') {
+      const surname = capitalizeName(message);
+      if (surname.length >= 1 && !/\d/.test(surname)) {
+        session.surname = surname;
+        session.identityStep = 'ask_dob';
+        await saveSession(patientId, session);
+        await sendWhatsAppMessage(from, msg('ask_dob', lang));
+        return;
+      }
+      await sendWhatsAppMessage(from, msg('ask_surname', lang, session.firstName));
+      return;
+    }
+
+    // Step 1.2c: Date of birth
+    if (session.identityStep === 'ask_dob') {
+      const dob = parseDOB(message);
+      if (dob.valid) {
+        session.dob = dob;
+        session.patientAge = dob.age;
+        session.identityStep = 'ask_sex';
+        await saveSession(patientId, session);
+        await sendWhatsAppMessage(from, msg('ask_sex', lang));
+        return;
+      }
+      await sendWhatsAppMessage(from, msg('ask_dob', lang));
+      return;
+    }
+
+    // Step 1.2d: Sex
+    if (session.identityStep === 'ask_sex') {
+      if (message === '1' || message === '2') {
+        session.sex = message === '1' ? 'male' : 'female';
+        session.identityDone = true;
+        session.identityStep = null;
+        await saveSession(patientId, session);
+        await sendWhatsAppMessage(from, msg('identity_confirmed', lang, session.firstName, session.surname));
+        await sendWhatsAppMessage(from, msg('chronic_screening', lang));
+        return;
+      }
+      await sendWhatsAppMessage(from, msg('ask_sex', lang));
+      return;
+    }
+  }
+
   // ==================== STEP 1.5: CHRONIC CONDITION SCREENING ====================
   // Runs once after consent, before any triage. Captures chronic conditions
   // for ALL patients so the governance risk upgrade (Pillar 2) works universally.
@@ -3191,6 +3438,15 @@ async function orchestrate(patientId, from, message, session) {
         symptoms: session.lastSymptoms
       });
 
+      // Ask returning vs new (only for YELLOW/GREEN — not emergencies)
+      if (session.lastTriage?.triage_level === 'YELLOW' || session.lastTriage?.triage_level === 'GREEN') {
+        session.awaitingReturningPatient = true;
+        await saveSession(patientId, session);
+        await sendWhatsAppMessage(from, msg('ask_returning', lang, facility.name));
+        return;
+      }
+
+      // For RED/ORANGE — skip, every second counts
       await scheduleFollowUp(patientId, from, session.lastTriage?.triage_level);
       await sendWhatsAppMessage(from, msg('tips', lang));
       return;
@@ -3245,6 +3501,32 @@ async function orchestrate(patientId, from, message, session) {
       await sendWhatsAppMessage(from, msg('tips', lang));
       return;
     }
+  }
+
+  // ==================== STEP: RETURNING VS NEW PATIENT ====================
+  if (session.awaitingReturningPatient) {
+    session.awaitingReturningPatient = false;
+
+    if (message === '1') {
+      session.isReturningPatient = true;
+      session.fileStatus = 'existing';
+      await saveSession(patientId, session);
+      await sendWhatsAppMessage(from, msg('returning_yes', lang));
+    } else if (message === '2') {
+      session.isReturningPatient = false;
+      session.fileStatus = 'new';
+      await saveSession(patientId, session);
+      await sendWhatsAppMessage(from, msg('returning_new', lang));
+    } else {
+      session.isReturningPatient = null;
+      session.fileStatus = 'unknown';
+      await saveSession(patientId, session);
+      await sendWhatsAppMessage(from, msg('returning_unsure', lang));
+    }
+
+    await scheduleFollowUp(patientId, from, session.lastTriage?.triage_level);
+    await sendWhatsAppMessage(from, msg('tips', lang));
+    return;
   }
 
   // ==================== STEP: LANGUAGE CHANGE ====================
@@ -3625,14 +3907,6 @@ async function handleMessage(msgObj) {
   const patientId = hashPhone(from);
   let session = await getSession(patientId);
 
-  // HARD RESET — typing "00" wipes entire session (full re-onboarding)
-  // Use for testing or when patient wants to start completely fresh
-  if (msgObj.type === 'text' && msgObj.text.body.trim() === '00') {
-    await saveSession(patientId, {});
-    await sendWhatsAppMessage(from, MESSAGES.language_menu._all);
-    return;
-  }
-
   // RESET COMMAND — soft reset
   // Preserves: language, chronic conditions, study code, study participation
   // Clears: current triage state, facility routing, pending steps
@@ -3641,6 +3915,13 @@ async function handleMessage(msgObj) {
     const preserved = {
       language: session.language,
       consent: session.consent,
+      // Identity fields (never re-ask)
+      firstName: session.firstName,
+      surname: session.surname,
+      dob: session.dob,
+      sex: session.sex,
+      identityDone: session.identityDone,
+      // Existing preserved fields
       chronicConditions: session.chronicConditions,
       ccmddConditions: session.ccmddConditions,
       chronicScreeningDone: session.chronicScreeningDone,
@@ -3648,13 +3929,16 @@ async function handleMessage(msgObj) {
       studyCode: session.studyCode,
       location: session.location,
       patientAge: session.patientAge,
+      // File status
+      isReturningPatient: session.isReturningPatient,
+      fileStatus: session.fileStatus,
     };
     await saveSession(patientId, preserved);
 
     const lang = preserved.language || 'en';
 
     // If they have a full profile, skip straight to category menu
-    if (preserved.language && preserved.consent && preserved.chronicScreeningDone && preserved.isStudyParticipant !== undefined) {
+    if (preserved.language && preserved.consent && preserved.identityDone && preserved.chronicScreeningDone && preserved.isStudyParticipant !== undefined) {
       const resetMsg = {
         en: '🔄 Conversation reset. How can we help you today?',
         zu: '🔄 Ingxoxo iqalwe kabusha. Singakusiza ngani namuhla?',
@@ -4112,134 +4396,6 @@ function getClinicalDashboardHTML() {
 }
 
 // ================================================================
-// PRIVACY POLICY — Public page (no auth required)
-// Required by Meta to publish the WhatsApp app to Live mode.
-// Adapted from the BIZUSIZO POPIA DPIA document.
-// ================================================================
-app.get('/privacy', (req, res) => {
-  res.setHeader('Content-Type', 'text/html');
-  res.send(getPrivacyPolicyHTML());
-});
-
-function getPrivacyPolicyHTML() {
-  return [
-'<!DOCTYPE html>',
-'<html lang="en">',
-'<head>',
-'<meta charset="UTF-8">',
-'<meta name="viewport" content="width=device-width, initial-scale=1.0">',
-'<title>BIZUSIZO Privacy Policy</title>',
-'<style>',
-'*{margin:0;padding:0;box-sizing:border-box}',
-'body{background:#fff;color:#1a1a2e;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;line-height:1.7;padding:20px}',
-'.container{max-width:720px;margin:0 auto;padding:20px}',
-'h1{font-size:28px;color:#1B3A5C;margin-bottom:8px}',
-'h2{font-size:20px;color:#1B3A5C;margin-top:32px;margin-bottom:12px;padding-bottom:8px;border-bottom:2px solid #e2e8f0}',
-'h3{font-size:16px;color:#334155;margin-top:20px;margin-bottom:8px}',
-'p{margin-bottom:12px;color:#334155}',
-'ul{margin-bottom:12px;padding-left:24px}',
-'li{margin-bottom:6px;color:#334155}',
-'.subtitle{color:#64748b;font-size:14px;margin-bottom:24px}',
-'.updated{color:#64748b;font-size:13px;margin-top:32px;padding-top:16px;border-top:1px solid #e2e8f0}',
-'table{width:100%;border-collapse:collapse;margin:16px 0;font-size:14px}',
-'th{text-align:left;padding:8px 12px;background:#f1f5f9;color:#1B3A5C;font-size:12px;text-transform:uppercase;border:1px solid #e2e8f0}',
-'td{padding:8px 12px;border:1px solid #e2e8f0}',
-'.logo{font-size:32px;margin-bottom:4px}',
-'</style>',
-'</head>',
-'<body>',
-'<div class="container">',
-'<div class="logo">🏥</div>',
-'<h1>BIZUSIZO Privacy Policy</h1>',
-'<p class="subtitle">Protection of Personal Information Act (POPIA) Compliance</p>',
-'',
-'<h2>1. Who We Are</h2>',
-'<p>BIZUSIZO (Pty) Ltd operates a WhatsApp-based multilingual triage service for South African primary healthcare. Our service helps patients assess the urgency of their symptoms and guides them to appropriate healthcare facilities.</p>',
-'<p><strong>Responsible Party:</strong> BIZUSIZO (Pty) Ltd<br>',
-'<strong>Contact:</strong> info@bizusizo.co.za<br>',
-'<strong>WhatsApp:</strong> +27 78 612 0775</p>',
-'',
-'<h2>2. What Information We Collect</h2>',
-'<table>',
-'<tr><th>Information</th><th>Purpose</th><th>How Long We Keep It</th></tr>',
-'<tr><td>Phone number</td><td>Identify your session</td><td>Immediately converted to an irreversible code (hash). Your actual phone number is never stored.</td></tr>',
-'<tr><td>Language preference</td><td>Communicate in your language</td><td>Duration of service</td></tr>',
-'<tr><td>Symptom description</td><td>Assess urgency of your condition</td><td>Duration of service + research period (anonymised)</td></tr>',
-'<tr><td>Chronic conditions</td><td>Improve triage accuracy</td><td>Duration of service</td></tr>',
-'<tr><td>Location (if you share it)</td><td>Find your nearest clinic or hospital</td><td>Used once for routing, then discarded</td></tr>',
-'<tr><td>Triage result</td><td>Guide you to appropriate care</td><td>Duration of service + research period (anonymised)</td></tr>',
-'</table>',
-'',
-'<h2>3. What We Do NOT Collect</h2>',
-'<ul>',
-'<li>Your name</li>',
-'<li>Your ID number</li>',
-'<li>Your physical address</li>',
-'<li>Your medical records</li>',
-'<li>Your personal WhatsApp chat history</li>',
-'</ul>',
-'',
-'<h2>4. How We Protect Your Information</h2>',
-'<ul>',
-'<li><strong>Phone number hashing:</strong> Your phone number is immediately converted into an irreversible code using SHA-256 encryption. We cannot recover your original phone number from this code.</li>',
-'<li><strong>Encrypted storage:</strong> All data is stored in encrypted databases with row-level security.</li>',
-'<li><strong>WhatsApp encryption:</strong> Messages between you and BIZUSIZO are protected by WhatsApp end-to-end encryption.</li>',
-'<li><strong>Clinical governance:</strong> A registered nurse oversees the system through a four-pillar governance framework.</li>',
-'</ul>',
-'',
-'<h2>5. Who Processes Your Information</h2>',
-'<table>',
-'<tr><th>Service Provider</th><th>Role</th><th>Location</th></tr>',
-'<tr><td>Meta (WhatsApp)</td><td>Message delivery</td><td>Global (end-to-end encrypted)</td></tr>',
-'<tr><td>Anthropic</td><td>AI symptom classification</td><td>United States (no data retention on API tier)</td></tr>',
-'<tr><td>Railway</td><td>Application hosting</td><td>Cloud (encrypted)</td></tr>',
-'<tr><td>Supabase</td><td>Database hosting</td><td>Cloud (encrypted at rest)</td></tr>',
-'</table>',
-'<p>We do not sell, rent, or share your personal information with any third party for marketing purposes.</p>',
-'',
-'<h2>6. Research Use</h2>',
-'<p>BIZUSIZO is undergoing an evaluation study funded by the EVAH programme. If you choose to participate in the study (you will be asked), your <strong>anonymised</strong> triage data may be used for research purposes. This means:</p>',
-'<ul>',
-'<li>Your phone number is never included in research data</li>',
-'<li>Your name is never collected or included</li>',
-'<li>Data is linked only by an anonymous study code (e.g. BZ-4827)</li>',
-'<li>The study has ethics approval from the University of the Witwatersrand</li>',
-'</ul>',
-'<p>You can use BIZUSIZO without participating in the study. Regular users have no study code generated and their data is excluded from research.</p>',
-'',
-'<h2>7. Your Rights Under POPIA</h2>',
-'<p>Under the Protection of Personal Information Act (POPIA), you have the right to:</p>',
-'<ul>',
-'<li><strong>Access:</strong> Request a copy of your anonymised triage history</li>',
-'<li><strong>Correction:</strong> Request correction of inaccurate information</li>',
-'<li><strong>Deletion:</strong> Request deletion of your data by contacting us</li>',
-'<li><strong>Objection:</strong> Stop using BIZUSIZO at any time (type "0" to reset)</li>',
-'<li><strong>Withdraw consent:</strong> Study participants can withdraw at any time</li>',
-'<li><strong>Complain:</strong> Lodge a complaint with the Information Regulator at <a href="https://inforegulator.org.za">inforegulator.org.za</a></li>',
-'</ul>',
-'',
-'<h2>8. Children</h2>',
-'<p>BIZUSIZO is intended for users aged 18 and older. We do not knowingly collect personal information from children under 18.</p>',
-'',
-'<h2>9. Changes to This Policy</h2>',
-'<p>We may update this privacy policy from time to time. The latest version is always available at this URL. We will notify users of significant changes through the BIZUSIZO WhatsApp service.</p>',
-'',
-'<h2>10. Contact Us</h2>',
-'<p>If you have questions about this privacy policy or how we handle your data:</p>',
-'<ul>',
-'<li><strong>Email:</strong> info@bizusizo.co.za</li>',
-'<li><strong>WhatsApp:</strong> +27 78 612 0775</li>',
-'<li><strong>Website:</strong> <a href="https://bizusizo.co.za">bizusizo.co.za</a></li>',
-'</ul>',
-'',
-'<p class="updated">Last updated: 24 March 2026<br>BIZUSIZO (Pty) Ltd — Registered in South Africa</p>',
-'</div>',
-'</body>',
-'</html>',
-  ].join('\n');
-}
-
-// ================================================================
 // STUDY CODE — API ENDPOINTS (for research assistants)
 // ================================================================
 
@@ -4531,7 +4687,459 @@ app.put('/api/governance/reviews/:id', requireDashboardAuth, async (req, res) =>
   }
 });
 
+// ================================================================
+// CLINIC QUEUE MANAGEMENT SYSTEM
+// ================================================================
+// Supabase table required: clinic_queue
+// See clinic-queue-migration.sql for schema
+// ================================================================
+
+// GET /api/clinic/expected — Today's expected patients for file preparation
+// Admin opens this at 07:00 to pre-pull files
+app.get('/api/clinic/expected', requireDashboardAuth, async (req, res) => {
+  try {
+    const facility = req.query.facility;
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+
+    let query = supabase
+      .from('triage_logs')
+      .select('*')
+      .gte('created_at', todayStart.toISOString())
+      .not('facility_name', 'is', null)
+      .order('created_at', { ascending: true });
+
+    if (facility) {
+      query = query.eq('facility_name', facility);
+    }
+
+    const { data: triages, error } = await query;
+    if (error) throw error;
+
+    const expectedPatients = [];
+    const seenPatients = new Set();
+
+    for (const t of (triages || [])) {
+      if (seenPatients.has(t.patient_id)) continue;
+      seenPatients.add(t.patient_id);
+
+      const { data: sessionData } = await supabase
+        .from('sessions')
+        .select('data')
+        .eq('patient_id', t.patient_id)
+        .single();
+
+      const s = sessionData?.data || {};
+
+      const { data: studyCodeData } = await supabase
+        .from('study_codes')
+        .select('study_code')
+        .eq('patient_id', t.patient_id)
+        .limit(1);
+
+      // Generate file hints for admin
+      const fileHints = [];
+      if (s.surname) {
+        const initial = s.surname.charAt(0).toUpperCase();
+        if (initial <= 'F') fileHints.push('Check A–F shelf');
+        else if (initial <= 'M') fileHints.push('Check G–M shelf');
+        else fileHints.push('Check N–Z shelf');
+      }
+      if ((s.chronicConditions || []).length > 0) {
+        fileHints.push('Check chronic files section');
+      }
+      if (s.fileStatus === 'new') {
+        fileHints.push('NEW PATIENT — create folder');
+      }
+
+      expectedPatients.push({
+        patient_id: t.patient_id,
+        first_name: s.firstName || null,
+        surname: s.surname || null,
+        dob: s.dob?.dob_string || null,
+        age: s.dob?.age || s.patientAge || null,
+        sex: s.sex || null,
+        triage_level: t.triage_level,
+        triage_confidence: t.confidence,
+        symptoms_summary: t.symptoms ? t.symptoms.slice(0, 200) : null,
+        facility_name: t.facility_name,
+        triage_time: t.created_at,
+        study_code: studyCodeData?.[0]?.study_code || s.studyCode || null,
+        chronic_conditions: (s.chronicConditions || []).map(c => c.label_en || c.key),
+        is_returning: s.isReturningPatient,
+        file_status: s.fileStatus || 'unknown',
+        file_hints: fileHints,
+        language: s.language || 'en',
+      });
+    }
+
+    res.json({
+      date: todayStart.toISOString().split('T')[0],
+      facility: facility || 'all',
+      count: expectedPatients.length,
+      patients: expectedPatients,
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /api/clinic/queue — Get current queue
+app.get('/api/clinic/queue', requireDashboardAuth, async (req, res) => {
+  try {
+    let query = supabase
+      .from('clinic_queue')
+      .select('*')
+      .in('status', ['waiting', 'in_consultation'])
+      .order('queue_type', { ascending: true })
+      .order('position', { ascending: true });
+
+    if (req.query.queue_type) {
+      query = query.eq('queue_type', req.query.queue_type);
+    }
+
+    const { data, error } = await query;
+    if (error) throw error;
+    res.json({ queue: data || [] });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /api/clinic/queue/stats — Live queue statistics
+app.get('/api/clinic/queue/stats', requireDashboardAuth, async (req, res) => {
+  try {
+    const { data: active, error } = await supabase
+      .from('clinic_queue')
+      .select('queue_type, status, triage_level, checked_in_at')
+      .in('status', ['waiting', 'in_consultation']);
+
+    if (error) throw error;
+
+    const waiting = (active || []).filter(p => p.status === 'waiting');
+    const inConsult = (active || []).filter(p => p.status === 'in_consultation');
+
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+
+    const { data: completed } = await supabase
+      .from('clinic_queue')
+      .select('checked_in_at, called_at, queue_type')
+      .eq('status', 'completed')
+      .gte('checked_in_at', todayStart.toISOString())
+      .not('called_at', 'is', null);
+
+    const avgWaitByQueue = {};
+    if (completed && completed.length > 0) {
+      const grouped = {};
+      completed.forEach(p => {
+        const qt = p.queue_type || 'walk_in';
+        if (!grouped[qt]) grouped[qt] = [];
+        const waitMs = new Date(p.called_at) - new Date(p.checked_in_at);
+        if (waitMs > 0) grouped[qt].push(waitMs);
+      });
+      Object.entries(grouped).forEach(([qt, waits]) => {
+        avgWaitByQueue[qt] = Math.round(waits.reduce((a, b) => a + b, 0) / waits.length / 60000);
+      });
+    }
+
+    const stats = {
+      fast_track: { waiting: 0, in_consultation: 0 },
+      routine: { waiting: 0, in_consultation: 0 },
+      walk_in: { waiting: 0, in_consultation: 0 },
+      total_waiting: waiting.length,
+      total_in_consultation: inConsult.length,
+      avg_wait_minutes: avgWaitByQueue,
+    };
+
+    waiting.forEach(p => {
+      const qt = p.queue_type || 'walk_in';
+      if (stats[qt]) stats[qt].waiting++;
+    });
+
+    inConsult.forEach(p => {
+      const qt = p.queue_type || 'walk_in';
+      if (stats[qt]) stats[qt].in_consultation++;
+    });
+
+    const { data: todayAll } = await supabase
+      .from('clinic_queue')
+      .select('status')
+      .gte('checked_in_at', todayStart.toISOString());
+
+    stats.today_total = todayAll ? todayAll.length : 0;
+    stats.today_completed = todayAll ? todayAll.filter(p => p.status === 'completed').length : 0;
+    stats.today_no_show = todayAll ? todayAll.filter(p => p.status === 'no_show').length : 0;
+
+    res.json(stats);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /api/clinic/lookup — Lookup patient by phone number or study code
+app.get('/api/clinic/lookup', requireDashboardAuth, async (req, res) => {
+  try {
+    const { phone, study_code } = req.query;
+
+    if (!phone && !study_code) {
+      return res.status(400).json({ error: 'Provide phone or study_code' });
+    }
+
+    let patientId;
+    let studyCodeData = null;
+
+    if (study_code) {
+      const { data } = await supabase
+        .from('study_codes')
+        .select('*')
+        .eq('study_code', study_code.toUpperCase().trim())
+        .limit(1);
+      if (data && data.length > 0) {
+        patientId = data[0].patient_id;
+        studyCodeData = data[0];
+      }
+    } else if (phone) {
+      patientId = crypto.createHash('sha256').update(phone).digest('hex').slice(0, 16);
+    }
+
+    if (!patientId) {
+      return res.json({ found: false });
+    }
+
+    const { data: triages } = await supabase
+      .from('triage_logs')
+      .select('*')
+      .eq('patient_id', patientId)
+      .order('created_at', { ascending: false })
+      .limit(5);
+
+    const { data: sessionData } = await supabase
+      .from('sessions')
+      .select('data')
+      .eq('patient_id', patientId)
+      .single();
+
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const { data: queueEntry } = await supabase
+      .from('clinic_queue')
+      .select('*')
+      .eq('patient_id', patientId)
+      .gte('checked_in_at', todayStart.toISOString())
+      .in('status', ['waiting', 'in_consultation'])
+      .limit(1);
+
+    const session = sessionData?.data || {};
+
+    res.json({
+      found: true,
+      patient_id: patientId,
+      first_name: session.firstName || null,
+      surname: session.surname || null,
+      dob: session.dob?.dob_string || null,
+      age: session.dob?.age || session.patientAge || null,
+      sex: session.sex || null,
+      study_code: studyCodeData?.study_code || session.studyCode || null,
+      language: session.language || 'en',
+      triage_history: triages || [],
+      latest_triage: triages && triages.length > 0 ? triages[0] : null,
+      chronic_conditions: session.ccmddConditions || session.chronicConditions || [],
+      is_returning: session.isReturningPatient,
+      file_status: session.fileStatus || 'unknown',
+      already_in_queue: queueEntry && queueEntry.length > 0 ? queueEntry[0] : null,
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// POST /api/clinic/queue — Add patient to queue
+app.post('/api/clinic/queue', requireDashboardAuth, async (req, res) => {
+  try {
+    const { patient_id, patient_phone, patient_name, triage_level,
+            triage_confidence, symptoms_summary, queue_type, notes,
+            study_code, added_by } = req.body;
+
+    if (!patient_id || !queue_type) {
+      return res.status(400).json({ error: 'patient_id and queue_type required' });
+    }
+
+    const { data: lastInQueue } = await supabase
+      .from('clinic_queue')
+      .select('position')
+      .eq('queue_type', queue_type)
+      .eq('status', 'waiting')
+      .order('position', { ascending: false })
+      .limit(1);
+
+    const nextPosition = (lastInQueue && lastInQueue.length > 0)
+      ? lastInQueue[0].position + 1
+      : 1;
+
+    const entry = {
+      patient_id,
+      patient_phone: patient_phone || null,
+      patient_name: patient_name || null,
+      triage_level: triage_level || 'UNKNOWN',
+      triage_confidence: triage_confidence || null,
+      symptoms_summary: symptoms_summary || null,
+      queue_type,
+      status: 'waiting',
+      checked_in_at: new Date(),
+      position: nextPosition,
+      notes: notes || null,
+      study_code: study_code || null,
+      created_at: new Date(),
+    };
+
+    const { data, error } = await supabase
+      .from('clinic_queue')
+      .insert(entry)
+      .select()
+      .single();
+
+    if (error) throw error;
+    res.json({ success: true, queue_entry: data });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// PUT /api/clinic/queue/:id/call — Call patient (move to in_consultation)
+app.put('/api/clinic/queue/:id/call', requireDashboardAuth, async (req, res) => {
+  try {
+    const { assigned_to } = req.body;
+    const { error } = await supabase
+      .from('clinic_queue')
+      .update({
+        status: 'in_consultation',
+        called_at: new Date(),
+        assigned_to: assigned_to || null,
+      })
+      .eq('id', req.params.id);
+
+    if (error) throw error;
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// PUT /api/clinic/queue/:id/complete — Complete consultation
+app.put('/api/clinic/queue/:id/complete', requireDashboardAuth, async (req, res) => {
+  try {
+    const { notes } = req.body;
+    const { error } = await supabase
+      .from('clinic_queue')
+      .update({
+        status: 'completed',
+        completed_at: new Date(),
+        notes: notes || null,
+      })
+      .eq('id', req.params.id);
+
+    if (error) throw error;
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// PUT /api/clinic/queue/:id/no-show — Mark as no-show
+app.put('/api/clinic/queue/:id/no-show', requireDashboardAuth, async (req, res) => {
+  try {
+    const { error } = await supabase
+      .from('clinic_queue')
+      .update({
+        status: 'no_show',
+        completed_at: new Date(),
+      })
+      .eq('id', req.params.id);
+
+    if (error) throw error;
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// PUT /api/clinic/queue/:id/reassign — Move patient to different queue
+app.put('/api/clinic/queue/:id/reassign', requireDashboardAuth, async (req, res) => {
+  try {
+    const { queue_type } = req.body;
+    if (!queue_type) return res.status(400).json({ error: 'queue_type required' });
+
+    const { data: lastInQueue } = await supabase
+      .from('clinic_queue')
+      .select('position')
+      .eq('queue_type', queue_type)
+      .eq('status', 'waiting')
+      .order('position', { ascending: false })
+      .limit(1);
+
+    const nextPosition = (lastInQueue && lastInQueue.length > 0)
+      ? lastInQueue[0].position + 1
+      : 1;
+
+    const { error } = await supabase
+      .from('clinic_queue')
+      .update({
+        queue_type,
+        position: nextPosition,
+      })
+      .eq('id', req.params.id);
+
+    if (error) throw error;
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /api/clinic/nurse-view — Next patients per queue + priority alerts
+app.get('/api/clinic/nurse-view', requireDashboardAuth, async (req, res) => {
+  try {
+    const { data: waiting, error } = await supabase
+      .from('clinic_queue')
+      .select('*')
+      .eq('status', 'waiting')
+      .order('position', { ascending: true });
+
+    if (error) throw error;
+
+    const fastTrack = (waiting || []).filter(p => p.queue_type === 'fast_track');
+    const routine = (waiting || []).filter(p => p.queue_type === 'routine');
+    const walkIn = (waiting || []).filter(p => p.queue_type === 'walk_in');
+
+    const now = Date.now();
+    const alerts = (waiting || []).filter(p => {
+      const waitMin = (now - new Date(p.checked_in_at).getTime()) / 60000;
+      return (
+        (p.triage_level === 'RED' && waitMin > 5) ||
+        (p.triage_level === 'ORANGE' && waitMin > 15) ||
+        (p.triage_level === 'YELLOW' && waitMin > 60)
+      );
+    }).map(p => ({
+      ...p,
+      wait_minutes: Math.round((now - new Date(p.checked_in_at).getTime()) / 60000),
+      alert_reason: p.triage_level === 'RED' ? 'RED patient waiting > 5 min'
+        : p.triage_level === 'ORANGE' ? 'ORANGE patient waiting > 15 min'
+        : 'YELLOW patient waiting > 60 min',
+    }));
+
+    res.json({
+      fast_track: fastTrack.slice(0, 10),
+      routine: routine.slice(0, 10),
+      walk_in: walkIn.slice(0, 10),
+      alerts,
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ================== START ==================
 app.listen(process.env.PORT || 3000, () => {
-  console.log('🚀 BIZUSIZO v2.2 Orchestrator LIVE (Governance Framework Active)');
+  console.log('🚀 BIZUSIZO v2.3 Orchestrator LIVE (Governance + Identity + Clinic Queue)');
 });
