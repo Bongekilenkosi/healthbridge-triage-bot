@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>BIZUSIZO Check-In</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f0f4f8;min-height:100vh;display:flex;flex-direction:column}
+.header{background:#1e40af;color:#fff;padding:16px 20px;text-align:center}
+.header h1{font-size:28px;font-weight:800;letter-spacing:1px}
+.header p{font-size:14px;opacity:.8;margin-top:2px}
+.body{flex:1;padding:16px;max-width:600px;margin:0 auto;width:100%}
+.card{background:#fff;border-radius:16px;padding:24px;margin-bottom:16px;box-shadow:0 2px 8px rgba(0,0,0,.06)}
+.card h2{font-size:20px;color:#1e40af;margin-bottom:12px;text-align:center}
+.card p{font-size:15px;color:#4b5563;text-align:center;margin-bottom:16px;line-height:1.5}
+.btn-grid{display:grid;gap:10px}
+.btn-grid.cols-2{grid-template-columns:1fr 1fr}
+.btn-grid.cols-3{grid-template-columns:1fr 1fr 1fr}
+.btn{display:flex;align-items:center;justify-content:center;gap:8px;padding:18px 16px;border-radius:12px;border:2px solid #e5e7eb;background:#fff;font-size:16px;font-weight:600;color:#1f2937;cursor:pointer;transition:all .15s;text-align:center;min-height:60px;line-height:1.3}
+.btn:active{transform:scale(.97);background:#eff6ff;border-color:#3b82f6}
+.btn.selected{background:#eff6ff;border-color:#3b82f6;color:#1e40af}
+.btn-primary{background:#1e40af;color:#fff;border-color:#1e40af;font-size:18px;padding:20px;border-radius:12px;width:100%;font-weight:700;cursor:pointer;margin-top:12px}
+.btn-primary:active{background:#1e3a8a;transform:scale(.98)}
+.btn-primary:disabled{background:#94a3b8;border-color:#94a3b8}
+.btn-danger{background:#dc2626;color:#fff;border-color:#dc2626}
+.btn-danger:active{background:#b91c1c}
+.input{width:100%;padding:16px;border-radius:12px;border:2px solid #e5e7eb;font-size:18px;outline:none;margin-bottom:10px}
+.input:focus{border-color:#3b82f6}
+.input-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.label{font-size:13px;color:#6b7280;margin-bottom:4px;font-weight:600}
+.badge{display:inline-block;padding:6px 16px;border-radius:99px;font-size:16px;font-weight:700}
+.badge-red{background:#fef2f2;color:#dc2626;border:2px solid #fecaca}
+.badge-orange{background:#fff7ed;color:#ea580c;border:2px solid #fed7aa}
+.badge-yellow{background:#fefce8;color:#ca8a04;border:2px solid #fef08a}
+.badge-green{background:#f0fdf4;color:#16a34a;border:2px solid #bbf7d0}
+.result-box{text-align:center;padding:24px}
+.result-box .emoji{font-size:48px;margin-bottom:12px}
+.result-box h3{font-size:22px;margin-bottom:8px}
+.result-box p{font-size:15px;color:#4b5563;line-height:1.6}
+.ref-num{font-size:32px;font-weight:800;color:#1e40af;margin:16px 0;letter-spacing:2px}
+.progress{display:flex;gap:6px;justify-content:center;margin-bottom:16px}
+.progress .dot{width:10px;height:10px;border-radius:99px;background:#e5e7eb}
+.progress .dot.active{background:#1e40af}
+.progress .dot.done{background:#22c55e}
+.footer{text-align:center;padding:12px;font-size:11px;color:#9ca3af}
+.hidden{display:none}
+.back-btn{font-size:13px;color:#6b7280;cursor:pointer;text-align:center;margin-top:8px;padding:8px}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>BIZUSIZO</h1>
+  <p id="header-sub">Clinic Check-In / Ukubhalisa Emtholampilo</p>
+</div>
+
+<div class="body" id="app"></div>
+
+<div class="footer">BIZUSIZO v2.3 · Tap any button to continue · Ask staff for help</div>
+
+<script>
+const API = window.location.origin;
+let state = { step: 'language', language: 'en', firstName: '', surname: '', dob: '', sex: '', symptoms: '', category: '', severity: '', triageResult: null, refCode: '' };
+
+const LANGS = [
+  {code:'en',name:'English'},{code:'zu',name:'isiZulu'},{code:'xh',name:'isiXhosa'},
+  {code:'af',name:'Afrikaans'},{code:'nso',name:'Sepedi'},{code:'tn',name:'Setswana'},
+  {code:'st',name:'Sesotho'},{code:'ts',name:'Xitsonga'},{code:'ss',name:'siSwati'},
+  {code:'ve',name:'Tshivenda'},{code:'nr',name:'isiNdebele'}
+];
+
+const CATEGORIES = [
+  {id:'1',emoji:'\uD83E\uDEC1',en:'Breathing / Chest pain',zu:'Ukuphefumula / Isifuba'},
+  {id:'2',emoji:'\uD83E\uDD15',en:'Head injury / Headache',zu:'Ikhanda elibuhlungu'},
+  {id:'3',emoji:'\uD83E\uDD30',en:'Pregnancy related',zu:'Okuphathelene nokukhulelwa'},
+  {id:'4',emoji:'\uD83E\uDE78',en:'Bleeding / Wound',zu:'Ukopha / Inxeba'},
+  {id:'5',emoji:'\uD83E\uDD12',en:'Fever / Flu / Cough',zu:'Imfiva / Umkhuhlane'},
+  {id:'6',emoji:'\uD83E\uDD22',en:'Stomach / Vomiting',zu:'Isisu / Ukuhlanza'},
+  {id:'7',emoji:'\uD83D\uDC76',en:'Child illness',zu:'Ukugula kwengane'},
+  {id:'8',emoji:'\uD83D\uDC8A',en:'Medication / Chronic',zu:'Umuthi / Esingamahlalakhona'},
+  {id:'9',emoji:'\uD83E\uDDB4',en:'Bone / Joint / Back pain',zu:'Ithambo / Umhlane'},
+  {id:'10',emoji:'\uD83E\uDDE0',en:'Mental health',zu:'Impilo yengqondo'},
+  {id:'11',emoji:'\uD83E\uDD27',en:'Allergy / Rash',zu:'I-allergy / Isikhumba'},
+  {id:'12',emoji:'\u270F\uFE0F',en:'Other',zu:'Okunye'},
+];
+
+const T = {
+  en: {choose_lang:'Choose your language',welcome:'Welcome! Let\'s get you checked in.',name:'What is your first name?',surname:'What is your surname?',dob:'Date of birth (DD-MM-YYYY)',sex:'What is your sex?',male:'Male',female:'Female',whats_wrong:'What is your main problem today?',how_bad:'How bad is it?',mild:'Mild',moderate:'Moderate',severe:'Severe',describe:'Describe your symptoms (optional)',next:'Next',back:'Back',checking:'Checking your symptoms...',result_title:'Your Result',queue_msg:'You have been added to the queue.',show_reception:'Show this screen to reception:',ref:'Your reference number:',your_turn:'Have a seat. The nurse will call your name.',start_over:'Start Over (New Patient)',emergency:'EMERGENCY? Call 10177',mild_desc:'I can do my daily activities',mod_desc:'It\'s affecting my daily activities',sev_desc:'I can barely function'},
+  zu: {choose_lang:'Khetha ulimi lwakho',welcome:'Siyakwemukela! Masikubhalise.',name:'Ngubani igama lakho?',surname:'Yisiphi isibongo sakho?',dob:'Usuku lokuzalwa (DD-MM-YYYY)',sex:'Ubulili bakho?',male:'Owesilisa',female:'Owesifazane',whats_wrong:'Yini inkinga yakho enkulu namuhla?',how_bad:'Kumbi kangakanani?',mild:'Kancane',moderate:'Maphakathi',severe:'Kakhulu',describe:'Chaza izimpawu zakho (uma uthanda)',next:'Okulandelayo',back:'Emuva',checking:'Sihlola izimpawu zakho...',result_title:'Umphumela Wakho',queue_msg:'Usufakwe emgqeni.',show_reception:'Khombisa lesi sikrini e-reception:',ref:'Inombolo yakho:',your_turn:'Hlala phansi. Unesi uzokubiza ngegama.',start_over:'Qala Kabusha (Umuntu Omusha)',emergency:'KUPHUTHUMILE? Shaya 10177',mild_desc:'Ngingenza imisebenzi yami',mod_desc:'Kuthinta imisebenzi yami',sev_desc:'Angikwazi nhlobo'},
+};
+
+function t(key){ return (T[state.language]||T.en)[key] || T.en[key] || key; }
+function el(id){ return document.getElementById(id); }
+function render(html){ document.getElementById('app').innerHTML = html; }
+
+function progress(current, total){
+  let dots = '';
+  for(let i=0;i<total;i++){
+    dots += '<div class="dot '+(i<current?'done':i===current?'active':'')+'"></div>';
+  }
+  return '<div class="progress">'+dots+'</div>';
+}
+
+function showLanguage(){
+  state.step='language';
+  render('<div class="card"><h2>BIZUSIZO</h2><p>Choose your language / Khetha ulimi lwakho</p><div class="btn-grid cols-2">'+
+    LANGS.map(l=>'<div class="btn" onclick="selectLang(\''+l.code+'\')">'+l.name+'</div>').join('')+
+  '</div></div><div style="text-align:center;margin-top:16px"><div class="btn btn-danger" style="display:inline-flex;width:auto;padding:14px 28px" onclick="alert(\'Call 10177 or 084 124 (ER24) immediately!\')">EMERGENCY / KUPHUTHUMILE</div></div>');
+}
+
+function selectLang(code){
+  state.language=code;
+  showName();
+}
+
+function showName(){
+  state.step='name';
+  render(progress(0,6)+'<div class="card"><h2>'+t('welcome')+'</h2>'+
+    '<div class="label">'+t('name')+'</div><input class="input" id="fname" placeholder="e.g. Thabo" autocomplete="off">'+
+    '<div class="label">'+t('surname')+'</div><input class="input" id="sname" placeholder="e.g. Molefe" autocomplete="off">'+
+    '<button class="btn-primary" onclick="saveName()">'+t('next')+'</button>'+
+    '<div class="back-btn" onclick="showLanguage()">'+t('back')+'</div></div>');
+  setTimeout(()=>document.getElementById('fname').focus(),100);
+}
+
+function saveName(){
+  const f=document.getElementById('fname').value.trim();
+  const s=document.getElementById('sname').value.trim();
+  if(!f){alert('Please enter a first name');return;}
+  state.firstName=f;
+  state.surname=s;
+  showDob();
+}
+
+function showDob(){
+  state.step='dob';
+  render(progress(1,6)+'<div class="card"><h2>'+state.firstName+'</h2>'+
+    '<div class="label">'+t('dob')+'</div><input class="input" id="dob" placeholder="DD-MM-YYYY" inputmode="numeric" autocomplete="off">'+
+    '<div class="label">'+t('sex')+'</div>'+
+    '<div class="btn-grid cols-2">'+
+    '<div class="btn" id="sex-m" onclick="selectSex(\'male\')">'+t('male')+'</div>'+
+    '<div class="btn" id="sex-f" onclick="selectSex(\'female\')">'+t('female')+'</div>'+
+    '</div>'+
+    '<button class="btn-primary" id="dob-next" onclick="saveDob()" disabled>'+t('next')+'</button>'+
+    '<div class="back-btn" onclick="showName()">'+t('back')+'</div></div>');
+}
+
+function selectSex(s){
+  state.sex=s;
+  document.getElementById('sex-m').className='btn'+(s==='male'?' selected':'');
+  document.getElementById('sex-f').className='btn'+(s==='female'?' selected':'');
+  document.getElementById('dob-next').disabled=false;
+}
+
+function saveDob(){
+  if(!state.sex){alert('Please select your sex');return;}
+  state.dob=document.getElementById('dob').value.trim();
+  showCategory();
+}
+
+function showCategory(){
+  state.step='category';
+  const lang=state.language;
+  render(progress(2,6)+'<div class="card"><h2>'+t('whats_wrong')+'</h2>'+
+    '<div class="btn-grid">'+
+    CATEGORIES.map(c=>'<div class="btn" onclick="selectCategory(\''+c.id+'\')"><span style="font-size:22px">'+c.emoji+'</span> '+(lang==='zu'&&c.zu?c.zu:c.en)+'</div>').join('')+
+    '</div>'+
+    '<div class="back-btn" onclick="showDob()">'+t('back')+'</div></div>');
+}
+
+function selectCategory(id){
+  state.category=id;
+  const cat = CATEGORIES.find(c=>c.id===id);
+  state.categoryName = cat ? (state.language==='zu'&&cat.zu?cat.zu:cat.en) : 'Other';
+  showSeverity();
+}
+
+function showSeverity(){
+  state.step='severity';
+  render(progress(3,6)+'<div class="card"><h2>'+t('how_bad')+'</h2>'+
+    '<p style="font-size:14px;color:#6b7280">'+state.categoryName+'</p>'+
+    '<div class="btn-grid">'+
+    '<div class="btn" onclick="selectSeverity(\'mild\')" style="border-color:#22c55e"><span style="color:#22c55e;font-weight:700">'+t('mild')+'</span><br><span style="font-size:12px;color:#6b7280">'+t('mild_desc')+'</span></div>'+
+    '<div class="btn" onclick="selectSeverity(\'moderate\')" style="border-color:#eab308"><span style="color:#eab308;font-weight:700">'+t('moderate')+'</span><br><span style="font-size:12px;color:#6b7280">'+t('mod_desc')+'</span></div>'+
+    '<div class="btn" onclick="selectSeverity(\'severe\')" style="border-color:#ef4444"><span style="color:#ef4444;font-weight:700">'+t('severe')+'</span><br><span style="font-size:12px;color:#6b7280">'+t('sev_desc')+'</span></div>'+
+    '</div>'+
+    '<div class="back-btn" onclick="showCategory()">'+t('back')+'</div></div>');
+}
+
+function selectSeverity(s){
+  state.severity=s;
+  showDescribe();
+}
+
+function showDescribe(){
+  state.step='describe';
+  render(progress(4,6)+'<div class="card"><h2>'+t('describe')+'</h2>'+
+    '<textarea class="input" id="symptoms" rows="3" placeholder="e.g. cough for 3 days, mild fever..." style="resize:none"></textarea>'+
+    '<button class="btn-primary" onclick="submitTriage()">'+t('next')+'</button>'+
+    '<div class="back-btn" onclick="showSeverity()">'+t('back')+'</div></div>');
+}
+
+async function submitTriage(){
+  const symptoms = document.getElementById('symptoms').value.trim();
+  state.symptoms = symptoms;
+  
+  render(progress(5,6)+'<div class="card"><div class="result-box"><div class="emoji">\u23F3</div><h3>'+t('checking')+'</h3></div></div>');
+
+  try {
+    const res = await fetch(API+'/api/kiosk/triage', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        firstName: state.firstName,
+        surname: state.surname,
+        dob: state.dob,
+        sex: state.sex,
+        category: state.category,
+        categoryName: state.categoryName,
+        severity: state.severity,
+        symptoms: state.symptoms,
+        language: state.language,
+      })
+    });
+    const data = await res.json();
+    if(data.success){
+      state.triageResult = data.triage_level;
+      state.refCode = data.ref_code;
+      showResult(data);
+    } else {
+      showError();
+    }
+  } catch(e){
+    showError();
+  }
+}
+
+function showResult(data){
+  const level = data.triage_level || 'YELLOW';
+  const colors = {RED:'badge-red',ORANGE:'badge-orange',YELLOW:'badge-yellow',GREEN:'badge-green'};
+  const labels = {RED:'Emergency',ORANGE:'Very Urgent',YELLOW:'Urgent',GREEN:'Routine'};
+  const emojis = {RED:'\uD83D\uDEA8',ORANGE:'\uD83D\uDFE0',YELLOW:'\uD83D\uDFE1',GREEN:'\uD83D\uDFE2'};
+  const instructions = {
+    RED:{en:'Tell a nurse IMMEDIATELY. Do not sit down.',zu:'Tshela unesi MANJE. Ungahlali phansi.'},
+    ORANGE:{en:'Tell reception you are VERY URGENT. You will be fast-tracked.',zu:'Tshela i-reception ukuthi KUPHUTHUMA KAKHULU. Uzosheshiswa.'},
+    YELLOW:{en:'Have a seat. The nurse will call your name.',zu:'Hlala phansi. Unesi uzokubiza ngegama.'},
+    GREEN:{en:'You may be able to manage at home. Ask the nurse for advice.',zu:'Ungakwazi ukuzinakekela ekhaya. Buza unesi iseluleko.'},
+  };
+  const inst = instructions[level]||instructions.YELLOW;
+
+  render('<div class="card"><div class="result-box">'+
+    '<div class="emoji">'+emojis[level]+'</div>'+
+    '<h3>'+t('result_title')+'</h3>'+
+    '<div class="badge '+(colors[level]||'badge-yellow')+'">'+level+' \u2014 '+(labels[level]||'Urgent')+'</div>'+
+    '<p style="margin-top:16px;font-size:16px;font-weight:600">'+(state.language==='zu'?inst.zu:inst.en)+'</p>'+
+    '<div style="margin-top:20px;padding:16px;background:#eff6ff;border-radius:12px">'+
+    '<p style="font-size:13px;color:#6b7280">'+t('show_reception')+'</p>'+
+    '<div class="ref-num">'+data.ref_code+'</div>'+
+    '<p style="font-size:14px;color:#1f2937"><b>'+state.firstName+' '+state.surname+'</b></p>'+
+    '<p style="font-size:13px;color:#6b7280">Queue: #'+(data.queue_position||'—')+' \u2014 '+(labels[level]||'')+'</p>'+
+    '</div>'+
+    (level!=='RED'?'<p style="margin-top:12px;font-size:14px;color:#4b5563">'+t('your_turn')+'</p>':'')+
+    '</div></div>'+
+    '<button class="btn-primary" style="background:#64748b;border-color:#64748b" onclick="resetKiosk()">'+t('start_over')+'</button>');
+
+  // Auto-reset after 60 seconds
+  setTimeout(()=>{ if(state.step==='result') resetKiosk(); }, 60000);
+  state.step='result';
+}
+
+function showError(){
+  render('<div class="card"><div class="result-box">'+
+    '<div class="emoji">\u26A0\uFE0F</div>'+
+    '<h3>Something went wrong</h3>'+
+    '<p>Please ask reception to register you manually.</p>'+
+    '</div></div>'+
+    '<button class="btn-primary" onclick="resetKiosk()">Try Again</button>');
+}
+
+function resetKiosk(){
+  state = { step:'language', language:'en', firstName:'', surname:'', dob:'', sex:'', symptoms:'', category:'', severity:'', triageResult:null, refCode:'' };
+  showLanguage();
+}
+
+// Start
+showLanguage();
+</script>
+</body>
+</html>
