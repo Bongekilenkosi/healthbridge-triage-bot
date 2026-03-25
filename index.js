@@ -1146,17 +1146,17 @@ Uyavuma?
   },
 
   facility_alternatives: {
-    en: (facilities) => `Here are other options nearby:\n${facilities}\n\nReply with the number of your choice.`,
-    zu: (facilities) => `Nazi ezinye izindawo eziseduze:\n${facilities}\n\nPhendula ngenombolo oyikhethayo.`,
-    xh: (facilities) => `Nazi ezinye iindawo ezikufutshane:\n${facilities}\n\nPhendula ngenombolo oyikhethayo.`,
-    af: (facilities) => `Hier is ander opsies naby:\n${facilities}\n\nAntwoord met die nommer van jou keuse.`,
-    nso: (facilities) => `Tše ke mafelo a mangwe a kgauswi:\n${facilities}\n\nAraba ka nomoro ya kgetho ya gago.`,
-    tn: (facilities) => `Ke mafelo a mangwe a gaufi:\n${facilities}\n\nAraba ka nomoro ya kgetho ya gago.`,
-    st: (facilities) => `Mona ke mafelo a mang a haufi:\n${facilities}\n\nAraba ka nomoro ya kgetho ya hao.`,
-    ts: (facilities) => `Leti i tindhawu tin'wana ta kusuhi:\n${facilities}\n\nHlamula hi nomboro ya nhlawulo wa wena.`,
-    ss: (facilities) => `Nati letinye tindzawo letisetfuze:\n${facilities}\n\nPhendvula ngenombolo yalokukhetsa kwakho.`,
-    ve: (facilities) => `Hafha ndi huṅwe fhethu hu re tsini:\n${facilities}\n\nFhindulani nga nomboro ya khetho yaṋu.`,
-    nr: (facilities) => `Nazi ezinye iindawo ezisetjhezi:\n${facilities}\n\nPhendula ngenomboro yalokukhetha kwakho.`
+    en: (facilities, firstName) => `Here are other options nearby:\n${facilities}\n\n0 — Go back to the first suggestion${firstName ? ' (*' + firstName + '*)' : ''}\n\nReply with the number of your choice.`,
+    zu: (facilities, firstName) => `Nazi ezinye izindawo eziseduze:\n${facilities}\n\n0 — Buyela esiphakamisweni sokuqala${firstName ? ' (*' + firstName + '*)' : ''}\n\nPhendula ngenombolo oyikhethayo.`,
+    xh: (facilities, firstName) => `Nazi ezinye iindawo ezikufutshane:\n${facilities}\n\n0 — Buyela kwisiphakamiso sokuqala${firstName ? ' (*' + firstName + '*)' : ''}\n\nPhendula ngenombolo oyikhethayo.`,
+    af: (facilities, firstName) => `Hier is ander opsies naby:\n${facilities}\n\n0 — Gaan terug na die eerste voorstel${firstName ? ' (*' + firstName + '*)' : ''}\n\nAntwoord met die nommer van jou keuse.`,
+    nso: (facilities, firstName) => `Tše ke mafelo a mangwe a kgauswi:\n${facilities}\n\n0 — Boela go keletšo ya mathomo${firstName ? ' (*' + firstName + '*)' : ''}\n\nAraba ka nomoro ya kgetho ya gago.`,
+    tn: (facilities, firstName) => `Ke mafelo a mangwe a gaufi:\n${facilities}\n\n0 — Boela kwa kgakololong ya ntlha${firstName ? ' (*' + firstName + '*)' : ''}\n\nAraba ka nomoro ya kgetho ya gago.`,
+    st: (facilities, firstName) => `Mona ke mafelo a mang a haufi:\n${facilities}\n\n0 — Khutlela kgakololong ya pele${firstName ? ' (*' + firstName + '*)' : ''}\n\nAraba ka nomoro ya kgetho ya hao.`,
+    ts: (facilities, firstName) => `Leti i tindhawu tin'wana ta kusuhi:\n${facilities}\n\n0 — Tlhelela eka xiringanyeto xo sungula${firstName ? ' (*' + firstName + '*)' : ''}\n\nHlamula hi nomboro ya nhlawulo wa wena.`,
+    ss: (facilities, firstName) => `Nati letinye tindzawo letisetfuze:\n${facilities}\n\n0 — Buyela esiphakamisweni sekucala${firstName ? ' (*' + firstName + '*)' : ''}\n\nPhendvula ngenombolo yalokukhetsa kwakho.`,
+    ve: (facilities, firstName) => `Hafha ndi huṅwe fhethu hu re tsini:\n${facilities}\n\n0 — Humbelani u vhuyelela kha tshiṅwelo tsha u thoma${firstName ? ' (*' + firstName + '*)' : ''}\n\nFhindulani nga nomboro ya khetho yaṋu.`,
+    nr: (facilities, firstName) => `Nazi ezinye iindawo ezisetjhezi:\n${facilities}\n\n0 — Buyela esiphakamisweni sokuthoma${firstName ? ' (*' + firstName + '*)' : ''}\n\nPhendula ngenomboro yalokukhetha kwakho.`
   },
 
   // ==================== FOLLOW-UP ====================
@@ -1605,17 +1605,17 @@ Uyavuma?
 
   // ==================== CATEGORY FOLLOW-UP ====================
   category_detail_prompt: {
-    en: (category) => `You selected: *${category}*\n\nPlease describe your symptoms in your own words. For example: when did it start, how bad is it, and anything else you think is important.\n\nYou can type or send a voice note 🎤`,
-    zu: (category) => `Ukhethe: *${category}*\n\nSicela uchaze izimpawu zakho ngamazwi akho. Isibonelo: zaqala nini, zimbi kangakanani, nanoma yini enye ebalulekile.\n\nUngabhala noma uthumele ivoice note 🎤`,
-    xh: (category) => `Ukhethe: *${category}*\n\nNceda uchaze iimpawu zakho ngamazwi akho. Umzekelo: ziqale nini, zimbi kangakanani, naye nantoni na ebalulekile.\n\nUngabhala okanye uthumele ivoice note 🎤`,
-    af: (category) => `Jy het gekies: *${category}*\n\nBeskryf asseblief jou simptome in jou eie woorde. Byvoorbeeld: wanneer het dit begin, hoe erg is dit, en enigiets anders wat belangrik is.\n\nJy kan tik of 'n stemnota stuur 🎤`,
-    nso: (category) => `O kgethile: *${category}*\n\nHle hlaloša dika tša gago ka mantšu a gago. Mohlala: di thomile neng, di mpe gakaakang, le sengwe se bohlokwa.\n\nO ka ngwala goba wa romela voice note 🎤`,
-    tn: (category) => `O tlhophile: *${category}*\n\nTswee-tswee tlhalosa matshwao a gago ka mafoko a gago. Sekai: a simolotse leng, a maswe go le kana kang, le sengwe se botlhokwa.\n\nO ka kwala kgotsa wa romela voice note 🎤`,
-    st: (category) => `O kgethile: *${category}*\n\nKa kopo hlalosa matshwao a hao ka mantswe a hao. Mohlala: a qalile neng, a mpe hakaakang, le se seng se bohlokwa.\n\nO ka ngola kapa wa romela voice note 🎤`,
-    ts: (category) => `U hlawule: *${category}*\n\nHi kombela u hlamusela swikombiso swa wena hi marito ya wena. Xikombiso: swi sungule rini, swi bihile ku fikela kwihi, na swin'wana swa nkoka.\n\nU nga tsala kumbe u rhumela voice note 🎤`,
-    ss: (category) => `Ukhetse: *${category}*\n\nSicela uchaze timphawu takho ngamagama akho. Sibonelo: tichale nini, timbi kangakanani, nalokunye lokubalulekile.\n\nUngabhala noma utfumele voice note 🎤`,
-    ve: (category) => `No nanga: *${category}*\n\nRi humbela ni ṱalutshedze zwiga zwaṋu nga maipfi aṋu. Tsumbo: zwo thoma lini, zwi vhavha hani, na zwiṅwe zwa ndeme.\n\nNi nga ṅwala kana na rumela voice note 🎤`,
-    nr: (category) => `Ukhethe: *${category}*\n\nSibawa uchaze iimpawu zakho ngamagama wakho. Isibonelo: zithome nini, zimbi kangangani, nalokhunye okuqakathekileko.\n\nUngatlola namkha uthumele voice note 🎤`
+    en: (category) => `You selected: *${category}*\n\nHow bad is it?\n1 — Mild (I can do my daily activities)\n2 — Moderate (it's affecting my daily activities)\n3 — Severe (I can barely function)\n\nOr type your symptoms in your own words.\nYou can also send a voice note 🎤`,
+    zu: (category) => `Ukhethe: *${category}*\n\nKumbi kangakanani?\n1 — Kancane (ngingenza imisebenzi yami yansuku zonke)\n2 — Maphakathi (kuthinta imisebenzi yami)\n3 — Kakhulu (angikwazi nhlobo)\n\nNoma uchaze izimpawu zakho ngamazwi akho.\nUngathuma ivoice note 🎤`,
+    xh: (category) => `Ukhethe: *${category}*\n\nKumbi kangakanani?\n1 — Kancinane (ndingenza imisebenzi yam yemihla ngemihla)\n2 — Maphakathi (kuchaphazela imisebenzi yam)\n3 — Kakhulu (andikwazi kwaphela)\n\nOkanye uchaze iimpawu zakho ngamazwi akho.\nUngathuma ivoice note 🎤`,
+    af: (category) => `Jy het gekies: *${category}*\n\nHoe erg is dit?\n1 — Lig (ek kan my daaglikse aktiwiteite doen)\n2 — Matig (dit affekteer my daaglikse aktiwiteite)\n3 — Ernstig (ek kan skaars funksioneer)\n\nOf beskryf jou simptome in jou eie woorde.\nJy kan ook \'n stemnota stuur 🎤`,
+    nso: (category) => `O kgethile: *${category}*\n\nGo mpe gakaakang?\n1 — Gannyane (nka dira mediro ya ka ya tšatši le lengwe le le lengwe)\n2 — Magareng (go ama mediro ya ka)\n3 — Kudu (nka se kgone ka tsela)\n\nGoba hlaloša dika tša gago ka mantšu a gago.\nO ka romela voice note 🎤`,
+    tn: (category) => `O tlhophile: *${category}*\n\nGo maswe go le kana kang?\n1 — Bonnye (nka dira ditiro tsa ka tsa letsatsi le letsatsi)\n2 — Magareng (go ama ditiro tsa ka)\n3 — Thata (nka se kgone gotlhelele)\n\nKgotsa tlhalosa matshwao a gago ka mafoko a gago.\nO ka romela voice note 🎤`,
+    st: (category) => `O kgethile: *${category}*\n\nHo mpe hakaakang?\n1 — Hanyane (nka etsa mesebetsi ya ka ya letsatsi le letsatsi)\n2 — Mahareng (ho ama mesebetsi ya ka)\n3 — Haholo (nka se tsebe ho sebetsa)\n\nKapa hlalosa matshwao a hao ka mantswe a hao.\nO ka romela voice note 🎤`,
+    ts: (category) => `U hlawule: *${category}*\n\nSwi bihile ku fikela kwihi?\n1 — Swi nyane (ndzi nga endla mintirho ya mina ya siku na siku)\n2 — Swi ringana (swi khumbha mintirho ya mina)\n3 — Swi tika (a ndzi koti na swintsongo)\n\nKumbe u hlamusela swikombiso swa wena hi marito ya wena.\nU nga rhumela voice note 🎤`,
+    ss: (category) => `Ukhetse: *${category}*\n\nKumbi kangakanani?\n1 — Kancane (ngingenta imisebenti yami yemalanga onkhe)\n2 — Emkhatsini (iyangiphazamisa)\n3 — Kakhulu (angikwati kutenta lutfo)\n\nNoma uchaze timphawu takho ngamagama akho.\nUngathuma voice note 🎤`,
+    ve: (category) => `No nanga: *${category}*\n\nZwi vhavha hani?\n1 — Zwiṱuku (ndi a kona u ita mishumo yanga ya ḓuvha na ḓuvha)\n2 — Vhukati (zwi khou kwama mishumo yanga)\n3 — Vhukuma (a thi koni na luthihi)\n\nKana ni ṱalutshedze zwiga zwaṋu nga maipfi aṋu.\nNi nga rumela voice note 🎤`,
+    nr: (category) => `Ukhethe: *${category}*\n\nKumbi kangangani?\n1 — Kancani (ngingenza imisebenzi yami yemalanga)\n2 — Maphakathi (iyangithinta imisebenzi yami)\n3 — Khulu (angikghoni ukwenza litho)\n\nNamkha uchaze iimpawu zakho ngamagama wakho.\nUngathuma voice note 🎤`
   },
 
   // ==================== VOICE NOTE PROMPT ====================
@@ -3576,8 +3576,25 @@ async function orchestrate(patientId, from, message, session) {
         session.sex = message === '1' ? 'male' : 'female';
         session.identityDone = true;
         session.identityStep = null;
+
+        // Generate reference number for ALL patients (not just study participants)
+        if (!session.studyCode) {
+          const refCode = await generateStudyCode(patientId);
+          session.studyCode = refCode;
+        }
+
         await saveSession(patientId, session);
         await sendWhatsAppMessage(from, msg('identity_confirmed', lang, session.firstName, session.surname));
+
+        // Send reference number
+        const refMsg = {
+          en: `🔢 Your reference number is: *${session.studyCode}*\n\nShow this number at reception when you arrive at the clinic.`,
+          zu: `🔢 Inombolo yakho yereferensi ithi: *${session.studyCode}*\n\nKhombisa le nombolo e-reception uma ufika emtholampilo.`,
+          xh: `🔢 Inombolo yakho yereferensi ithi: *${session.studyCode}*\n\nBonisa le nombolo e-reception xa ufika ekliniki.`,
+          af: `🔢 Jou verwysingsnommer is: *${session.studyCode}*\n\nWys hierdie nommer by ontvangs wanneer jy by die kliniek aankom.`,
+        };
+        await sendWhatsAppMessage(from, refMsg[lang] || refMsg['en']);
+
         await sendWhatsAppMessage(from, msg('chronic_screening', lang));
         return;
       }
@@ -3714,7 +3731,8 @@ async function orchestrate(patientId, from, message, session) {
       session.awaitingFacilityConfirm = false;
       session.awaitingAlternativeChoice = true;
       await saveSession(patientId, session);
-      await sendWhatsAppMessage(from, msg('facility_alternatives', lang, listStr));
+      const firstFacilityName = session.suggestedFacility?.name || null;
+      await sendWhatsAppMessage(from, msg('facility_alternatives', lang, listStr, firstFacilityName));
       return;
     }
   }
@@ -3722,6 +3740,39 @@ async function orchestrate(patientId, from, message, session) {
   // ==================== STEP: ALTERNATIVE FACILITY CHOICE ====================
   if (session.awaitingAlternativeChoice) {
     const alternatives = session.alternativeFacilities || [];
+
+    // Option 0: go back to first suggestion
+    if (message === '0' && session.suggestedFacility) {
+      const facility = session.suggestedFacility;
+      session.awaitingAlternativeChoice = false;
+      session.confirmedFacility = facility;
+      await saveSession(patientId, session);
+      await sendWhatsAppMessage(from, msg('facility_confirmed', lang, facility.name));
+
+      await logTriage({
+        patient_id: patientId,
+        triage_level: session.lastTriage?.triage_level,
+        confidence: session.lastTriage?.confidence,
+        escalation: false,
+        pathway: session.lastPathway,
+        facility_name: facility.name,
+        location: session.location || null,
+        symptoms: session.lastSymptoms
+      });
+
+      if (session.lastTriage?.triage_level === 'YELLOW' || session.lastTriage?.triage_level === 'GREEN') {
+        session.awaitingReturningPatient = true;
+        await saveSession(patientId, session);
+        await sendWhatsAppMessage(from, msg('ask_returning', lang, facility.name));
+        return;
+      }
+
+      await autoAddToQueue(patientId, from, session);
+      await scheduleFollowUp(patientId, from, session.lastTriage?.triage_level);
+      await sendWhatsAppMessage(from, msg('tips', lang));
+      return;
+    }
+
     const choice = parseInt(message) - 1;
 
     if (choice >= 0 && choice < alternatives.length) {
@@ -4041,7 +4092,33 @@ async function orchestrate(patientId, from, message, session) {
 
     // Categories 1-12: Prepend category context and triage
     const categoryContext = CATEGORY_DESCRIPTIONS[session.selectedCategory] || '';
-    const enrichedMessage = categoryContext
+
+    // Parse severity options (1=mild, 2=moderate, 3=severe) or accept free text
+    const SEVERITY_MAP = {
+      '1': 'Severity: MILD — patient can do daily activities.',
+      '2': 'Severity: MODERATE — affecting daily activities.',
+      '3': 'Severity: SEVERE — patient can barely function.',
+    };
+    const severityText = SEVERITY_MAP[message.trim()];
+    let enrichedMessage;
+    if (severityText) {
+      enrichedMessage = `Category: ${categoryContext}. ${severityText}`;
+      // If they just picked a severity number, ask for a brief description too
+      session.awaitingSymptomFollowUp = true;
+      session.pendingSeverity = enrichedMessage;
+      session.awaitingSymptomDetail = false;
+      await saveSession(patientId, session);
+      const followUpMsg = {
+        en: 'Thank you. Can you briefly tell us:\n\n• When did it start?\n• Any other symptoms?\n\nOr type *skip* to proceed with triage.',
+        zu: 'Siyabonga. Ungasitshela kafushane:\n\n• Kuqale nini?\n• Ezinye izimpawu?\n\nNoma bhala *skip* ukuqhubeka.',
+        xh: 'Enkosi. Ungasixelela kafutshane:\n\n• Kuqale nini?\n• Ezinye iimpawu?\n\nOkanye bhala *skip* ukuqhubeka.',
+        af: 'Dankie. Kan jy kortliks sê:\n\n• Wanneer het dit begin?\n• Enige ander simptome?\n\nOf tik *skip* om voort te gaan.',
+      };
+      await sendWhatsAppMessage(from, followUpMsg[lang] || followUpMsg['en']);
+      return;
+    }
+
+    enrichedMessage = categoryContext
       ? `Category: ${categoryContext}. Patient says: ${message}`
       : message;
 
@@ -4049,6 +4126,21 @@ async function orchestrate(patientId, from, message, session) {
     session.selectedCategory = null;
     await saveSession(patientId, session);
 
+    message = enrichedMessage;
+  }
+
+  // ==================== STEP: SEVERITY FOLLOW-UP ====================
+  if (session.awaitingSymptomFollowUp) {
+    session.awaitingSymptomFollowUp = false;
+    let enrichedMessage = session.pendingSeverity || '';
+
+    if (message !== 'skip' && message.length > 1) {
+      enrichedMessage += ' Patient adds: ' + message;
+    }
+
+    session.pendingSeverity = null;
+    session.selectedCategory = null;
+    await saveSession(patientId, session);
     message = enrichedMessage;
   }
 
