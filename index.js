@@ -5782,7 +5782,8 @@ app.put('/api/clinic/queue/:id/call', requireDashboardAuth, async (req, res) => 
 
     if (error) throw error;
 
-    // Send WhatsApp notification to patient
+    // Send WhatsApp notification to patient (best-effort)
+    let whatsappSent = false;
     if (patient && patient.patient_phone) {
       try {
         const session = await getSession(patient.patient_id);
@@ -5791,14 +5792,13 @@ app.put('/api/clinic/queue/:id/call', requireDashboardAuth, async (req, res) => 
         const calledMsg = typeof MESSAGES.queue_called[lang] === 'function'
           ? MESSAGES.queue_called[lang](displayName)
           : MESSAGES.queue_called['en'](displayName);
-        await sendWhatsAppMessage(patient.patient_phone, calledMsg);
+        whatsappSent = await sendWhatsAppMessage(patient.patient_phone, calledMsg);
       } catch (e) {
         console.error('[QUEUE_CALL] WhatsApp notification failed:', e.message);
-        // Don't fail the API call — notification is best-effort
       }
     }
 
-    res.json({ success: true });
+    res.json({ success: true, whatsapp_sent: whatsappSent });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
