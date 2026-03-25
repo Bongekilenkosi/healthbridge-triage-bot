@@ -5201,14 +5201,25 @@ app.get('/api/clinic/expected', requireDashboardAuth, async (req, res) => {
   }
 });
 
-// GET /api/clinic/queue — Get current queue
+// GET /api/clinic/queue — Get current queue (or filter by status)
 app.get('/api/clinic/queue', requireDashboardAuth, async (req, res) => {
   try {
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+
     let query = supabase
       .from('clinic_queue')
       .select('*')
-      .in('status', ['waiting', 'in_consultation'])
-      .order('queue_type', { ascending: true })
+      .gte('checked_in_at', todayStart.toISOString());
+
+    // Filter by status (default: waiting + in_consultation)
+    if (req.query.status) {
+      query = query.eq('status', req.query.status);
+    } else {
+      query = query.in('status', ['waiting', 'in_consultation']);
+    }
+
+    query = query.order('queue_type', { ascending: true })
       .order('position', { ascending: true });
 
     if (req.query.queue_type) {
