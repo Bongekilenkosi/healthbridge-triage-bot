@@ -317,7 +317,7 @@ async function refreshExpected(){
       '<td>'+(p.first_name||'—')+'</td>'+
       '<td>'+(p.dob||'—')+'</td>'+
       '<td>'+(p.sex?p.sex.charAt(0).toUpperCase():'—')+'</td>'+
-      '<td>'+triageBadge(p.triage_level)+'</td>'+
+      '<td>'+triageBadge(p.triage_level)+(p.triage_level==='ORANGE'?' <span style="display:inline-block;padding:1px 5px;border-radius:3px;font-size:8px;font-weight:700;background:rgba(249,115,22,.15);color:#f97316;border:1px solid rgba(249,115,22,.3);vertical-align:middle">FAST-TRACK</span>':'')+'</td>'+
       '<td>'+(chronic||'—')+'</td>'+
       '<td>'+fs+'</td>'+
       '<td>'+hints+'</td>'+
@@ -377,12 +377,14 @@ async function refreshQueues(){
 function renderPatientCard(p,queueType){
   const w=waitMin(p.checked_in_at);
   const urgent=(p.triage_level==='RED'&&w>5)||(p.triage_level==='ORANGE'&&w>15);
+  const isFastTracked=p.triage_level==='ORANGE'&&queueType==='fast_track';
+  const ftBadge=isFastTracked?'<span style="display:inline-block;padding:2px 7px;border-radius:3px;font-size:9px;font-weight:700;background:rgba(249,115,22,.15);color:#f97316;border:1px solid rgba(249,115,22,.3);margin-left:6px">BIZUSIZO FAST-TRACK</span>':'';
   const sym=p.symptoms_summary?'<div class="p-symptoms">'+((p.symptoms_summary||'').length>90?(p.symptoms_summary||'').slice(0,90)+'…':p.symptoms_summary)+'</div>':'';
   let btns='<button class="btn btn-call" onclick="callPatient(\''+p.id+'\')">✓ Call</button><button class="btn btn-noshow" onclick="noShow(\''+p.id+'\')">✕ No-show</button>';
   if(queueType!=='fast_track')btns+='<button class="btn btn-fast" onclick="reassign(\''+p.id+'\',\'fast_track\')">⚡ Fast-track</button>';
   if(queueType!=='routine')btns+='<button class="btn btn-routine" onclick="reassign(\''+p.id+'\',\'routine\')">→ Routine</button>';
 
-  return '<div class="p-card" style="border-left:3px solid '+(urgent?'#ef4444':'transparent')+'"><div class="p-row"><div><div class="p-name">'+(p.patient_name||'Unknown patient')+(p.study_code?'<span class="p-code">'+p.study_code+'</span>':'')+'</div><div class="p-meta">'+triageBadge(p.triage_level)+' <span style="margin-left:6px">Waiting '+w+' min · Arrived '+fmtTime(p.checked_in_at)+'</span></div></div><div class="p-wait" style="color:'+waitColor(w)+'">'+w+'<span class="p-wait-unit">m</span></div></div>'+sym+'<div class="p-actions">'+btns+'</div></div>';
+  return '<div class="p-card" style="border-left:3px solid '+(urgent?'#ef4444':'transparent')+'"><div class="p-row"><div><div class="p-name">'+(p.patient_name||'Unknown patient')+(p.study_code?'<span class="p-code">'+p.study_code+'</span>':'')+ftBadge+'</div><div class="p-meta">'+triageBadge(p.triage_level)+' <span style="margin-left:6px">Waiting '+w+' min · Arrived '+fmtTime(p.checked_in_at)+'</span></div></div><div class="p-wait" style="color:'+waitColor(w)+'">'+w+'<span class="p-wait-unit">m</span></div></div>'+sym+'<div class="p-actions">'+btns+'</div></div>';
 }
 
 // ==================== NURSE VIEW ====================
@@ -399,7 +401,7 @@ async function refreshNurse(){
   const colors={RED:'#ef4444',ORANGE:'#f97316',YELLOW:'#eab308'};
   const bgs={RED:'rgba(239,68,68,.08)',ORANGE:'rgba(249,115,22,.08)',YELLOW:'rgba(234,179,8,.08)'};
   const borders={RED:'rgba(239,68,68,.2)',ORANGE:'rgba(249,115,22,.2)',YELLOW:'rgba(234,179,8,.2)'};
-  document.getElementById('nurse-alerts').innerHTML=(d.alerts||[]).length>0?'<div style="font-size:14px;font-weight:700;color:#ef4444;margin-bottom:8px">🚨 Priority Alerts ('+(d.alerts||[]).length+')</div>'+(d.alerts||[]).map(p=>'<div class="nurse-alert" style="background:'+(bgs[p.triage_level]||bgs.YELLOW)+';border:1px solid '+(borders[p.triage_level]||borders.YELLOW)+'"><div class="nurse-alert-hdr"><div><span class="nurse-alert-level" style="color:'+(colors[p.triage_level]||'#eab308')+'">'+p.triage_level+'</span><span class="nurse-alert-name">'+(p.patient_name||'Unknown')+'</span><span class="nurse-alert-wait">Waiting <b>'+p.wait_minutes+' min</b></span></div><button class="btn btn-call" onclick="callPatient(\''+p.id+'\')">Call now</button></div>'+(p.symptoms_summary?'<div class="nurse-alert-symptoms">'+p.symptoms_summary+'</div>':'')+'</div>').join(''):'';
+  document.getElementById('nurse-alerts').innerHTML=(d.alerts||[]).length>0?'<div style="font-size:14px;font-weight:700;color:#ef4444;margin-bottom:8px">🚨 Priority Alerts ('+(d.alerts||[]).length+')</div>'+(d.alerts||[]).map(p=>'<div class="nurse-alert" style="background:'+(bgs[p.triage_level]||bgs.YELLOW)+';border:1px solid '+(borders[p.triage_level]||borders.YELLOW)+'"><div class="nurse-alert-hdr"><div><span class="nurse-alert-level" style="color:'+(colors[p.triage_level]||'#eab308')+'">'+p.triage_level+'</span>'+(p.triage_level==='ORANGE'?' <span style="display:inline-block;padding:1px 5px;border-radius:3px;font-size:8px;font-weight:700;background:rgba(249,115,22,.15);color:#f97316;border:1px solid rgba(249,115,22,.3)">FAST-TRACK</span>':'')+'<span class="nurse-alert-name">'+(p.patient_name||'Unknown')+'</span><span class="nurse-alert-wait">Waiting <b>'+p.wait_minutes+' min</b></span></div><button class="btn btn-call" onclick="callPatient(\''+p.id+'\')">Call now</button></div>'+(p.symptoms_summary?'<div class="nurse-alert-symptoms">'+p.symptoms_summary+'</div>':'')+'</div>').join(''):'';
 
   // Next patients per queue
   const types=[
