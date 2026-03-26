@@ -7531,22 +7531,103 @@ app.post('/api/clinic/arrive', async (req, res) => {
   }
 });
 
-// PUT /api/clinic/queue/:id/complete — Complete consultation
+// PUT /api/clinic/queue/:id/complete — Complete consultation (DoH Exit Flow)
+// Captures: treatment given, tests done, medication dispensed, next visit, notes
+// Sends WhatsApp exit message with treatment summary + health education + next visit
 app.put('/api/clinic/queue/:id/complete', requireDashboardAuth, async (req, res) => {
   try {
-    const { notes } = req.body;
+    const { treatments, tests, medications, next_visit_date, notes, nurse_name } = req.body;
+
+    // Get patient details for WhatsApp notification
+    const { data: patient } = await supabase
+      .from('clinic_queue')
+      .select('patient_phone, patient_id, patient_name, triage_level, queue_type, symptoms_summary, facility_name')
+      .eq('id', req.params.id)
+      .single();
+
+    // Build exit summary
+    const exitData = {
+      treatments: treatments || [],     // e.g. ['medication', 'injection', 'wound_care']
+      tests: tests || [],               // e.g. ['hiv_test', 'bp_check', 'glucose']
+      medications: medications || [],   // e.g. ['prescription', 'chronic_meds', 'otc']
+      next_visit_date: next_visit_date || null,
+      nurse_name: nurse_name || null,
+      completed_by: req.user?.display_name || nurse_name || null,
+    };
+
     const { error } = await supabase
       .from('clinic_queue')
       .update({
         status: 'completed',
         completed_at: new Date(),
-        notes: notes || null,
+        notes: (notes ? notes + ' | ' : '') + 'EXIT: ' + JSON.stringify(exitData),
+        exit_data: exitData,
       })
       .eq('id', req.params.id);
 
     if (error) throw error;
-    res.json({ success: true });
-    await logAudit(req, 'COMPLETE', req.params.id);
+
+    // Send WhatsApp exit message to patient (if phone available)
+    if (patient?.patient_phone) {
+      try {
+        // Get patient language from session
+        const patientId = patient.patient_id;
+        const { data: sessionData } = await supabase.from('sessions').select('data').eq('patient_id', patientId).single();
+        const lang = sessionData?.data?.language || 'en';
+
+        // Build exit message components
+        const treatmentLabels = { medication: 'Medication', injection: 'Injection', wound_care: 'Wound care', nebulisation: 'Nebulisation', counselling: 'Counselling', procedure: 'Procedure' };
+        const testLabels = { hiv_test: 'HIV test', bp_check: 'BP check', glucose: 'Glucose test', urine: 'Urine test', blood_draw: 'Blood draw', pap_smear: 'Pap smear' };
+        const medLabels = { prescription: 'Prescription', chronic_meds: 'Chronic medication', otc: 'Over-the-counter medication' };
+
+        const treatmentStr = (treatments || []).map(t => treatmentLabels[t] || t).join(', ') || 'General consultation';
+        const testStr = (tests || []).length > 0 ? (tests || []).map(t => testLabels[t] || t).join(', ') : null;
+        const medStr = (medications || []).length > 0 ? (medications || []).map(m => medLabels[m] || m).join(', ') : null;
+        const nextVisitStr = next_visit_date ? new Date(next_visit_date).toLocaleDateString('en-ZA', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) : null;
+
+        const exitMsg = {
+          en: `✅ *Your visit is complete.*\n\n🏥 ${patient.facility_name || 'Clinic'}\n💊 Treatment: ${treatmentStr}${testStr ? '\n🔬 Tests: ' + testStr : ''}${medStr ? '\n💊 Medication: ' + medStr : ''}${nextVisitStr ? '\n📅 Next visit: *' + nextVisitStr + '*' : ''}\n\nIf your symptoms worsen or you need help, type *0* to start a new consultation.\n\nStay well. 🙏`,
+          zu: `✅ *Ukuvakashela kwakho kuphelile.*\n\n🏥 ${patient.facility_name || 'Umtholampilo'}\n💊 Ukwelashwa: ${treatmentStr}${testStr ? '\n🔬 Izinhlolo: ' + testStr : ''}${medStr ? '\n💊 Umuthi: ' + medStr : ''}${nextVisitStr ? '\n📅 Ukuvakashela okulandelayo: *' + nextVisitStr + '*' : ''}\n\nUma izimpawu zakho ziba zimbi noma udinga usizo, bhala *0* ukuqala kabusha.\n\nUhlale kahle. 🙏`,
+          xh: `✅ *Utyelelo lwakho lugqityiwe.*\n\n🏥 ${patient.facility_name || 'Ikliniki'}\n💊 Unyango: ${treatmentStr}${testStr ? '\n🔬 Izilingo: ' + testStr : ''}${medStr ? '\n💊 Amayeza: ' + medStr : ''}${nextVisitStr ? '\n📅 Utyelelo olulandelayo: *' + nextVisitStr + '*' : ''}\n\nUkuba iimpawu zakho ziya zisiba mbi okanye ufuna uncedo, bhala *0* ukuqala kwakhona.\n\nHlala kakuhle. 🙏`,
+          af: `✅ *Jou besoek is voltooi.*\n\n🏥 ${patient.facility_name || 'Kliniek'}\n💊 Behandeling: ${treatmentStr}${testStr ? '\n🔬 Toetse: ' + testStr : ''}${medStr ? '\n💊 Medikasie: ' + medStr : ''}${nextVisitStr ? '\n📅 Volgende besoek: *' + nextVisitStr + '*' : ''}\n\nAs jou simptome vererger of jy hulp nodig het, tik *0* vir nuwe konsultasie.\n\nBly gesond. 🙏`,
+          nso: `✅ *Ketelo ya gago e phethilwe.*\n\n🏥 ${patient.facility_name || 'Kliniki'}\n💊 Kalafo: ${treatmentStr}${testStr ? '\n🔬 Diteko: ' + testStr : ''}${medStr ? '\n💊 Dihlare: ' + medStr : ''}${nextVisitStr ? '\n📅 Ketelo ye e latelago: *' + nextVisitStr + '*' : ''}\n\nGe dika di mpefala goba o nyaka thušo, ngwala *0* go thoma lefsa.\n\nDula gabotse. 🙏`,
+          tn: `✅ *Ketelo ya gago e fedile.*\n\n🏥 ${patient.facility_name || 'Kliniki'}\n💊 Kalafo: ${treatmentStr}${testStr ? '\n🔬 Diteko: ' + testStr : ''}${medStr ? '\n💊 Dimelemo: ' + medStr : ''}${nextVisitStr ? '\n📅 Ketelo e e latelang: *' + nextVisitStr + '*' : ''}\n\nFa matshwao a maswe kgotsa o tlhoka thuso, kwala *0* go simolola sešwa.\n\nNna sentle. 🙏`,
+          st: `✅ *Ketelo ya hao e phethilwe.*\n\n🏥 ${patient.facility_name || 'Kliniki'}\n💊 Pheko: ${treatmentStr}${testStr ? '\n🔬 Diteko: ' + testStr : ''}${medStr ? '\n💊 Meriana: ' + medStr : ''}${nextVisitStr ? '\n📅 Ketelo e latelang: *' + nextVisitStr + '*' : ''}\n\nHaeba matshwao a mpefala kapa o hloka thuso, ngola *0* ho qala bocha.\n\nPhela hantle. 🙏`,
+          ts: `✅ *Ku endzela ka wena ku hetile.*\n\n🏥 ${patient.facility_name || 'Kliniki'}\n💊 Vurhanyi: ${treatmentStr}${testStr ? '\n🔬 Mavonelo: ' + testStr : ''}${medStr ? '\n💊 Mirhi: ' + medStr : ''}${nextVisitStr ? '\n📅 Ku endzela loku landzelaka: *' + nextVisitStr + '*' : ''}\n\nLoko swikombiso swi nyanya kumbe u lava mpfuno, tsala *0* ku sungula hi vuntshwa.\n\nTshama kahle. 🙏`,
+          ss: `✅ *Kuvakashela kwakho kuphelile.*\n\n🏥 ${patient.facility_name || 'Umtfolamphilo'}\n💊 Kwelapha: ${treatmentStr}${testStr ? '\n🔬 Kuhlolwa: ' + testStr : ''}${medStr ? '\n💊 Imitsi: ' + medStr : ''}${nextVisitStr ? '\n📅 Kuvakashela lokulandzelako: *' + nextVisitStr + '*' : ''}\n\nNangabe timphawu tiba timbi noma udzinga lusito, bhala *0* kucala kabusha.\n\nHlala kahle. 🙏`,
+          ve: `✅ *U dalela haṋu ho fhela.*\n\n🏥 ${patient.facility_name || 'Kiliniki'}\n💊 Vhulafhi: ${treatmentStr}${testStr ? '\n🔬 Ndingo: ' + testStr : ''}${medStr ? '\n💊 Mushonga: ' + medStr : ''}${nextVisitStr ? '\n📅 U dalela hu tevhelaho: *' + nextVisitStr + '*' : ''}\n\nArali zwiga zwi tshi vhifha kana ni tshi ṱoḓa thuso, ṅwalani *0* u thoma hafhu.\n\nDzulani zwavhuḓi. 🙏`,
+          nr: `✅ *Ukuvakatjhela kwakho kuphelile.*\n\n🏥 ${patient.facility_name || 'Ikliniki'}\n💊 Ukwelapha: ${treatmentStr}${testStr ? '\n🔬 Ukuhlolwa: ' + testStr : ''}${medStr ? '\n💊 Imitjhoga: ' + medStr : ''}${nextVisitStr ? '\n📅 Ukuvakatjhela okulandelako: *' + nextVisitStr + '*' : ''}\n\nNangabe iimphawu ziba zimbi noma udinga isizo, tlola *0* ukuthoma kabutjha.\n\nHlala kuhle. 🙏`,
+        };
+        await sendWhatsAppMessage(patient.patient_phone, exitMsg[lang] || exitMsg['en']);
+      } catch (e) {
+        console.error('[EXIT] WhatsApp exit message failed:', e.message);
+        // Non-critical — don't fail the completion
+      }
+    }
+
+    // Schedule next visit reminder if date provided
+    if (next_visit_date && patient?.patient_phone) {
+      try {
+        const visitDate = new Date(next_visit_date);
+        const reminderDate = new Date(visitDate);
+        reminderDate.setDate(reminderDate.getDate() - 1); // Day before
+        reminderDate.setHours(6, 30, 0, 0); // 06:30 SAST (04:30 UTC)
+
+        await supabase.from('follow_ups').insert({
+          patient_id: patient.patient_id,
+          phone: patient.patient_phone,
+          triage_level: patient.triage_level || 'GREEN',
+          scheduled_at: reminderDate,
+          status: 'pending',
+          type: 'next_visit_reminder',
+        });
+      } catch (e) {
+        console.error('[EXIT] Next visit reminder scheduling failed:', e.message);
+      }
+    }
+
+    res.json({ success: true, exit_data: exitData });
+    await logAudit(req, 'COMPLETE', req.params.id, { ...exitData, patient_name: patient?.patient_name });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
