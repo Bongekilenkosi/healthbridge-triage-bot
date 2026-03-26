@@ -513,7 +513,7 @@ async function refreshNurse(){
   document.getElementById('nurse-columns').innerHTML=types.map(t=>{
     return '<div class="q-col"><div class="q-hdr" style="border-bottom-color:'+t.color+'"><div class="q-hdr-title">'+t.icon+' Next in '+t.label+'</div></div>'+(t.data.length===0?'<div class="q-empty">Queue empty</div>':t.data.slice(0,5).map((p,i)=>{
       const w=waitMin(p.checked_in_at);
-      return '<div style="padding:8px 14px;border-bottom:1px solid #131b2e"><div style="display:flex;justify-content:space-between;align-items:center"><div><span style="font-size:11px;font-weight:600;color:#475569;margin-right:6px">#'+(i+1)+'</span><span style="font-size:12px;font-weight:600;color:#e2e8f0">'+(p.patient_name||'Unknown')+'</span></div>'+triageBadge(p.triage_level)+'</div>'+(p.symptoms_summary?'<div style="font-size:10px;color:#94a3b8;margin-top:4px;padding:4px 6px;background:rgba(255,255,255,.03);border-radius:4px;line-height:1.4">'+((p.symptoms_summary||'').length>140?(p.symptoms_summary||'').slice(0,140)+'…':p.symptoms_summary)+'</div>':'')+'<div style="font-size:10px;color:#475569;margin-top:3px">Waiting: '+w+' min</div><div class="p-actions" style="margin-top:4px"><button class="btn btn-call" onclick="callPatient(\''+p.id+'\')">✓ Call</button><button class="btn btn-noshow" onclick="noShow(\''+p.id+'\')">✕ No-show</button><button class="btn" style="color:#22c55e;border-color:rgba(34,197,94,.3);background:rgba(34,197,94,.08)" onclick="nurseFeedback(\''+p.id+'\',\'agree\')">👍 Agree</button><button class="btn" style="color:#f97316;border-color:rgba(249,115,22,.3);background:rgba(249,115,22,.08)" onclick="nurseFeedback(\''+p.id+'\',\'disagree\')">👎 Disagree</button></div></div>';
+      return '<div style="padding:8px 14px;border-bottom:1px solid #131b2e"><div style="display:flex;justify-content:space-between;align-items:center"><div><span style="font-size:11px;font-weight:600;color:#475569;margin-right:6px">#'+(i+1)+'</span><span style="font-size:12px;font-weight:600;color:#e2e8f0">'+(p.patient_name||'Unknown')+'</span></div>'+triageBadge(p.triage_level)+'</div>'+(p.symptoms_summary?'<div style="font-size:10px;color:#94a3b8;margin-top:4px;padding:4px 6px;background:rgba(255,255,255,.03);border-radius:4px;line-height:1.4">'+((p.symptoms_summary||'').length>140?(p.symptoms_summary||'').slice(0,140)+'…':p.symptoms_summary)+'</div>':'')+'<div style="font-size:10px;color:#475569;margin-top:3px">Waiting: '+w+' min</div><div class="p-actions" style="margin-top:4px"><button class="btn btn-call" onclick="callPatient(\''+p.id+'\')">✓ Call</button><button class="btn btn-noshow" onclick="noShow(\''+p.id+'\')">✕ No-show</button><button class="btn" style="color:#22c55e;border-color:rgba(34,197,94,.3);background:rgba(34,197,94,.08)" onclick="nurseFeedback(\''+p.id+'\',\'agree\')">👍 Agree</button><button class="btn" style="color:#f97316;border-color:rgba(249,115,22,.3);background:rgba(249,115,22,.08)" onclick="nurseFeedback(\''+p.id+'\',\'disagree\')">👎 Disagree</button><button class=\"btn\" style=\"color:#06b6d4;border-color:rgba(6,182,212,.3);background:rgba(6,182,212,.08)\" onclick=\"openTEWS(\\''+p.id+'\\',\\''+((p.patient_name||'Unknown').replace(/'/g,"\\\\\\'"))+'\\',\\''+p.triage_level+'\\')\">📊 TEWS</button></div></div>';
     }).join(''))+'</div>';
   }).join('');
 }
@@ -668,6 +668,32 @@ async function completePatient(id){
         <div style="font-size:12px;font-weight:600;color:#94a3b8;margin-bottom:6px">📝 Notes (optional):</div>
         <textarea id="exit-notes" rows="2" style="width:100%;padding:8px;border-radius:6px;border:1px solid #1e293b;background:#0d1321;color:#e2e8f0;font-size:12px;resize:vertical" placeholder="Any additional notes..."></textarea>
       </div>
+
+      <div style="margin-bottom:16px;padding:10px;background:rgba(34,197,94,.05);border:1px solid rgba(34,197,94,.15);border-radius:8px">
+        <div style="font-size:11px;font-weight:600;color:#22c55e;margin-bottom:6px">📋 Entry Attribution</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <div>
+            <label style="font-size:10px;color:#64748b;display:block;margin-bottom:2px">Your role</label>
+            <select id="exit-role" style="width:100%;padding:5px;border-radius:4px;border:1px solid #1e293b;background:#0d1321;color:#e2e8f0;font-size:11px">
+              <option value="nurse">Nurse</option>
+              <option value="clerk">Clerk</option>
+              <option value="data_capturer">Data Capturer</option>
+              <option value="facility_manager">Facility Manager</option>
+            </select>
+          </div>
+          <div>
+            <label style="font-size:10px;color:#64748b;display:block;margin-bottom:2px">Entry type</label>
+            <select id="exit-retro" style="width:100%;padding:5px;border-radius:4px;border:1px solid #1e293b;background:#0d1321;color:#e2e8f0;font-size:11px" onchange="document.getElementById('exit-orig-time-wrap').style.display=this.value==='yes'?'block':'none'">
+              <option value="no">Real-time</option>
+              <option value="yes">Retrospective (from paper)</option>
+            </select>
+          </div>
+        </div>
+        <div id="exit-orig-time-wrap" style="display:none;margin-top:6px">
+          <label style="font-size:10px;color:#64748b;display:block;margin-bottom:2px">Original completion time (from paper register)</label>
+          <input type="datetime-local" id="exit-orig-time" style="width:100%;padding:5px;border-radius:4px;border:1px solid #1e293b;background:#0d1321;color:#e2e8f0;font-size:11px">
+        </div>
+      </div>
       
       <div style="display:flex;gap:8px">
         <button onclick="submitComplete('${id}')" style="flex:1;padding:10px;border-radius:6px;border:none;background:#22c55e;color:white;font-size:13px;font-weight:600;cursor:pointer">✅ Confirm & Exit Patient</button>
@@ -684,6 +710,9 @@ async function submitComplete(id){
   const medications=[...document.querySelectorAll('.exit-med:checked')].map(c=>c.value);
   const nextVisit=document.getElementById('exit-next-visit').value||null;
   const notes=document.getElementById('exit-notes').value.trim()||null;
+  const role=document.getElementById('exit-role').value;
+  const isRetro=document.getElementById('exit-retro').value==='yes';
+  const origTime=document.getElementById('exit-orig-time').value||null;
   
   const el=document.getElementById('exit-modal');
   if(el)el.remove();
@@ -692,7 +721,10 @@ async function submitComplete(id){
     treatments, tests, medications,
     next_visit_date:nextVisit,
     notes,
-    nurse_name:UNAME
+    nurse_name:UNAME,
+    entered_by_role:role,
+    is_retrospective:isRetro,
+    original_completion_time:origTime
   })});
   refresh();
 }
@@ -804,6 +836,214 @@ async function nurseFeedback(id,verdict){
   if(res&&res.success){
     alert(verdict==='agree'?'Triage confirmed. Thank you!':'Feedback recorded. Triage updated to '+nurseLevel+'.');
     refresh();
+  }
+}
+
+// ==================== TEWS CALCULATOR (DoH SATS-aligned) ====================
+// Triage Early Warning Score: 7 parameters, score 0-17
+// TEWS ≥7 = RED, 5-6 = ORANGE, 3-4 = YELLOW, 0-2 = GREEN
+function openTEWS(queueId, patientName, currentLevel){
+  const html=`<div style="position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:999;display:flex;align-items:center;justify-content:center" id="tews-modal">
+    <div style="background:#111827;border:1px solid #1e293b;border-radius:12px;padding:24px;width:440px;max-height:90vh;overflow-y:auto">
+      <h3 style="font-size:16px;margin-bottom:4px;color:#e2e8f0">📊 TEWS Calculator</h3>
+      <div style="font-size:12px;color:#64748b;margin-bottom:16px">Patient: <b>${patientName}</b> · Current: <span style="font-weight:600">${currentLevel}</span></div>
+      
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">
+        <div>
+          <label style="font-size:11px;color:#94a3b8;display:block;margin-bottom:3px">Respiratory Rate (/min)</label>
+          <input type="number" id="tews-rr" placeholder="e.g. 18" style="width:100%;padding:6px 8px;border-radius:6px;border:1px solid #1e293b;background:#0d1321;color:#e2e8f0;font-size:13px" oninput="calcTEWS()">
+        </div>
+        <div>
+          <label style="font-size:11px;color:#94a3b8;display:block;margin-bottom:3px">Heart Rate (bpm)</label>
+          <input type="number" id="tews-hr" placeholder="e.g. 80" style="width:100%;padding:6px 8px;border-radius:6px;border:1px solid #1e293b;background:#0d1321;color:#e2e8f0;font-size:13px" oninput="calcTEWS()">
+        </div>
+        <div>
+          <label style="font-size:11px;color:#94a3b8;display:block;margin-bottom:3px">Systolic BP (mmHg)</label>
+          <input type="number" id="tews-sbp" placeholder="e.g. 120" style="width:100%;padding:6px 8px;border-radius:6px;border:1px solid #1e293b;background:#0d1321;color:#e2e8f0;font-size:13px" oninput="calcTEWS()">
+        </div>
+        <div>
+          <label style="font-size:11px;color:#94a3b8;display:block;margin-bottom:3px">Temperature (°C)</label>
+          <input type="number" id="tews-temp" step="0.1" placeholder="e.g. 37.0" style="width:100%;padding:6px 8px;border-radius:6px;border:1px solid #1e293b;background:#0d1321;color:#e2e8f0;font-size:13px" oninput="calcTEWS()">
+        </div>
+      </div>
+      
+      <div style="margin-bottom:12px">
+        <label style="font-size:11px;color:#94a3b8;display:block;margin-bottom:3px">AVPU (Level of Consciousness)</label>
+        <select id="tews-avpu" style="width:100%;padding:6px 8px;border-radius:6px;border:1px solid #1e293b;background:#0d1321;color:#e2e8f0;font-size:13px" onchange="calcTEWS()">
+          <option value="">Select...</option>
+          <option value="A">A — Alert</option>
+          <option value="V">V — Responds to Voice</option>
+          <option value="P">P — Responds to Pain</option>
+          <option value="U">U — Unresponsive</option>
+        </select>
+      </div>
+      
+      <div style="margin-bottom:12px">
+        <label style="font-size:11px;color:#94a3b8;display:block;margin-bottom:3px">Mobility</label>
+        <select id="tews-mobility" style="width:100%;padding:6px 8px;border-radius:6px;border:1px solid #1e293b;background:#0d1321;color:#e2e8f0;font-size:13px" onchange="calcTEWS()">
+          <option value="">Select...</option>
+          <option value="walking">Walking</option>
+          <option value="wheelchair">Wheelchair / assisted</option>
+          <option value="stretcher">Stretcher / immobile</option>
+        </select>
+      </div>
+      
+      <div style="margin-bottom:12px">
+        <label style="font-size:11px;color:#94a3b8;display:block;margin-bottom:3px">Trauma</label>
+        <select id="tews-trauma" style="width:100%;padding:6px 8px;border-radius:6px;border:1px solid #1e293b;background:#0d1321;color:#e2e8f0;font-size:13px" onchange="calcTEWS()">
+          <option value="no">No trauma</option>
+          <option value="yes">Trauma present</option>
+        </select>
+      </div>
+
+      <div style="margin-bottom:12px">
+        <label style="font-size:11px;color:#94a3b8;display:block;margin-bottom:6px">Discriminators (tick all that apply):</label>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px">
+          <label style="font-size:11px;color:#cbd5e1;cursor:pointer"><input type="checkbox" class="tews-disc" value="chest_pain" onchange="calcTEWS()"> Chest pain</label>
+          <label style="font-size:11px;color:#cbd5e1;cursor:pointer"><input type="checkbox" class="tews-disc" value="severe_pain" onchange="calcTEWS()"> Severe pain</label>
+          <label style="font-size:11px;color:#cbd5e1;cursor:pointer"><input type="checkbox" class="tews-disc" value="haemorrhage" onchange="calcTEWS()"> Active haemorrhage</label>
+          <label style="font-size:11px;color:#cbd5e1;cursor:pointer"><input type="checkbox" class="tews-disc" value="seizure" onchange="calcTEWS()"> Seizure / convulsion</label>
+          <label style="font-size:11px;color:#cbd5e1;cursor:pointer"><input type="checkbox" class="tews-disc" value="overdose" onchange="calcTEWS()"> Overdose / poisoning</label>
+          <label style="font-size:11px;color:#cbd5e1;cursor:pointer"><input type="checkbox" class="tews-disc" value="burns" onchange="calcTEWS()"> Burns</label>
+          <label style="font-size:11px;color:#cbd5e1;cursor:pointer"><input type="checkbox" class="tews-disc" value="stroke" onchange="calcTEWS()"> Stroke signs</label>
+          <label style="font-size:11px;color:#cbd5e1;cursor:pointer"><input type="checkbox" class="tews-disc" value="hypoglycaemia" onchange="calcTEWS()"> Hypoglycaemia</label>
+          <label style="font-size:11px;color:#cbd5e1;cursor:pointer"><input type="checkbox" class="tews-disc" value="shortness_of_breath" onchange="calcTEWS()"> Shortness of breath</label>
+          <label style="font-size:11px;color:#cbd5e1;cursor:pointer"><input type="checkbox" class="tews-disc" value="abdominal_pain" onchange="calcTEWS()"> Acute abdominal pain</label>
+        </div>
+      </div>
+      
+      <div id="tews-result" style="background:#0d1321;border:1px solid #1e293b;border-radius:8px;padding:12px;margin-bottom:16px;text-align:center">
+        <div style="font-size:11px;color:#64748b">Enter vitals to calculate TEWS</div>
+      </div>
+
+      <div style="margin-bottom:12px;padding:10px;background:rgba(6,182,212,.05);border:1px solid rgba(6,182,212,.15);border-radius:8px">
+        <div style="font-size:11px;font-weight:600;color:#06b6d4;margin-bottom:6px">📋 Entry Attribution</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <div>
+            <label style="font-size:10px;color:#64748b;display:block;margin-bottom:2px">Your role</label>
+            <select id="tews-role" style="width:100%;padding:5px;border-radius:4px;border:1px solid #1e293b;background:#0d1321;color:#e2e8f0;font-size:11px">
+              <option value="nurse">Nurse</option>
+              <option value="clerk">Clerk</option>
+              <option value="data_capturer">Data Capturer</option>
+              <option value="facility_manager">Facility Manager</option>
+            </select>
+          </div>
+          <div>
+            <label style="font-size:10px;color:#64748b;display:block;margin-bottom:2px">Entry type</label>
+            <select id="tews-retro" style="width:100%;padding:5px;border-radius:4px;border:1px solid #1e293b;background:#0d1321;color:#e2e8f0;font-size:11px" onchange="document.getElementById('tews-orig-time-wrap').style.display=this.value==='yes'?'block':'none'">
+              <option value="no">Real-time (at bedside)</option>
+              <option value="yes">Retrospective (from paper)</option>
+            </select>
+          </div>
+        </div>
+        <div id="tews-orig-time-wrap" style="display:none;margin-top:6px">
+          <label style="font-size:10px;color:#64748b;display:block;margin-bottom:2px">Original assessment time (from paper register)</label>
+          <input type="datetime-local" id="tews-orig-time" style="width:100%;padding:5px;border-radius:4px;border:1px solid #1e293b;background:#0d1321;color:#e2e8f0;font-size:11px">
+        </div>
+      </div>
+      
+      <div style="display:flex;gap:8px">
+        <button onclick="submitTEWS('${queueId}')" id="tews-submit-btn" style="flex:1;padding:10px;border-radius:6px;border:none;background:#06b6d4;color:white;font-size:13px;font-weight:600;cursor:pointer" disabled>Save TEWS Score</button>
+        <button onclick="document.getElementById('tews-modal').remove()" style="padding:10px 16px;border-radius:6px;border:1px solid #1e293b;background:#111827;color:#94a3b8;font-size:13px;cursor:pointer">Cancel</button>
+      </div>
+    </div>
+  </div>`;
+  document.body.insertAdjacentHTML('beforeend',html);
+}
+
+function calcTEWS(){
+  const rr=parseInt(document.getElementById('tews-rr').value)||0;
+  const hr=parseInt(document.getElementById('tews-hr').value)||0;
+  const sbp=parseInt(document.getElementById('tews-sbp').value)||0;
+  const temp=parseFloat(document.getElementById('tews-temp').value)||0;
+  const avpu=document.getElementById('tews-avpu').value;
+  const mobility=document.getElementById('tews-mobility').value;
+  const trauma=document.getElementById('tews-trauma').value;
+  const discs=[...document.querySelectorAll('.tews-disc:checked')].map(c=>c.value);
+  
+  if(!rr&&!hr&&!sbp&&!avpu)return;
+  
+  let score=0;
+  // RR scoring
+  if(rr<9)score+=3; else if(rr<=14)score+=0; else if(rr<=20)score+=1; else if(rr<=29)score+=2; else score+=3;
+  // HR scoring
+  if(hr<41)score+=3; else if(hr<=50)score+=1; else if(hr<=100)score+=0; else if(hr<=110)score+=1; else if(hr<=129)score+=2; else score+=3;
+  // SBP scoring
+  if(sbp<71)score+=3; else if(sbp<=80)score+=2; else if(sbp<=100)score+=1; else if(sbp<=199)score+=0; else score+=2;
+  // Temp scoring
+  if(temp>0){if(temp<35)score+=2; else if(temp<=38.4)score+=0; else score+=2;}
+  // AVPU scoring
+  if(avpu==='A')score+=0; else if(avpu==='V')score+=1; else if(avpu==='P')score+=2; else if(avpu==='U')score+=3;
+  // Mobility
+  if(mobility==='walking')score+=0; else if(mobility==='wheelchair')score+=1; else if(mobility==='stretcher')score+=2;
+  // Trauma
+  if(trauma==='yes')score+=1;
+  
+  // Determine SATS colour from TEWS
+  let colour='GREEN',colHex='#22c55e';
+  if(score>=7){colour='RED';colHex='#ef4444';}
+  else if(score>=5){colour='ORANGE';colHex='#f97316';}
+  else if(score>=3){colour='YELLOW';colHex='#eab308';}
+  
+  // Discriminator upgrade: certain discriminators force at least ORANGE
+  const orangeDiscs=['chest_pain','severe_pain','haemorrhage','seizure','overdose','burns','stroke','hypoglycaemia','shortness_of_breath','abdominal_pain'];
+  if(discs.some(d=>orangeDiscs.includes(d))&&score<5){
+    colour='ORANGE';colHex='#f97316';
+  }
+  // Critical discriminators force RED
+  const redDiscs=['seizure','haemorrhage'];
+  if(discs.some(d=>redDiscs.includes(d))&&score<7){
+    colour='RED';colHex='#ef4444';
+  }
+  
+  const el=document.getElementById('tews-result');
+  el.innerHTML='<div style="font-size:28px;font-weight:700;color:'+colHex+'">TEWS: '+score+'/17</div><div style="font-size:14px;font-weight:600;color:'+colHex+';margin-top:4px">'+colour+'</div>'+(discs.length>0?'<div style="font-size:10px;color:#64748b;margin-top:4px">Discriminators: '+discs.join(', ')+'</div>':'');
+  
+  document.getElementById('tews-submit-btn').disabled=false;
+  document.getElementById('tews-submit-btn').dataset.score=score;
+  document.getElementById('tews-submit-btn').dataset.colour=colour;
+  document.getElementById('tews-submit-btn').dataset.discs=JSON.stringify(discs);
+}
+
+async function submitTEWS(queueId){
+  const btn=document.getElementById('tews-submit-btn');
+  const score=parseInt(btn.dataset.score)||0;
+  const colour=btn.dataset.colour||'GREEN';
+  const discs=JSON.parse(btn.dataset.discs||'[]');
+  
+  const vitals={
+    rr:document.getElementById('tews-rr').value||null,
+    hr:document.getElementById('tews-hr').value||null,
+    sbp:document.getElementById('tews-sbp').value||null,
+    temp:document.getElementById('tews-temp').value||null,
+    avpu:document.getElementById('tews-avpu').value||null,
+    mobility:document.getElementById('tews-mobility').value||null,
+    trauma:document.getElementById('tews-trauma').value||null,
+  };
+
+  const role=document.getElementById('tews-role').value;
+  const isRetro=document.getElementById('tews-retro').value==='yes';
+  const origTime=document.getElementById('tews-orig-time').value||null;
+  
+  const el=document.getElementById('tews-modal');
+  if(el)el.remove();
+  
+  const res=await api('/api/clinic/queue/'+queueId+'/tews',{method:'PUT',body:JSON.stringify({
+    tews_score:score,
+    tews_colour:colour,
+    discriminators:discs,
+    vitals,
+    nurse_name:UNAME,
+    entered_by_role:role,
+    is_retrospective:isRetro,
+    original_assessment_time:origTime
+  })});
+  
+  if(res&&res.success){
+    alert('TEWS '+score+' ('+colour+') saved successfully.');
+    refresh();
+  }else{
+    alert('Failed to save TEWS score.');
   }
 }
 
