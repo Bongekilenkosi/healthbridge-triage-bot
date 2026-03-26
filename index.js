@@ -20,9 +20,269 @@ const fs = require('fs');
 const path = require('path');
 const { createClient } = require('@supabase/supabase-js');
 const Anthropic = require('@anthropic-ai/sdk');
+const bcrypt = require('bcrypt');
 
 const app = express();
 app.use(express.json());
+
+// ================================================================
+// COOKIE PARSER (lightweight — no dependency needed)
+// ================================================================
+function parseCookies(req) {
+  const cookies = {};
+  (req.headers.cookie || '').split(';').forEach(c => {
+    const [k, v] = c.trim().split('=');
+    if (k) cookies[k] = v;
+  });
+  return cookies;
+}
+
+// ================================================================
+// SESSION-BASED AUTHENTICATION SYSTEM
+// ================================================================
+const SESSION_DURATION_HOURS = 8; // Nursing shift length
+
+function generateSessionToken() {
+  return crypto.randomBytes(32).toString('hex');
+}
+
+function getSessionToken(req) {
+  const cookies = parseCookies(req);
+  if (cookies.bz_session) return cookies.bz_session;
+  const auth = req.headers.authorization || '';
+  if (auth.startsWith('Bearer ')) return auth.substring(7);
+  return null;
+}
+
+// Validate session and attach req.user
+async function validateSession(req) {
+  const token = getSessionToken(req);
+  if (!token) return false;
+  try {
+    const { data: session, error } = await supabase
+      .from('user_sessions')
+      .select('*')
+      .eq('token', token)
+      .eq('is_active', true)
+      .gt('expires_at', new Date().toISOString())
+      .single();
+    if (error || !session) return false;
+    req.user = {
+      id: session.user_id,
+      facility_id: session.facility_id,
+      facility_name: session.facility_name || null,
+      role: session.role,
+      display_name: session.display_name
+    };
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+// Audit logging — async, never blocks
+async function logAudit(req, action, targetId, metadata) {
+  try {
+    await supabase.from('audit_log').insert({
+      user_id: req.user ? req.user.id : null,
+      facility_id: req.user ? req.user.facility_id : null,
+      action,
+      target_id: targetId || null,
+      metadata: metadata || {},
+      ip_address: req.headers['x-forwarded-for'] || req.socket.remoteAddress
+    });
+  } catch (e) { console.error('[AUDIT] Log error:', e.message); }
+}
+
+// Build facility-filtered query
+function facilityFilter(req, query, facilityColumn) {
+  const col = facilityColumn || 'facility_name';
+  if (req.user && req.user.role === 'admin') {
+    const f = req.query.facility_filter || req.headers['x-facility-filter'];
+    if (f && f !== 'all') return query.eq(col, f);
+    return query;
+  }
+  if (req.user && req.user.facility_name) {
+    return query.eq(col, req.user.facility_name);
+  }
+  return query;
+}
+
+// ================================================================
+// AUTH API ROUTES
+// ================================================================
+
+// POST /api/auth/login
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const { username, password } = req.body;
+    if (!username || !password) {
+      return res.status(400).json({ error: 'Username and password required' });
+    }
+    const { data: user, error } = await supabase
+      .from('facility_users')
+      .select('*')
+      .eq('username', username.toLowerCase().trim())
+      .eq('is_active', true)
+      .single();
+    if (error || !user) {
+      return res.status(401).json({ error: 'Invalid username or password' });
+    }
+    const match = await bcrypt.compare(password, user.password_hash);
+    if (!match) {
+      return res.status(401).json({ error: 'Invalid username or password' });
+    }
+    // Get facility name
+    let facilityName = null;
+    if (user.facility_id) {
+      const { data: fac } = await supabase
+        .from('facilities')
+        .select('name')
+        .eq('id', user.facility_id)
+        .single();
+      facilityName = fac?.name || null;
+    }
+    const token = generateSessionToken();
+    const expiresAt = new Date(Date.now() + SESSION_DURATION_HOURS * 60 * 60 * 1000);
+    await supabase.from('user_sessions').insert({
+      user_id: user.id,
+      facility_id: user.facility_id,
+      facility_name: facilityName,
+      token,
+      role: user.role,
+      display_name: user.display_name,
+      expires_at: expiresAt.toISOString()
+    });
+    await supabase.from('facility_users').update({ last_login: new Date().toISOString() }).eq('id', user.id);
+    // Audit log
+    await supabase.from('audit_log').insert({
+      user_id: user.id,
+      facility_id: user.facility_id,
+      action: 'LOGIN',
+      ip_address: req.headers['x-forwarded-for'] || req.socket.remoteAddress,
+      metadata: { username: user.username, facility_name: facilityName }
+    });
+    console.log(`[AUTH] Login: ${user.display_name} (${user.role}) at ${facilityName || 'admin'}`);
+    res.json({
+      success: true,
+      token,
+      user: { display_name: user.display_name, role: user.role, facility_id: user.facility_id, facility_name: facilityName }
+    });
+  } catch (e) {
+    console.error('[AUTH] Login error:', e.message);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// POST /api/auth/logout
+app.post('/api/auth/logout', async (req, res) => {
+  const token = getSessionToken(req);
+  if (token) {
+    await supabase.from('user_sessions').update({ is_active: false }).eq('token', token);
+    if (req.user) await logAudit(req, 'LOGOUT');
+  }
+  res.json({ success: true });
+});
+
+// GET /api/auth/me
+app.get('/api/auth/me', async (req, res) => {
+  const valid = await validateSession(req);
+  if (!valid) return res.status(401).json({ error: 'Not authenticated' });
+  res.json({
+    display_name: req.user.display_name,
+    role: req.user.role,
+    facility_id: req.user.facility_id,
+    facility_name: req.user.facility_name
+  });
+});
+
+// GET /clinical/login — Serve login page
+app.get('/clinical/login', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'login.html'));
+});
+
+// GET /referral — Serve referral lookup page
+app.get('/referral', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'referral-lookup.html'));
+});
+
+// POST /api/referral/lookup — Public referral lookup by REF number
+app.post('/api/referral/lookup', async (req, res) => {
+  try {
+    const { ref_number } = req.body;
+    if (!ref_number) return res.status(400).json({ error: 'Referral number required' });
+    const cleanRef = ref_number.trim().toUpperCase();
+    const { data: referral, error } = await supabase
+      .from('referrals')
+      .select('*')
+      .eq('ref_number', cleanRef)
+      .single();
+    if (error || !referral) {
+      return res.status(404).json({ error: 'Referral not found. Please check the REF number.' });
+    }
+    if (!referral.looked_up_at) {
+      await supabase.from('referrals').update({
+        looked_up_at: new Date().toISOString(),
+        looked_up_by: req.headers['x-forwarded-for'] || req.socket.remoteAddress,
+        status: 'accepted'
+      }).eq('id', referral.id);
+    }
+    await supabase.from('audit_log').insert({
+      action: 'VIEW_REFERRAL',
+      target_id: referral.id,
+      ip_address: req.headers['x-forwarded-for'] || req.socket.remoteAddress,
+      metadata: { ref_number: cleanRef }
+    });
+    res.json({
+      ref_number: referral.ref_number,
+      patient_name: referral.patient_name,
+      patient_surname: referral.patient_surname,
+      patient_age: referral.patient_age,
+      patient_sex: referral.patient_sex,
+      triage_colour: referral.triage_colour,
+      triage_category: referral.triage_category,
+      symptom_summary: referral.symptom_summary,
+      risk_factors: referral.risk_factors,
+      referral_reason: referral.referral_reason,
+      transport_method: referral.transport_method,
+      originating_facility_name: referral.originating_facility_name,
+      status: referral.status,
+      created_at: referral.created_at
+    });
+  } catch (e) {
+    console.error('[REFERRAL] Lookup error:', e.message);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// GET /api/audit — Admin only audit log query
+app.get('/api/audit', async (req, res) => {
+  const valid = await validateSession(req);
+  if (!valid || req.user.role !== 'admin') return res.status(403).json({ error: 'Admin access required' });
+  try {
+    const { facility_id, action, date_from, date_to, limit: lim } = req.query;
+    let query = supabase.from('audit_log').select('*').order('created_at', { ascending: false }).limit(Math.min(parseInt(lim) || 100, 500));
+    if (facility_id) query = query.eq('facility_id', facility_id);
+    if (action) query = query.eq('action', action);
+    if (date_from) query = query.gte('created_at', date_from);
+    if (date_to) query = query.lte('created_at', date_to);
+    const { data, error } = await query;
+    if (error) throw error;
+    res.json(data);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Seed passwords utility — DELETE AFTER USE
+app.get('/api/admin/seed-passwords', async (req, res) => {
+  if (req.query.secret !== process.env.ADMIN_SECRET) return res.status(403).json({ error: 'Forbidden' });
+  const pw = req.query.password || 'bizusizo2026';
+  const hash = await bcrypt.hash(pw, 10);
+  const { data, error } = await supabase.from('facility_users').update({ password_hash: hash }).eq('password_hash', '$PLACEHOLDER_HASH$').select('username');
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ message: `Updated ${data.length} users`, users: data.map(u => u.username), warning: 'Change passwords and delete this endpoint before pilot.' });
+});
 
 // Serve governance dashboard as a static file
 app.use('/public', express.static(path.join(__dirname, 'public')));
@@ -245,9 +505,14 @@ setInterval(refresh,30000);
 });
 
 // ================================================================
-// CLINIC QUEUE DASHBOARD — Served from file for reliability
+// CLINIC QUEUE DASHBOARD — Session-protected, served from file
 // ================================================================
 app.get('/clinic', (req, res) => {
+  // Check for session cookie — redirect to login if not present
+  const cookies = parseCookies(req);
+  if (!cookies.bz_session) {
+    return res.redirect('/clinical/login');
+  }
   res.sendFile(path.join(__dirname, 'public', 'clinic.html'));
 });
 
@@ -2096,6 +2361,7 @@ async function autoAddToQueue(patientId, from, session) {
       checked_in_at: new Date(),
       position,
       study_code: session.studyCode || null,
+      facility_name: facility ? facility.name : null,
       notes: facility ? `Facility: ${facility.name}` : null,
       created_at: new Date(),
     });
@@ -3304,38 +3570,52 @@ setInterval(pollNHLSResults, 15 * 60 * 1000);
 // This creates a full audit trail for governance accountability.
 // ================================================================
 function requireDashboardAuth(req, res, next) {
+  // Try session-based auth first (new system)
+  const token = getSessionToken(req);
+  if (token) {
+    validateSession(req).then(valid => {
+      if (valid) {
+        // Log to audit_log (new system)
+        logAudit(req, 'API_CALL', null, { endpoint: req.method + ' ' + req.path });
+        return next();
+      }
+      // Session invalid — try password fallback
+      return tryPasswordAuth(req, res, next);
+    }).catch(() => tryPasswordAuth(req, res, next));
+    return;
+  }
+  // No session — try password auth (backward compat for governance dashboard)
+  tryPasswordAuth(req, res, next);
+}
+
+function tryPasswordAuth(req, res, next) {
   const password = req.headers['x-dashboard-password'] || req.query.password;
   if (password !== process.env.DASHBOARD_PASSWORD) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
-
-  // Log the access (async, don't block the request)
+  // Legacy auth — set a minimal req.user for compatibility
+  if (!req.user) {
+    req.user = {
+      id: null,
+      facility_id: null,
+      facility_name: null,
+      role: 'admin', // Password auth = admin access (sees all)
+      display_name: req.headers['x-dashboard-user'] || 'unknown'
+    };
+  }
+  // Log access (legacy table + new audit_log)
   const userName = req.headers['x-dashboard-user'] || 'unknown';
   const endpoint = req.method + ' ' + req.path;
   const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown';
-
   supabase.from('dashboard_access_logs').insert({
-    user_name: userName,
-    endpoint: endpoint,
-    ip_address: ip,
-    accessed_at: new Date(),
+    user_name: userName, endpoint, ip_address: ip, accessed_at: new Date(),
   }).then(() => {}).catch(e => {
-    // Don't fail the request if logging fails — queue locally
     console.error('[ACCESS_LOG] Failed to log:', e.message);
     if (typeof queueEvent === 'function') {
-      queueEvent({
-        type: 'dashboard_access',
-        table: 'dashboard_access_logs',
-        data: {
-          user_name: userName,
-          endpoint: endpoint,
-          ip_address: ip,
-          original_timestamp: new Date().toISOString(),
-        }
-      });
+      queueEvent({ type: 'dashboard_access', table: 'dashboard_access_logs', data: { user_name: userName, endpoint, ip_address: ip, original_timestamp: new Date().toISOString() } });
     }
   });
-
+  logAudit(req, 'API_CALL', null, { endpoint, auth_method: 'password' });
   next();
 }
 
@@ -5518,7 +5798,10 @@ app.get('/api/clinic/expected', requireDashboardAuth, async (req, res) => {
       .not('facility_name', 'is', null)
       .order('created_at', { ascending: true });
 
-    if (facility) {
+    // Facility filtering: session-based user sees only their facility
+    if (req.user && req.user.facility_name && req.user.role !== 'admin') {
+      query = query.eq('facility_name', req.user.facility_name);
+    } else if (facility) {
       query = query.eq('facility_name', facility);
     }
 
@@ -5604,6 +5887,9 @@ app.get('/api/clinic/queue', requireDashboardAuth, async (req, res) => {
       .select('*')
       .gte('checked_in_at', todayStart.toISOString());
 
+    // Facility filtering
+    query = facilityFilter(req, query);
+
     // Filter by status (default: waiting + in_consultation + paused)
     if (req.query.status) {
       query = query.eq('status', req.query.status);
@@ -5629,10 +5915,12 @@ app.get('/api/clinic/queue', requireDashboardAuth, async (req, res) => {
 // GET /api/clinic/queue/stats — Live queue statistics
 app.get('/api/clinic/queue/stats', requireDashboardAuth, async (req, res) => {
   try {
-    const { data: active, error } = await supabase
+    let activeQuery = supabase
       .from('clinic_queue')
-      .select('queue_type, status, triage_level, checked_in_at')
+      .select('queue_type, status, triage_level, checked_in_at, facility_name')
       .in('status', ['waiting', 'in_consultation']);
+    activeQuery = facilityFilter(req, activeQuery);
+    const { data: active, error } = await activeQuery;
 
     if (error) throw error;
 
@@ -5642,12 +5930,14 @@ app.get('/api/clinic/queue/stats', requireDashboardAuth, async (req, res) => {
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
 
-    const { data: completed } = await supabase
+    let completedQuery = supabase
       .from('clinic_queue')
-      .select('checked_in_at, called_at, queue_type')
+      .select('checked_in_at, called_at, queue_type, facility_name')
       .eq('status', 'completed')
       .gte('checked_in_at', todayStart.toISOString())
       .not('called_at', 'is', null);
+    completedQuery = facilityFilter(req, completedQuery);
+    const { data: completed } = await completedQuery;
 
     const avgWaitByQueue = {};
     if (completed && completed.length > 0) {
@@ -5682,10 +5972,12 @@ app.get('/api/clinic/queue/stats', requireDashboardAuth, async (req, res) => {
       if (stats[qt]) stats[qt].in_consultation++;
     });
 
-    const { data: todayAll } = await supabase
+    let todayQuery = supabase
       .from('clinic_queue')
-      .select('status')
+      .select('status, facility_name')
       .gte('checked_in_at', todayStart.toISOString());
+    todayQuery = facilityFilter(req, todayQuery);
+    const { data: todayAll } = await todayQuery;
 
     stats.today_total = todayAll ? todayAll.length : 0;
     stats.today_completed = todayAll ? todayAll.filter(p => p.status === 'completed').length : 0;
@@ -5810,6 +6102,7 @@ app.post('/api/clinic/queue', requireDashboardAuth, async (req, res) => {
       position: nextPosition,
       notes: notes || null,
       study_code: study_code || null,
+      facility_name: req.user ? req.user.facility_name : null,
       created_at: new Date(),
     };
 
@@ -5820,6 +6113,7 @@ app.post('/api/clinic/queue', requireDashboardAuth, async (req, res) => {
       .single();
 
     if (error) throw error;
+    await logAudit(req, 'REGISTER_WALKIN', data?.id, { patient_name, queue_type, triage_level });
     res.json({ success: true, queue_entry: data });
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -5866,12 +6160,8 @@ app.put('/api/clinic/queue/:id/call', requireDashboardAuth, async (req, res) => 
     }
 
     res.json({ success: true, whatsapp_sent: whatsappSent });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-// PUT /api/clinic/queue/:id/escalate — Escalate patient to hospital (referral)
+    await logAudit(req, 'CALL', req.params.id, { assigned_to, room });
+  } catch (e) { — Escalate patient to hospital (referral)
 // Creates a referral record, updates queue, sends referral to patient on WhatsApp
 // If the hospital uses BIZUSIZO, they can look up the patient by referral_id or study_code
 app.put('/api/clinic/queue/:id/escalate', requireDashboardAuth, async (req, res) => {
@@ -6005,6 +6295,23 @@ app.put('/api/clinic/queue/:id/escalate', requireDashboardAuth, async (req, res)
     console.log(`[REFERRAL] ${referralId}: ${patientName} → ${destination_hospital || 'nearest hospital'} by ${nurse_name} (${transport_method})`);
 
     res.json({ success: true, referral_id: referralId });
+    await logAudit(req, 'ESCALATE', req.params.id, { referral_id: referralId, destination: destination_hospital, transport_method });
+    // Also store in the new referrals table for hospital lookup
+    try {
+      await supabase.from('referrals').insert({
+        ref_number: referralId,
+        session_id: patient.id,
+        patient_name: patient.patient_name?.split(' ')[0] || null,
+        patient_surname: patient.patient_name?.split(' ').slice(1).join(' ') || null,
+        triage_colour: patient.triage_level,
+        symptom_summary: patient.symptoms_summary,
+        originating_facility_name: req.user?.facility_name || patient.notes?.replace('Facility: ', '') || null,
+        receiving_facility_name: destination_hospital,
+        referral_reason: nurse_notes,
+        transport_method,
+        status: 'pending'
+      });
+    } catch (refErr) { console.error('[REFERRAL] referrals table insert error:', refErr.message); }
   } catch (e) {
     console.error('[REFERRAL] Error:', e.message);
     res.status(500).json({ error: e.message });
@@ -6055,12 +6362,9 @@ app.put('/api/clinic/queue/:id/feedback', requireDashboardAuth, async (req, res)
     });
 
     res.json({ success: true });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-// GET /api/referral/:id — Lookup a referral by ID (for hospitals using BIZUSIZO)
+    const auditAction = verdict === 'agree' ? 'AGREE' : 'DISAGREE';
+    await logAudit(req, auditAction, req.params.id, { ai_level: entry.triage_level, nurse_level: nurse_triage_level || entry.triage_level, nurse_name });
+  } catch (e) { — Lookup a referral by ID (for hospitals using BIZUSIZO)
 // Hospital reception types the referral ID → gets full patient summary
 app.get('/api/referral/:id', requireDashboardAuth, async (req, res) => {
   try {
@@ -6153,6 +6457,7 @@ app.put('/api/clinic/queue/:id/complete', requireDashboardAuth, async (req, res)
 
     if (error) throw error;
     res.json({ success: true });
+    await logAudit(req, 'COMPLETE', req.params.id);
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -6171,6 +6476,7 @@ app.put('/api/clinic/queue/:id/no-show', requireDashboardAuth, async (req, res) 
 
     if (error) throw error;
     res.json({ success: true });
+    await logAudit(req, 'NO_SHOW', req.params.id);
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -6196,6 +6502,7 @@ app.put('/api/clinic/queue/:id/pause', requireDashboardAuth, async (req, res) =>
 
     if (error) throw error;
     res.json({ success: true });
+    await logAudit(req, 'PAUSE', req.params.id, { nurse_name });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -6235,6 +6542,7 @@ app.put('/api/clinic/queue/:id/resume', requireDashboardAuth, async (req, res) =
 
     if (error) throw error;
     res.json({ success: true });
+    await logAudit(req, 'RESUME', req.params.id, { nurse_name });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -6255,6 +6563,7 @@ app.put('/api/clinic/queue/:id/left', requireDashboardAuth, async (req, res) => 
 
     if (error) throw error;
     res.json({ success: true });
+    await logAudit(req, 'LWBS', req.params.id, { nurse_name });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -6288,6 +6597,7 @@ app.put('/api/clinic/queue/:id/reassign', requireDashboardAuth, async (req, res)
 
     if (error) throw error;
     res.json({ success: true });
+    await logAudit(req, 'REASSIGN', req.params.id, { new_queue: queue_type });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -6296,13 +6606,13 @@ app.put('/api/clinic/queue/:id/reassign', requireDashboardAuth, async (req, res)
 // GET /api/clinic/nurse-view — Next patients per queue + priority alerts
 app.get('/api/clinic/nurse-view', requireDashboardAuth, async (req, res) => {
   try {
-    const { data: waiting, error } = await supabase
+    let waitingQuery = supabase
       .from('clinic_queue')
       .select('*')
       .eq('status', 'waiting')
       .order('position', { ascending: true });
-
-    if (error) throw error;
+    waitingQuery = facilityFilter(req, waitingQuery);
+    const { data: waiting, error } = await waitingQuery;
 
     const fastTrack = (waiting || []).filter(p => p.queue_type === 'emergency' || p.queue_type === 'acute' || p.queue_type === 'fast_track');
     const routine = (waiting || []).filter(p => p.queue_type === 'general' || p.queue_type === 'routine');
@@ -6448,6 +6758,7 @@ app.post('/api/kiosk/triage', async (req, res) => {
       status: 'waiting',
       checked_in_at: new Date(),
       symptoms_summary: symptomText.slice(0, 500),
+      facility_name: req.body.facility_name || null,
     }).select().single();
 
     // If insert failed, try without optional columns (source/study_code may not exist yet)
@@ -6462,6 +6773,7 @@ app.post('/api/kiosk/triage', async (req, res) => {
         status: 'waiting',
         checked_in_at: new Date(),
         symptoms_summary: symptomText.slice(0, 500),
+        facility_name: req.body.facility_name || null,
       });
     }
 
