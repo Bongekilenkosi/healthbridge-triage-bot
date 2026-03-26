@@ -7685,12 +7685,72 @@ app.post('/api/clinic/arrive', async (req, res) => {
   }
 });
 
+// PUT /api/clinic/queue/:id/tews — Record TEWS score (DoH Documentation)
+// Supports BOTH real-time (nurse at bedside) AND retrospective (clerk/data capturer later)
+// Tracks: who entered, when entered, role, whether retrospective, original paper timestamp
+app.put('/api/clinic/queue/:id/tews', requireDashboardAuth, async (req, res) => {
+  try {
+    const { tews_score, tews_colour, discriminators, vitals, nurse_name,
+            entered_by_role, is_retrospective, original_assessment_time, notes } = req.body;
+
+    const now = new Date();
+    const enteredBy = nurse_name || req.user?.display_name || 'Unknown';
+    const role = entered_by_role || 'nurse'; // nurse, clerk, data_capturer, facility_manager
+
+    const tewsData = {
+      tews_score,
+      tews_colour,
+      discriminators: discriminators || [],
+      vitals: vitals || {},
+      entered_by: enteredBy,
+      entered_by_role: role,
+      entered_at: now,
+      is_retrospective: is_retrospective || false,
+      original_assessment_time: original_assessment_time || null, // when vitals were actually taken (from paper)
+      notes: notes || null,
+    };
+
+    // Update the queue entry with TEWS data
+    const { error } = await supabase
+      .from('clinic_queue')
+      .update({
+        tews_score,
+        tews_colour,
+        tews_data: tewsData,
+        // If TEWS colour is more urgent than current triage level, upgrade
+        ...(shouldUpgrade(tews_colour, null) ? { triage_level: tews_colour } : {}),
+      })
+      .eq('id', req.params.id);
+
+    if (error) throw error;
+
+    await logAudit(req, 'TEWS_RECORDED', req.params.id, {
+      tews_score, tews_colour, discriminators,
+      entered_by: enteredBy, role, is_retrospective: is_retrospective || false,
+    });
+
+    res.json({ success: true, tews_score, tews_colour });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Helper: should TEWS colour upgrade the triage level?
+function shouldUpgrade(tewsColour, currentLevel) {
+  const order = { RED: 4, ORANGE: 3, YELLOW: 2, GREEN: 1 };
+  return (order[tewsColour] || 0) > (order[currentLevel] || 0);
+}
+
 // PUT /api/clinic/queue/:id/complete — Complete consultation (DoH Exit Flow)
 // Captures: treatment given, tests done, medication dispensed, next visit, notes
 // Sends WhatsApp exit message with treatment summary + health education + next visit
 app.put('/api/clinic/queue/:id/complete', requireDashboardAuth, async (req, res) => {
   try {
-    const { treatments, tests, medications, next_visit_date, notes, nurse_name } = req.body;
+    const { treatments, tests, medications, next_visit_date, notes, nurse_name,
+            entered_by_role, is_retrospective, original_completion_time } = req.body;
+
+    const enteredBy = nurse_name || req.user?.display_name || 'Unknown';
+    const role = entered_by_role || 'nurse';
 
     // Get patient details for WhatsApp notification
     const { data: patient } = await supabase
@@ -7701,12 +7761,15 @@ app.put('/api/clinic/queue/:id/complete', requireDashboardAuth, async (req, res)
 
     // Build exit summary
     const exitData = {
-      treatments: treatments || [],     // e.g. ['medication', 'injection', 'wound_care']
-      tests: tests || [],               // e.g. ['hiv_test', 'bp_check', 'glucose']
-      medications: medications || [],   // e.g. ['prescription', 'chronic_meds', 'otc']
+      treatments: treatments || [],
+      tests: tests || [],
+      medications: medications || [],
       next_visit_date: next_visit_date || null,
-      nurse_name: nurse_name || null,
-      completed_by: req.user?.display_name || nurse_name || null,
+      entered_by: enteredBy,
+      entered_by_role: role,
+      entered_at: new Date(),
+      is_retrospective: is_retrospective || false,
+      original_completion_time: original_completion_time || null,
     };
 
     const { error } = await supabase
