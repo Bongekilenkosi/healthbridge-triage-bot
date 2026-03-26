@@ -626,7 +626,74 @@ async function resumePatient(id){
   refresh();
 }
 async function completePatient(id){
-  await api('/api/clinic/queue/'+id+'/complete',{method:'PUT',body:JSON.stringify({})});
+  // Show structured exit form (DoH Exit Flow)
+  const html=`<div style="position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:999;display:flex;align-items:center;justify-content:center" id="exit-modal">
+    <div style="background:#111827;border:1px solid #1e293b;border-radius:12px;padding:24px;width:420px;max-height:90vh;overflow-y:auto">
+      <h3 style="font-size:16px;margin-bottom:16px;color:#e2e8f0">✅ Complete Consultation</h3>
+      <div style="font-size:11px;color:#64748b;margin-bottom:12px">DoH Exit Flow — select what applies:</div>
+      
+      <div style="margin-bottom:14px">
+        <div style="font-size:12px;font-weight:600;color:#94a3b8;margin-bottom:6px">💊 Treatment given:</div>
+        <label style="display:block;font-size:12px;color:#cbd5e1;margin:4px 0;cursor:pointer"><input type="checkbox" class="exit-treatment" value="medication"> Medication prescribed</label>
+        <label style="display:block;font-size:12px;color:#cbd5e1;margin:4px 0;cursor:pointer"><input type="checkbox" class="exit-treatment" value="injection"> Injection</label>
+        <label style="display:block;font-size:12px;color:#cbd5e1;margin:4px 0;cursor:pointer"><input type="checkbox" class="exit-treatment" value="wound_care"> Wound care</label>
+        <label style="display:block;font-size:12px;color:#cbd5e1;margin:4px 0;cursor:pointer"><input type="checkbox" class="exit-treatment" value="nebulisation"> Nebulisation</label>
+        <label style="display:block;font-size:12px;color:#cbd5e1;margin:4px 0;cursor:pointer"><input type="checkbox" class="exit-treatment" value="counselling"> Counselling</label>
+        <label style="display:block;font-size:12px;color:#cbd5e1;margin:4px 0;cursor:pointer"><input type="checkbox" class="exit-treatment" value="procedure"> Procedure</label>
+      </div>
+      
+      <div style="margin-bottom:14px">
+        <div style="font-size:12px;font-weight:600;color:#94a3b8;margin-bottom:6px">🔬 Tests done:</div>
+        <label style="display:block;font-size:12px;color:#cbd5e1;margin:4px 0;cursor:pointer"><input type="checkbox" class="exit-test" value="hiv_test"> HIV test</label>
+        <label style="display:block;font-size:12px;color:#cbd5e1;margin:4px 0;cursor:pointer"><input type="checkbox" class="exit-test" value="bp_check"> BP check</label>
+        <label style="display:block;font-size:12px;color:#cbd5e1;margin:4px 0;cursor:pointer"><input type="checkbox" class="exit-test" value="glucose"> Glucose test</label>
+        <label style="display:block;font-size:12px;color:#cbd5e1;margin:4px 0;cursor:pointer"><input type="checkbox" class="exit-test" value="urine"> Urine test</label>
+        <label style="display:block;font-size:12px;color:#cbd5e1;margin:4px 0;cursor:pointer"><input type="checkbox" class="exit-test" value="blood_draw"> Blood draw</label>
+        <label style="display:block;font-size:12px;color:#cbd5e1;margin:4px 0;cursor:pointer"><input type="checkbox" class="exit-test" value="pap_smear"> Pap smear</label>
+      </div>
+      
+      <div style="margin-bottom:14px">
+        <div style="font-size:12px;font-weight:600;color:#94a3b8;margin-bottom:6px">💊 Medication dispensed:</div>
+        <label style="display:block;font-size:12px;color:#cbd5e1;margin:4px 0;cursor:pointer"><input type="checkbox" class="exit-med" value="prescription"> Prescription given</label>
+        <label style="display:block;font-size:12px;color:#cbd5e1;margin:4px 0;cursor:pointer"><input type="checkbox" class="exit-med" value="chronic_meds"> Chronic meds collected</label>
+        <label style="display:block;font-size:12px;color:#cbd5e1;margin:4px 0;cursor:pointer"><input type="checkbox" class="exit-med" value="otc"> Over-the-counter meds</label>
+      </div>
+      
+      <div style="margin-bottom:14px">
+        <div style="font-size:12px;font-weight:600;color:#94a3b8;margin-bottom:6px">📅 Next visit (optional):</div>
+        <input type="date" id="exit-next-visit" style="width:100%;padding:8px;border-radius:6px;border:1px solid #1e293b;background:#0d1321;color:#e2e8f0;font-size:12px">
+      </div>
+      
+      <div style="margin-bottom:16px">
+        <div style="font-size:12px;font-weight:600;color:#94a3b8;margin-bottom:6px">📝 Notes (optional):</div>
+        <textarea id="exit-notes" rows="2" style="width:100%;padding:8px;border-radius:6px;border:1px solid #1e293b;background:#0d1321;color:#e2e8f0;font-size:12px;resize:vertical" placeholder="Any additional notes..."></textarea>
+      </div>
+      
+      <div style="display:flex;gap:8px">
+        <button onclick="submitComplete('${id}')" style="flex:1;padding:10px;border-radius:6px;border:none;background:#22c55e;color:white;font-size:13px;font-weight:600;cursor:pointer">✅ Confirm & Exit Patient</button>
+        <button onclick="document.getElementById('exit-modal').remove()" style="padding:10px 16px;border-radius:6px;border:1px solid #1e293b;background:#111827;color:#94a3b8;font-size:13px;cursor:pointer">Cancel</button>
+      </div>
+    </div>
+  </div>`;
+  document.body.insertAdjacentHTML('beforeend',html);
+}
+
+async function submitComplete(id){
+  const treatments=[...document.querySelectorAll('.exit-treatment:checked')].map(c=>c.value);
+  const tests=[...document.querySelectorAll('.exit-test:checked')].map(c=>c.value);
+  const medications=[...document.querySelectorAll('.exit-med:checked')].map(c=>c.value);
+  const nextVisit=document.getElementById('exit-next-visit').value||null;
+  const notes=document.getElementById('exit-notes').value.trim()||null;
+  
+  const el=document.getElementById('exit-modal');
+  if(el)el.remove();
+  
+  await api('/api/clinic/queue/'+id+'/complete',{method:'PUT',body:JSON.stringify({
+    treatments, tests, medications,
+    next_visit_date:nextVisit,
+    notes,
+    nurse_name:UNAME
+  })});
   refresh();
 }
 async function noShow(id){
