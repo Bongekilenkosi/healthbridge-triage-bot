@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BIZUSIZO — Clinic Login</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --teal: #0C6E6B;
+  --teal-light: #E6F5F4;
+  --teal-dark: #064544;
+  --teal-deeper: #032E2D;
+  --amber: #D4873E;
+  --red: #C0392B;
+  --red-light: #FCEAE8;
+  --sand: #FAF6F1;
+  --earth: #3D3229;
+  --warm-gray: #6B5E54;
+  --warm-bg: #FDFBF8;
+  --border: rgba(60,50,41,0.08);
+  --white: #FFFFFF;
+  --font: 'DM Sans', system-ui, sans-serif;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: var(--font);
+  background: var(--teal-deeper);
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Decorative background */
+body::before {
+  content: '';
+  position: absolute;
+  top: -20%;
+  right: -15%;
+  width: 600px;
+  height: 600px;
+  background: radial-gradient(circle, rgba(12,110,107,0.3) 0%, transparent 70%);
+  border-radius: 50%;
+}
+body::after {
+  content: '';
+  position: absolute;
+  bottom: -25%;
+  left: -10%;
+  width: 500px;
+  height: 500px;
+  background: radial-gradient(circle, rgba(212,135,62,0.1) 0%, transparent 70%);
+  border-radius: 50%;
+}
+
+.login-card {
+  background: var(--white);
+  border-radius: 20px;
+  padding: 48px 40px;
+  width: 100%;
+  max-width: 420px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+  position: relative;
+  z-index: 1;
+  animation: fadeUp 0.5s ease both;
+}
+
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.logo-section {
+  text-align: center;
+  margin-bottom: 36px;
+}
+
+.logo-mark {
+  width: 48px;
+  height: 48px;
+  margin: 0 auto 14px;
+}
+
+.logo-text {
+  font-weight: 700;
+  font-size: 22px;
+  letter-spacing: 0.04em;
+  color: var(--teal);
+}
+
+.logo-sub {
+  font-size: 13px;
+  color: var(--warm-gray);
+  margin-top: 4px;
+}
+
+.form-group {
+  margin-bottom: 20px;
+}
+
+.form-group label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--earth);
+  margin-bottom: 6px;
+}
+
+.form-group input {
+  width: 100%;
+  padding: 14px 16px;
+  border: 1.5px solid var(--border);
+  border-radius: 10px;
+  font-family: var(--font);
+  font-size: 16px; /* Prevents iOS zoom */
+  color: var(--earth);
+  background: var(--warm-bg);
+  transition: border-color 0.2s, box-shadow 0.2s;
+  -webkit-appearance: none;
+}
+
+.form-group input:focus {
+  outline: none;
+  border-color: var(--teal);
+  box-shadow: 0 0 0 3px rgba(12,110,107,0.1);
+  background: var(--white);
+}
+
+.form-group input::placeholder {
+  color: #B0A89F;
+}
+
+.login-btn {
+  width: 100%;
+  padding: 15px;
+  background: var(--teal);
+  color: var(--white);
+  border: none;
+  border-radius: 12px;
+  font-family: var(--font);
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: 0 4px 16px rgba(12,110,107,0.25);
+  margin-top: 8px;
+}
+
+.login-btn:hover {
+  background: #0A5F5C;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(12,110,107,0.35);
+}
+
+.login-btn:active {
+  transform: translateY(0);
+}
+
+.login-btn:disabled {
+  background: #9A8E84;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.error-msg {
+  display: none;
+  background: var(--red-light);
+  color: var(--red);
+  padding: 12px 16px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 500;
+  margin-bottom: 20px;
+  border-left: 3px solid var(--red);
+  animation: fadeUp 0.3s ease;
+}
+
+.error-msg.show {
+  display: block;
+}
+
+.footer-text {
+  text-align: center;
+  margin-top: 24px;
+  font-size: 12px;
+  color: var(--warm-gray);
+}
+
+.footer-text a {
+  color: var(--teal);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.emergency-strip {
+  text-align: center;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.emergency-strip p {
+  font-size: 11px;
+  color: var(--warm-gray);
+}
+
+.emergency-strip a {
+  color: var(--red);
+  font-weight: 600;
+  text-decoration: none;
+  font-size: 12px;
+}
+
+/* Tablet optimisation */
+@media (min-width: 768px) and (max-width: 1024px) {
+  .login-card {
+    max-width: 460px;
+    padding: 56px 48px;
+  }
+  .form-group input {
+    padding: 16px 18px;
+    font-size: 17px;
+  }
+  .login-btn {
+    padding: 17px;
+    font-size: 16px;
+  }
+}
+
+/* Small phone */
+@media (max-width: 380px) {
+  .login-card {
+    padding: 36px 24px;
+  }
+}
+</style>
+</head>
+<body>
+
+<div class="login-card">
+  <div class="logo-section">
+    <svg class="logo-mark" viewBox="0 0 36 36" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="18" cy="18" r="17" fill="none" stroke="#0C6E6B" stroke-width="2"/>
+      <path d="M18 8 L18 28 M11 18 L25 18 M13 12 L23 12 M13 24 L23 24" stroke="#0C6E6B" stroke-width="2" stroke-linecap="round"/>
+      <circle cx="18" cy="18" r="4" fill="#D4873E" opacity="0.9"/>
+    </svg>
+    <div class="logo-text">BIZUSIZO</div>
+    <div class="logo-sub">Clinic Dashboard</div>
+  </div>
+
+  <div class="error-msg" id="errorMsg"></div>
+
+  <div class="form-group">
+    <label for="username">Username</label>
+    <input type="text" id="username" placeholder="e.g. eersterust_nurse" autocomplete="username" autocapitalize="none" spellcheck="false">
+  </div>
+
+  <div class="form-group">
+    <label for="password">Password</label>
+    <input type="password" id="password" placeholder="Enter your password" autocomplete="current-password">
+  </div>
+
+  <button class="login-btn" id="loginBtn" onclick="handleLogin()">Sign in</button>
+
+  <div class="footer-text">
+    <p>Having trouble? Contact your facility manager<br>or <a href="https://wa.me/27786120775">WhatsApp BIZUSIZO support</a></p>
+  </div>
+
+  <div class="emergency-strip">
+    <p>Medical emergency? Call <a href="tel:10177">10177</a></p>
+  </div>
+</div>
+
+<script>
+// Handle Enter key
+document.getElementById('password').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') handleLogin();
+});
+document.getElementById('username').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') document.getElementById('password').focus();
+});
+
+async function handleLogin() {
+  const username = document.getElementById('username').value.trim().toLowerCase();
+  const password = document.getElementById('password').value;
+  const btn = document.getElementById('loginBtn');
+  const errorMsg = document.getElementById('errorMsg');
+
+  // Clear previous errors
+  errorMsg.classList.remove('show');
+
+  // Validate
+  if (!username || !password) {
+    errorMsg.textContent = 'Please enter your username and password.';
+    errorMsg.classList.add('show');
+    return;
+  }
+
+  // Disable button
+  btn.disabled = true;
+  btn.textContent = 'Signing in...';
+
+  try {
+    const response = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password })
+    });
+
+    const data = await response.json();
+
+    if (response.ok && data.success) {
+      // Store session token
+      document.cookie = `bz_session=${data.token}; path=/; max-age=${8 * 60 * 60}; SameSite=Strict`;
+      
+      // Redirect to dashboard
+      window.location.href = '/clinical';
+    } else {
+      errorMsg.textContent = data.error || 'Invalid username or password. Please try again.';
+      errorMsg.classList.add('show');
+      document.getElementById('password').value = '';
+      document.getElementById('password').focus();
+    }
+  } catch (err) {
+    errorMsg.textContent = 'Connection error. Please check your internet and try again.';
+    errorMsg.classList.add('show');
+    console.error('Login error:', err);
+  }
+
+  btn.disabled = false;
+  btn.textContent = 'Sign in';
+}
+</script>
+</body>
+</html>
