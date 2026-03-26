@@ -355,6 +355,7 @@ td{padding:8px 12px;border-bottom:1px solid #1e293b}
   <div class="header">
     <h1>BIZUSIZO Governance Dashboard</h1>
     <div>
+      <a href="/clinic" style="color:#3b82f6;font-size:11px;margin-right:16px;text-decoration:none;border:1px solid rgba(59,130,246,.3);padding:3px 10px;border-radius:4px">→ Clinic Dashboard</a>
       <span id="sys-status" class="status nominal">LOADING...</span>
       <span style="color:#475569;font-size:11px;margin-left:12px" id="logged-in-as"></span>
       <span style="color:#475569;font-size:11px;margin-left:12px" id="last-refresh"></span>
@@ -366,6 +367,8 @@ td{padding:8px 12px;border-bottom:1px solid #1e293b}
     <div class="tab" onclick="showTab('alerts',this)">Alerts</div>
     <div class="tab" onclick="showTab('incidents',this)">Incidents</div>
     <div class="tab" onclick="showTab('metrics',this)">Metrics</div>
+    <div class="tab" onclick="showTab('reports',this)">Reports</div>
+    <div class="tab" onclick="showTab('audit',this)">Audit Log</div>
   </div>
 
   <div id="tab-overview">
@@ -384,6 +387,35 @@ td{padding:8px 12px;border-bottom:1px solid #1e293b}
 
   <div id="tab-metrics" style="display:none">
     <div class="card"><table><thead><tr><th>Time</th><th>Type</th><th>Requests</th><th>Errors</th><th>Error Rate</th></tr></thead><tbody id="metrics-body"></tbody></table></div>
+  </div>
+
+  <div id="tab-reports" style="display:none">
+    <div style="display:flex;gap:12px;margin-bottom:16px;align-items:center;flex-wrap:wrap">
+      <div style="font-size:11px;color:#64748b">Date range:</div>
+      <input type="date" id="report-start" style="padding:6px 10px;border-radius:6px;border:1px solid #1e293b;background:#0d1321;color:#e2e8f0;font-size:12px">
+      <span style="color:#475569">to</span>
+      <input type="date" id="report-end" style="padding:6px 10px;border-radius:6px;border:1px solid #1e293b;background:#0d1321;color:#e2e8f0;font-size:12px">
+      <button onclick="loadReports()" style="padding:6px 16px;border-radius:6px;border:1px solid #3b82f6;background:rgba(59,130,246,.15);color:#3b82f6;cursor:pointer;font-size:12px">Load Report</button>
+      <button onclick="exportCSV()" style="padding:6px 16px;border-radius:6px;border:1px solid #22c55e;background:rgba(34,197,94,.1);color:#22c55e;cursor:pointer;font-size:12px">📥 Export CSV</button>
+    </div>
+    <div class="grid" id="report-stats"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px">
+      <div class="card"><h3 style="font-size:13px;color:#64748b;margin-bottom:12px">Triage Distribution</h3><div id="report-triage-dist"></div></div>
+      <div class="card"><h3 style="font-size:13px;color:#64748b;margin-bottom:12px">Queue Stream Breakdown</h3><div id="report-queue-dist"></div></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px">
+      <div class="card"><h3 style="font-size:13px;color:#64748b;margin-bottom:12px">Nurse Feedback (Agree/Disagree)</h3><div id="report-nurse-feedback"></div></div>
+      <div class="card"><h3 style="font-size:13px;color:#64748b;margin-bottom:12px">Follow-up Response Rate</h3><div id="report-followup"></div></div>
+    </div>
+    <div class="card" style="margin-top:16px"><h3 style="font-size:13px;color:#64748b;margin-bottom:12px">Daily Patient Volume</h3><div id="report-daily-volume"></div></div>
+  </div>
+
+  <div id="tab-audit" style="display:none">
+    <div style="display:flex;gap:12px;margin-bottom:16px;align-items:center">
+      <input type="text" id="audit-filter" placeholder="Filter by action (e.g. CALL, ESCALATE, LOGIN)" style="padding:6px 10px;border-radius:6px;border:1px solid #1e293b;background:#0d1321;color:#e2e8f0;font-size:12px;width:280px">
+      <button onclick="loadAudit()" style="padding:6px 16px;border-radius:6px;border:1px solid #3b82f6;background:rgba(59,130,246,.15);color:#3b82f6;cursor:pointer;font-size:12px">Search</button>
+    </div>
+    <div class="card"><table><thead><tr><th>Time</th><th>User</th><th>Action</th><th>Patient</th><th>Details</th></tr></thead><tbody id="audit-body"></tbody></table></div>
   </div>
 
   <div style="margin-top:32px;padding-top:16px;border-top:1px solid #1e293b;font-size:10px;color:#475569;display:flex;justify-content:space-between">
@@ -496,6 +528,105 @@ async function refresh(){
       return '<tr><td>'+timeAgo(m.created_at)+'</td><td>'+(m.metric_type||'-')+'</td><td>'+(d.total_requests||d.batch_size||'-')+'</td><td>'+(d.api_failures||d.low_confidence_count||'-')+'</td><td>'+(d.error_rate!==undefined?(d.error_rate*100).toFixed(1)+'%':(d.low_confidence_rate||'-'))+'</td></tr>';
     }).join('');
   }else{mb.innerHTML='<tr><td colspan="5" class="empty">No metrics recorded yet</td></tr>';}
+}
+
+// Set default date range to last 7 days
+(function(){
+  const end=new Date();const start=new Date();start.setDate(start.getDate()-7);
+  document.getElementById('report-start').value=start.toISOString().split('T')[0];
+  document.getElementById('report-end').value=end.toISOString().split('T')[0];
+})();
+
+let _reportData=[];
+
+async function loadReports(){
+  const start=document.getElementById('report-start').value;
+  const end=document.getElementById('report-end').value;
+  if(!start||!end)return;
+
+  // Fetch triage logs for the date range
+  const data=await api('/api/governance/reports?start='+start+'&end='+end);
+  if(!data)return;
+  _reportData=data;
+
+  // Summary stats
+  document.getElementById('report-stats').innerHTML=[
+    {l:'Total Patients',v:data.total_patients||0,c:'#e2e8f0'},
+    {l:'Avg Confidence',v:(data.avg_confidence||0)+'%',c:'#3b82f6'},
+    {l:'Follow-up Sent',v:data.followup_sent||0,c:'#8b5cf6'},
+    {l:'Follow-up Responded',v:data.followup_responded||0,c:data.followup_responded>0?'#22c55e':'#64748b'},
+    {l:'Response Rate',v:data.followup_sent>0?Math.round(data.followup_responded/data.followup_sent*100)+'%':'—',c:'#eab308'},
+    {l:'Nurse Agreements',v:data.nurse_agree||0,c:'#22c55e'},
+    {l:'Nurse Disagreements',v:data.nurse_disagree||0,c:data.nurse_disagree>0?'#f97316':'#64748b'},
+    {l:'Agree Rate',v:(data.nurse_agree+data.nurse_disagree)>0?Math.round(data.nurse_agree/(data.nurse_agree+data.nurse_disagree)*100)+'%':'—',c:'#22c55e'},
+  ].map(c=>'<div class="card"><div class="label">'+c.l+'</div><div class="value" style="color:'+c.c+'">'+c.v+'</div></div>').join('');
+
+  // Triage distribution bar chart
+  const td=data.triage_distribution||{};
+  const triageTotal=Object.values(td).reduce((a,b)=>a+b,0)||1;
+  const triageColors={RED:'#ef4444',ORANGE:'#f97316',YELLOW:'#eab308',GREEN:'#22c55e'};
+  document.getElementById('report-triage-dist').innerHTML=Object.entries(td).filter(([,v])=>v>0).map(([k,v])=>{
+    const pct=Math.round(v/triageTotal*100);
+    return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><span style="width:60px;font-size:12px;font-weight:600;color:'+(triageColors[k]||'#64748b')+'">'+k+'</span><div style="flex:1;height:20px;background:rgba(255,255,255,.05);border-radius:4px;overflow:hidden"><div style="width:'+pct+'%;height:100%;background:'+(triageColors[k]||'#64748b')+'33;border-left:3px solid '+(triageColors[k]||'#64748b')+'"></div></div><span style="width:60px;text-align:right;font-size:12px;color:#94a3b8">'+v+' ('+pct+'%)</span></div>';
+  }).join('')||'<div class="empty">No data</div>';
+
+  // Queue stream breakdown
+  const qd=data.queue_distribution||{};
+  const queueTotal=Object.values(qd).reduce((a,b)=>a+b,0)||1;
+  const queueColors={emergency:'#ef4444',acute:'#f97316',maternal:'#a855f7',chronic:'#3b82f6',general:'#64748b',preventative:'#22c55e',walk_in:'#94a3b8'};
+  document.getElementById('report-queue-dist').innerHTML=Object.entries(qd).filter(([,v])=>v>0).map(([k,v])=>{
+    const pct=Math.round(v/queueTotal*100);
+    return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><span style="width:80px;font-size:11px;color:'+(queueColors[k]||'#64748b')+'">'+k+'</span><div style="flex:1;height:20px;background:rgba(255,255,255,.05);border-radius:4px;overflow:hidden"><div style="width:'+pct+'%;height:100%;background:'+(queueColors[k]||'#64748b')+'33;border-left:3px solid '+(queueColors[k]||'#64748b')+'"></div></div><span style="width:60px;text-align:right;font-size:12px;color:#94a3b8">'+v+'</span></div>';
+  }).join('')||'<div class="empty">No data</div>';
+
+  // Nurse feedback
+  const na=data.nurse_agree||0,nd=data.nurse_disagree||0;
+  const nTotal=na+nd||1;
+  document.getElementById('report-nurse-feedback').innerHTML=na+nd>0?
+    '<div style="display:flex;height:28px;border-radius:6px;overflow:hidden;margin-bottom:8px"><div style="width:'+Math.round(na/nTotal*100)+'%;background:rgba(34,197,94,.3);display:flex;align-items:center;justify-content:center;font-size:11px;color:#22c55e;font-weight:600">Agree '+na+'</div><div style="width:'+Math.round(nd/nTotal*100)+'%;background:rgba(249,115,22,.3);display:flex;align-items:center;justify-content:center;font-size:11px;color:#f97316;font-weight:600">Disagree '+nd+'</div></div><div style="font-size:11px;color:#64748b">Agreement rate: <b>'+Math.round(na/nTotal*100)+'%</b> across '+(na+nd)+' reviews</div>':
+    '<div class="empty">No nurse feedback yet</div>';
+
+  // Follow-up response rate
+  const fs=data.followup_sent||0,fr=data.followup_responded||0;
+  document.getElementById('report-followup').innerHTML=fs>0?
+    '<div style="display:flex;height:28px;border-radius:6px;overflow:hidden;margin-bottom:8px"><div style="width:'+Math.round(fr/fs*100)+'%;background:rgba(59,130,246,.3);display:flex;align-items:center;justify-content:center;font-size:11px;color:#3b82f6;font-weight:600">Responded '+fr+'</div><div style="width:'+Math.round((fs-fr)/fs*100)+'%;background:rgba(100,116,139,.2);display:flex;align-items:center;justify-content:center;font-size:11px;color:#64748b;font-weight:600">No response '+(fs-fr)+'</div></div><div style="font-size:11px;color:#64748b">Response rate: <b>'+Math.round(fr/fs*100)+'%</b> of '+fs+' sent</div>':
+    '<div class="empty">No follow-ups sent in this period</div>';
+
+  // Daily volume
+  const dv=data.daily_volume||{};
+  const maxVol=Math.max(...Object.values(dv),1);
+  document.getElementById('report-daily-volume').innerHTML=Object.entries(dv).length>0?
+    '<div style="display:flex;align-items:flex-end;gap:4px;height:120px;padding-bottom:20px;position:relative">'+
+    Object.entries(dv).map(([date,count])=>{
+      const h=Math.max(Math.round(count/maxVol*100),4);
+      const d=new Date(date);const dayLabel=(d.getDate())+'/'+(d.getMonth()+1);
+      return '<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px"><div style="width:100%;height:'+h+'px;background:rgba(59,130,246,.4);border-radius:3px 3px 0 0;min-width:16px"></div><span style="font-size:8px;color:#475569;transform:rotate(-45deg);white-space:nowrap">'+dayLabel+'</span></div>';
+    }).join('')+
+    '</div>':
+    '<div class="empty">No data for this period</div>';
+}
+
+function exportCSV(){
+  if(!_reportData||!_reportData.raw_triages)return alert('Load a report first');
+  const rows=[['Date','Patient ID','Triage Level','Confidence','Pathway','Facility','Symptoms']];
+  (_reportData.raw_triages||[]).forEach(t=>{
+    rows.push([t.created_at,t.patient_id,t.triage_level,t.confidence,t.pathway||'',t.facility_name||'','"'+(t.symptoms||'').replace(/"/g,"'").slice(0,200)+'"']);
+  });
+  const csv=rows.map(r=>r.join(',')).join('\\n');
+  const blob=new Blob([csv],{type:'text/csv'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');a.href=url;
+  a.download='bizusizo-report-'+document.getElementById('report-start').value+'-to-'+document.getElementById('report-end').value+'.csv';
+  a.click();URL.revokeObjectURL(url);
+}
+
+async function loadAudit(){
+  const filter=document.getElementById('audit-filter').value.trim().toUpperCase();
+  const data=await api('/api/admin/audit'+(filter?'?action='+encodeURIComponent(filter):''));
+  const ab=document.getElementById('audit-body');
+  if(data&&data.length>0){
+    ab.innerHTML=data.slice(0,100).map(a=>'<tr><td style="white-space:nowrap">'+timeAgo(a.created_at)+'</td><td>'+(a.user_name||'-')+'</td><td><span class="badge" style="color:#3b82f6;border:1px solid rgba(59,130,246,.3)">'+(a.action||'-')+'</span></td><td>'+(a.patient_id||'-')+'</td><td style="font-size:11px;color:#64748b;max-width:200px;overflow:hidden;text-overflow:ellipsis">'+JSON.stringify(a.details||{}).slice(0,120)+'</td></tr>').join('');
+  }else{ab.innerHTML='<tr><td colspan="5" class="empty">No audit records found'+(filter?' for "'+filter+'"':'')+'</td></tr>';}
 }
 
 setInterval(refresh,30000);
@@ -6406,6 +6537,102 @@ app.put('/api/governance/reviews/:id', requireDashboardAuth, async (req, res) =>
       .eq('id', req.params.id);
 
     res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /api/governance/reports — Aggregated reporting data for date range
+// Feeds the Reports tab on the governance dashboard
+app.get('/api/governance/reports', requireDashboardAuth, async (req, res) => {
+  try {
+    const start = req.query.start || new Date(Date.now() - 7 * 86400000).toISOString().split('T')[0];
+    const end = req.query.end || new Date().toISOString().split('T')[0];
+    const endDate = new Date(end);
+    endDate.setDate(endDate.getDate() + 1); // Include the end date
+
+    // 1. Triage logs for date range
+    const { data: triages } = await supabase
+      .from('triage_logs')
+      .select('*')
+      .gte('created_at', start)
+      .lt('created_at', endDate.toISOString())
+      .order('created_at', { ascending: true });
+    const t = triages || [];
+
+    // 2. Queue entries for date range
+    const { data: queueEntries } = await supabase
+      .from('clinic_queue')
+      .select('queue_type, triage_level, checked_in_at, called_at, completed_at, status')
+      .gte('checked_in_at', start)
+      .lt('checked_in_at', endDate.toISOString());
+    const q = queueEntries || [];
+
+    // 3. Follow-ups for date range
+    const { data: followups } = await supabase
+      .from('follow_ups')
+      .select('status, created_at')
+      .gte('created_at', start)
+      .lt('created_at', endDate.toISOString());
+    const f = followups || [];
+
+    // 4. Audit log for nurse agree/disagree
+    const { data: auditEntries } = await supabase
+      .from('audit_log')
+      .select('action, created_at')
+      .in('action', ['AGREE', 'DISAGREE'])
+      .gte('created_at', start)
+      .lt('created_at', endDate.toISOString());
+    const a = auditEntries || [];
+
+    // Aggregate: triage distribution
+    const triage_distribution = {};
+    t.forEach(r => { triage_distribution[r.triage_level] = (triage_distribution[r.triage_level] || 0) + 1; });
+
+    // Aggregate: queue stream distribution
+    const queue_distribution = {};
+    q.forEach(r => { queue_distribution[r.queue_type] = (queue_distribution[r.queue_type] || 0) + 1; });
+
+    // Aggregate: average confidence
+    const confidences = t.filter(r => r.confidence).map(r => r.confidence);
+    const avg_confidence = confidences.length > 0 ? Math.round(confidences.reduce((a, b) => a + b, 0) / confidences.length) : 0;
+
+    // Aggregate: daily volume
+    const daily_volume = {};
+    t.forEach(r => {
+      const day = r.created_at.split('T')[0];
+      daily_volume[day] = (daily_volume[day] || 0) + 1;
+    });
+
+    // Aggregate: follow-up rates
+    const followup_sent = f.filter(r => r.status === 'sent' || r.status === 'completed').length;
+    const followup_responded = f.filter(r => r.status === 'completed').length;
+
+    // Aggregate: nurse feedback
+    const nurse_agree = a.filter(r => r.action === 'AGREE').length;
+    const nurse_disagree = a.filter(r => r.action === 'DISAGREE').length;
+
+    res.json({
+      period: { start, end },
+      total_patients: t.length,
+      avg_confidence,
+      triage_distribution,
+      queue_distribution,
+      daily_volume,
+      followup_sent,
+      followup_responded,
+      nurse_agree,
+      nurse_disagree,
+      raw_triages: t.map(r => ({
+        created_at: r.created_at,
+        patient_id: r.patient_id,
+        triage_level: r.triage_level,
+        confidence: r.confidence,
+        pathway: r.pathway,
+        facility_name: r.facility_name,
+        symptoms: r.symptoms,
+      })),
+    });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
