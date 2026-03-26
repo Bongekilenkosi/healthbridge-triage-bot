@@ -2407,9 +2407,16 @@ async function autoAddToQueue(patientId, from, session) {
 
     // Send WhatsApp queue notification
     const queueNames = {
-      fast_track: { en: 'Fast-Track (urgent)', zu: 'Esheshayo (kuphuthuma)', xh: 'Ekhawulezayo (kungxamisekile)', af: 'Spoedlyn (dringend)' },
-      routine: { en: 'Routine', zu: 'Ejwayelekile', xh: 'Eqhelekileyo', af: 'Roetine' },
-      walk_in: { en: 'Walk-In', zu: 'Ungena nje', xh: 'Ungena nje', af: 'Instap' },
+      emergency: { en: 'Emergency', zu: 'Esiphuthumayo', xh: 'Engxamisekileyo', af: 'Noodgeval', nso: 'Tšhoganetšo', tn: 'Tshoganyetso', st: 'Tshohanyetso', ts: 'Xihatla', ss: 'Lokusheshisako', ve: 'Tshoganetso', nr: 'Lokusheshisako' },
+      acute: { en: 'Acute', zu: 'Okubukhali', xh: 'Ebukhali', af: 'Akuut', nso: 'E Bogale', tn: 'E Bogale', st: 'E Bohale', ts: 'Xo Hatlisa', ss: 'Lokubukhali', ve: 'Ya U Ṱavhanya', nr: 'Lokubukhali' },
+      maternal: { en: 'Maternal / Child', zu: 'Abazithweleyo / Izingane', xh: 'Abakhulelweyo / Abantwana', af: 'Moeder / Kind', nso: 'Bomme / Bana', tn: 'Bomme / Bana', st: 'Bomme / Bana', ts: 'Vamanana / Vana', ss: 'Bomake / Bantfwana', ve: 'Vhomme / Vhana', nr: 'Abomma / Abantwana' },
+      child: { en: 'Child', zu: 'Izingane', xh: 'Abantwana', af: 'Kind', nso: 'Bana', tn: 'Bana', st: 'Bana', ts: 'Vana', ss: 'Bantfwana', ve: 'Vhana', nr: 'Abantwana' },
+      chronic: { en: 'Chronic Medication', zu: 'Umuthi Wamahlalakhona', xh: 'Amayeza Aqhelekileyo', af: 'Chroniese Medikasie', nso: 'Dihlare tša go Dulela', tn: 'Dimelemo tsa go Nnela ruri', st: 'Meriana ya Mahlale', ts: 'Mirhi ya Vurhongo', ss: 'Imitsi Yesikhashana', ve: 'Mushonga wa Vhulwadze', nr: 'Imitjhoga Yesikhathi Eside' },
+      general: { en: 'General', zu: 'Okujwayelekile', xh: 'Jikelele', af: 'Algemeen', nso: 'Kakaretšo', tn: 'Kakaretso', st: 'Kakaretso', ts: 'Hinkwaswo', ss: 'Konkhe', ve: 'Zwothe', nr: 'Zoke' },
+      fast_track: { en: 'Fast-Track (urgent)', zu: 'Esheshayo (kuphuthuma)', xh: 'Ekhawulezayo (kungxamisekile)', af: 'Spoedlyn (dringend)', nso: 'Ka Pela (tšhoganetšo)', tn: 'Ka Bonako (tshoganyetso)', st: 'Ka Potlako (tshohanyetso)', ts: 'Hi Ku Hatlisa (xihatla)', ss: 'Ngekushesha (lokusheshisako)', ve: 'Nga U Ṱavhanya (tshoganetso)', nr: 'Ngokurhabha (lokusheshisako)' },
+      routine: { en: 'Routine', zu: 'Ejwayelekile', xh: 'Eqhelekileyo', af: 'Roetine', nso: 'Tlwaelo', tn: 'Tlwaelo', st: 'Tlwaelo', ts: 'Ntolovelo', ss: 'Lokuhlala kwentiwa', ve: 'Zwa Ḓuvha na Ḓuvha', nr: 'Lokuhlala kwenziwa' },
+      walk_in: { en: 'Walk-In', zu: 'Ungena nje', xh: 'Ungena nje', af: 'Instap', nso: 'Go Tsena', tn: 'Go Tsena', st: 'Ho Kena', ts: 'Ku Nghena', ss: 'Lokungena', ve: 'U Dzhena', nr: 'Ukungena' },
+      preventative: { en: 'Preventative', zu: 'Ukuvikela', xh: 'Ukukhusela', af: 'Voorkomend', nso: 'Thibelo', tn: 'Thibelo', st: 'Thibelo', ts: 'Ku Sivela', ss: 'Kuvikela', ve: 'U Thivhela', nr: 'Ukuvikela' },
     };
 
     const queueLabel = queueNames[queueType]?.[lang] || queueNames[queueType]?.['en'] || queueType;
@@ -2419,6 +2426,13 @@ async function autoAddToQueue(patientId, from, session) {
       zu: `📋 Usufakwe emugqeni wasemtholampilo.\n\n🏥 *${facility?.name || 'Umtholampilo'}*\n📊 Umugqa: *${queueLabel}*\n👥 Isikhundla: *#${position}*${estMinutes > 0 ? `\n⏱️ Isikhathi esilindelekile: *~${estMinutes} imizuzu*` : ''}\n\nSicela ufike emtholampilo. Uzobizwa ngokwesikhundla sakho.\n\nUmtholampilo unegama lakho nemininingwane yefayela lakho.`,
       xh: `📋 Ufakiwe kumgca wekliniki.\n\n🏥 *${facility?.name || 'Ikliniki'}*\n📊 Umgca: *${queueLabel}*\n👥 Indawo: *#${position}*${estMinutes > 0 ? `\n⏱️ Ixesha elilindelekileyo: *~${estMinutes} imizuzu*` : ''}\n\nNceda ufike ekliniki. Uya kubizwa ngokwendawo yakho.\n\nIkliniki inegama lakho nolwazi lwefayile yakho.`,
       af: `📋 Jy is by die kliniek se tou gevoeg.\n\n🏥 *${facility?.name || 'Kliniek'}*\n📊 Tou: *${queueLabel}*\n👥 Posisie: *#${position}*${estMinutes > 0 ? `\n⏱️ Geskatte wagtyd: *~${estMinutes} minute*` : ''}\n\nKom asseblief by die kliniek aan. Jy sal geroep word volgens jou posisie.\n\nDie kliniek het jou naam en lêerinligting gereed.`,
+      nso: `📋 O okeditšwe moleleng wa kliniki.\n\n🏥 *${facility?.name || 'Kliniki'}*\n📊 Molelo: *${queueLabel}*\n👥 Boemo: *#${position}*${estMinutes > 0 ? `\n⏱️ Nako ye e letetšwego: *~${estMinutes} metsotso*` : ''}\n\nHle fihla kliniki. O tla bitšwa go ya ka boemo bja gago.\n\nKliniki e na le leina la gago le tshedimošo ya faele.`,
+      tn: `📋 O okeditšwe molelwaneng wa kliniki.\n\n🏥 *${facility?.name || 'Kliniki'}*\n📊 Molelwane: *${queueLabel}*\n👥 Boemo: *#${position}*${estMinutes > 0 ? `\n⏱️ Nako e e solofetsweng: *~${estMinutes} metsotso*` : ''}\n\nTsweetswee goroga kwa kliniki. O tla bidiwa go ya ka boemo jwa gago.\n\nKliniki e na le leina la gago le tshedimosetso ya faele.`,
+      st: `📋 O kentswe moleleng wa kliniki.\n\n🏥 *${facility?.name || 'Kliniki'}*\n📊 Molelo: *${queueLabel}*\n👥 Boemo: *#${position}*${estMinutes > 0 ? `\n⏱️ Nako e lebeletsweng: *~${estMinutes} metsotso*` : ''}\n\nKa kopo fihla kliniki. O tla bitswa ho latela boemo ba hao.\n\nKliniki e na le lebitso la hao le tlhahisoleseding ya faele.`,
+      ts: `📋 U engeteleriwe emulayinini wa kliniki.\n\n🏥 *${facility?.name || 'Kliniki'}*\n📊 Mulayini: *${queueLabel}*\n👥 Xiyimo: *#${position}*${estMinutes > 0 ? `\n⏱️ Nkarhi lowu languteriwaka: *~${estMinutes} timinete*` : ''}\n\nHi kombela u fika ekliniki. U ta vitiwa hi ku ya hi xiyimo xa wena.\n\nKliniki yi na vito ra wena na vuxokoxoko bya fayili.`,
+      ss: `📋 Sewufakiwe emugceni wemtfolamphilo.\n\n🏥 *${facility?.name || 'Umtfolamphilo'}*\n📊 Umugca: *${queueLabel}*\n👥 Sikhundla: *#${position}*${estMinutes > 0 ? `\n⏱️ Sikhatsi lesilindzelwako: *~${estMinutes} imizuzu*` : ''}\n\nSicela ufike emtfolamphilo. Utawubitwa ngekwesikhundla sakho.\n\nUmtfolamphilo unelibito lakho nelwati lwefayili yakho.`,
+      ve: `📋 No engedzelwa mulayinini wa kiliniki.\n\n🏥 *${facility?.name || 'Kiliniki'}*\n📊 Mulayini: *${queueLabel}*\n👥 Vhuimo: *#${position}*${estMinutes > 0 ? `\n⏱️ Tshifhinga tshi lavhelelwaho: *~${estMinutes} minetse*` : ''}\n\nRi humbela ni swike kha kiliniki. Ni ḓo vhidziwa u ya nga vhuimo haṋu.\n\nKiliniki i na dzina laṋu na mafhungo a fayili.`,
+      nr: `📋 Usufakiwe emugceni wekliniki.\n\n🏥 *${facility?.name || 'Ikliniki'}*\n📊 Umugca: *${queueLabel}*\n👥 Isikhundla: *#${position}*${estMinutes > 0 ? `\n⏱️ Isikhathi esilindzelwako: *~${estMinutes} imizuzu*` : ''}\n\nSibawa ufike ekliniki. Utawubitwa ngokwesikhundla sakho.\n\nIkliniki inelibizo lakho nelwazi lwefayili yakho.`,
     };
 
     await sendWhatsAppMessage(from, waitMsg[lang] || waitMsg['en']);
@@ -3944,6 +3958,14 @@ async function orchestrate(patientId, from, message, session) {
           zu: `🔢 Inombolo yakho yereferensi ithi: *${session.studyCode}*\n\nKhombisa le nombolo e-reception uma ufika emtholampilo.`,
           xh: `🔢 Inombolo yakho yereferensi ithi: *${session.studyCode}*\n\nBonisa le nombolo e-reception xa ufika ekliniki.`,
           af: `🔢 Jou verwysingsnommer is: *${session.studyCode}*\n\nWys hierdie nommer by ontvangs wanneer jy by die kliniek aankom.`,
+          nso: `🔢 Nomoro ya gago ya referense ke: *${session.studyCode}*\n\nBontšha nomoro ye kwa resepsheneng ge o fihla kliniki.`,
+          tn: `🔢 Nomoro ya gago ya referense ke: *${session.studyCode}*\n\nBontsha nomoro e kwa resepsheneng fa o goroga kwa kliniki.`,
+          st: `🔢 Nomoro ya hao ya referense ke: *${session.studyCode}*\n\nBontsha nomoro ena resepsheneng ha o fihla kliniki.`,
+          ts: `🔢 Nomboro ya wena ya referense i le: *${session.studyCode}*\n\nKomba nomboro leyi eka resepsheni loko u fika ekliniki.`,
+          ss: `🔢 Inombolo yakho yereferensi itsi: *${session.studyCode}*\n\nKhombisa lenombolo ku-reception nawufika emtfolamphilo.`,
+          ve: `🔢 Nomboro yaṋu ya referense ndi: *${session.studyCode}*\n\nSumbedzani nomboro iyi kha resepsheni musi ni tshi swika kiliniki.`,
+          nr: `🔢 Inomboro yakho yereferensi ithi: *${session.studyCode}*\n\nKhombisa inomboro le ku-reception nawufika ekliniki.`,
+        };
         };
         await sendWhatsAppMessage(from, refMsg[lang] || refMsg['en']);
 
@@ -3964,10 +3986,18 @@ async function orchestrate(patientId, from, message, session) {
     if (message === '0') {
       session.chronicConditions = [];
       session.chronicScreeningDone = true;
+      // Auto-assign reference number for ALL patients
+      session.isStudyParticipant = true;
+      if (!session.studyCode) {
+        const studyCode = await generateStudyCode(patientId);
+        session.studyCode = studyCode;
+      }
       await saveSession(patientId, session);
       await sendWhatsAppMessage(from, msg('chronic_screening_saved', lang));
-      // Ask about study participation (not everyone is a study participant)
-      await sendWhatsAppMessage(from, msg('study_participation', lang));
+      // Show reference number then go straight to symptom categories
+      const refMsg = { en: `🔢 Your reference number is: *${session.studyCode}*\n\nShow this number at reception when you arrive.`, zu: `🔢 Inombolo yakho yereferensi: *${session.studyCode}*\n\nKhombisa le nombolo e-reception uma ufika.`, xh: `🔢 Inombolo yakho yereferensi: *${session.studyCode}*\n\nBonisa le nombolo e-reception xa ufika.`, af: `🔢 Jou verwysingsnommer is: *${session.studyCode}*\n\nWys by ontvangs wanneer jy aankom.`, nso: `🔢 Nomoro ya gago ya referense: *${session.studyCode}*\n\nBontšha nomoro ye resepsheneng ge o fihla.`, tn: `🔢 Nomoro ya gago ya referense: *${session.studyCode}*\n\nBontsha nomoro e resepsheneng fa o goroga.`, st: `🔢 Nomoro ya hao ya referense: *${session.studyCode}*\n\nBontsha nomoro ena resepsheneng ha o fihla.`, ts: `🔢 Nomboro ya wena ya referense: *${session.studyCode}*\n\nKomba nomboro leyi resepsheneng loko u fika.`, ss: `🔢 Inombolo yakho yereferensi: *${session.studyCode}*\n\nKhombisa lenombolo ku-reception nawufika.`, ve: `🔢 Nomboro yaṋu ya referense: *${session.studyCode}*\n\nSumbedzani nomboro iyi resepsheneng musi ni tshi swika.`, nr: `🔢 Inomboro yakho yereferensi: *${session.studyCode}*\n\nKhombisa inomboro le ku-reception nawufika.` };
+      await sendWhatsAppMessage(from, refMsg[lang] || refMsg['en']);
+      await sendWhatsAppMessage(from, msg('category_menu', lang));
       return;
     }
 
@@ -3976,10 +4006,18 @@ async function orchestrate(patientId, from, message, session) {
       session.chronicConditions = choices.map(c => CONDITION_MAP[c.trim()]);
       session.ccmddConditions = session.chronicConditions;
       session.chronicScreeningDone = true;
+      // Auto-assign reference number for ALL patients
+      session.isStudyParticipant = true;
+      if (!session.studyCode) {
+        const studyCode = await generateStudyCode(patientId);
+        session.studyCode = studyCode;
+      }
       await saveSession(patientId, session);
       await sendWhatsAppMessage(from, msg('chronic_screening_saved', lang));
-      // Ask about study participation
-      await sendWhatsAppMessage(from, msg('study_participation', lang));
+      // Show reference number then go straight to symptom categories
+      const refMsg = { en: `🔢 Your reference number is: *${session.studyCode}*\n\nShow this number at reception when you arrive.`, zu: `🔢 Inombolo yakho yereferensi: *${session.studyCode}*\n\nKhombisa le nombolo e-reception uma ufika.`, xh: `🔢 Inombolo yakho yereferensi: *${session.studyCode}*\n\nBonisa le nombolo e-reception xa ufika.`, af: `🔢 Jou verwysingsnommer is: *${session.studyCode}*\n\nWys by ontvangs wanneer jy aankom.`, nso: `🔢 Nomoro ya gago ya referense: *${session.studyCode}*\n\nBontšha nomoro ye resepsheneng ge o fihla.`, tn: `🔢 Nomoro ya gago ya referense: *${session.studyCode}*\n\nBontsha nomoro e resepsheneng fa o goroga.`, st: `🔢 Nomoro ya hao ya referense: *${session.studyCode}*\n\nBontsha nomoro ena resepsheneng ha o fihla.`, ts: `🔢 Nomboro ya wena ya referense: *${session.studyCode}*\n\nKomba nomboro leyi resepsheneng loko u fika.`, ss: `🔢 Inombolo yakho yereferensi: *${session.studyCode}*\n\nKhombisa lenombolo ku-reception nawufika.`, ve: `🔢 Nomboro yaṋu ya referense: *${session.studyCode}*\n\nSumbedzani nomboro iyi resepsheneng musi ni tshi swika.`, nr: `🔢 Inomboro yakho yereferensi: *${session.studyCode}*\n\nKhombisa inomboro le ku-reception nawufika.` };
+      await sendWhatsAppMessage(from, refMsg[lang] || refMsg['en']);
+      await sendWhatsAppMessage(from, msg('category_menu', lang));
       return;
     }
 
@@ -3988,30 +4026,17 @@ async function orchestrate(patientId, from, message, session) {
     return;
   }
 
-  // ==================== STEP 1.6: STUDY PARTICIPATION CHECK ====================
-  // Separates research participants from regular BIZUSIZO users.
-  // Study participants get a BZ-XXXX code for concordance matching.
-  // Regular users skip straight to triage — no study code, no research data.
+  // ==================== STEP 1.6: AUTO REFERENCE (replaces study participation question) ====================
+  // Every patient gets a BZ-XXXX reference number automatically.
+  // No study participation question needed — all patients are treated equally.
   if (session.chronicScreeningDone && session.isStudyParticipant === undefined) {
-    if (message === '1') {
-      // Study participant — generate study code
-      session.isStudyParticipant = true;
+    session.isStudyParticipant = true; // All patients get references
+    if (!session.studyCode) {
       const studyCode = await generateStudyCode(patientId);
       session.studyCode = studyCode;
-      await saveSession(patientId, session);
-      await sendWhatsAppMessage(from, msg('study_code', lang, studyCode));
-      await sendWhatsAppMessage(from, msg('category_menu', lang));
-      return;
     }
-    if (message === '2') {
-      // Regular user — skip study code, go straight to triage
-      session.isStudyParticipant = false;
-      await saveSession(patientId, session);
-      await sendWhatsAppMessage(from, msg('category_menu', lang));
-      return;
-    }
-    // Invalid input — re-show
-    await sendWhatsAppMessage(from, msg('study_participation', lang));
+    await saveSession(patientId, session);
+    await sendWhatsAppMessage(from, msg('category_menu', lang));
     return;
   }
 
@@ -4228,6 +4253,13 @@ async function orchestrate(patientId, from, message, session) {
             zu: `🏥 Uma i-ambulensi iphuza, isibhedlela esiseduze:\n*${nearest.name}* (${nearest.distance} km)\n\nCela umuntu akushayele.`,
             xh: `🏥 Ukuba i-ambulensi ilibele, isibhedlele esikufutshane:\n*${nearest.name}* (${nearest.distance} km)\n\nCela umntu akuqhubele.`,
             af: `🏥 As die ambulans vertraag word, jou naaste hospitaal is:\n*${nearest.name}* (${nearest.distance} km)\n\nVra iemand om jou te ry.`,
+            nso: `🏥 Ge ambulense e diegile, bookelo ya gago ya kgauswi ke:\n*${nearest.name}* (${nearest.distance} km)\n\nKopa motho a go iše ka koloi.`,
+            tn: `🏥 Fa ambulense e diegile, bookelong ya gago ya gaufi ke:\n*${nearest.name}* (${nearest.distance} km)\n\nKopa mongwe a go iše ka koloi.`,
+            st: `🏥 Haeba ambulense e diegile, sepetlele sa hao se haufi ke:\n*${nearest.name}* (${nearest.distance} km)\n\nKopa motho a o iše ka koloi.`,
+            ts: `🏥 Loko ambulense yi hlwerisile, xibedlhele xa wena xa kusuhi i:\n*${nearest.name}* (${nearest.distance} km)\n\nKombela munhu a ku yisa hi movha.`,
+            ss: `🏥 Nangabe i-ambulensi yephuzile, sibhedlela sakho lesisedvute ngu:\n*${nearest.name}* (${nearest.distance} km)\n\nCela umuntfu akushayele.`,
+            ve: `🏥 Arali ambulensi yo ḓala, sibadela tsha haṋu tsini kudu ndi:\n*${nearest.name}* (${nearest.distance} km)\n\nHumbelani muthu a ni fhirise nga goloi.`,
+            nr: `🏥 Nangabe i-ambulensi yephuze, isibhedlela sakho esiseduze ngu:\n*${nearest.name}* (${nearest.distance} km)\n\nBawa umuntu akushayele.`,
           };
           await sendWhatsAppMessage(from, hospitalMsg[lang] || hospitalMsg['en']);
         }
@@ -4355,6 +4387,13 @@ async function orchestrate(patientId, from, message, session) {
           zu: `🔢 Inombolo yakho yereferensi ithi: *${session.studyCode}*\n\nKhombisa le nombolo e-reception uma ufika emtholampilo.\n\nBhala "code" noma nini ukuyibona futhi.`,
           xh: `🔢 Inombolo yakho yereferensi ithi: *${session.studyCode}*\n\nBonisa le nombolo e-reception xa ufika ekliniki.\n\nBhala "code" nanini na ukuyibona kwakhona.`,
           af: `🔢 Jou verwysingsnommer is: *${session.studyCode}*\n\nWys hierdie nommer by ontvangs wanneer jy by die kliniek aankom.\n\nTik "code" enige tyd om dit weer te sien.`,
+          nso: `🔢 Nomoro ya gago ya referense ke: *${session.studyCode}*\n\nBontšha nomoro ye kwa resepsheneng ge o fihla kliniki.\n\nNgwala "code" nako efe go e bona gape.`,
+          tn: `🔢 Nomoro ya gago ya referense ke: *${session.studyCode}*\n\nBontsha nomoro e kwa resepsheneng fa o goroga kliniki.\n\nKwala "code" nako epe go e bona gape.`,
+          st: `🔢 Nomoro ya hao ya referense ke: *${session.studyCode}*\n\nBontsha nomoro ena resepsheneng ha o fihla kliniki.\n\nNgola "code" nako efe ho e bona hape.`,
+          ts: `🔢 Nomboro ya wena ya referense i le: *${session.studyCode}*\n\nKomba nomboro leyi eka resepsheni loko u fika ekliniki.\n\nTsala "code" nkarhi wihi ku yi vona nakambe.`,
+          ss: `🔢 Inombolo yakho yereferensi itsi: *${session.studyCode}*\n\nKhombisa lenombolo ku-reception nawufika emtfolamphilo.\n\nBhala "code" nobe nini kuyibona futsi.`,
+          ve: `🔢 Nomboro yaṋu ya referense ndi: *${session.studyCode}*\n\nSumbedzani nomboro iyi kha resepsheni musi ni tshi swika kiliniki.\n\nṄwalani "code" tshifhinga tshifhio na tshifhio u i vhona hafhu.`,
+          nr: `🔢 Inomboro yakho yereferensi ithi: *${session.studyCode}*\n\nKhombisa inomboro le ku-reception nawufika ekliniki.\n\nTlola "code" nobe nini kuyibona godu.`,
         };
         await sendWhatsAppMessage(from, codeMsg[lang] || codeMsg['en']);
       } else {
@@ -4366,6 +4405,13 @@ async function orchestrate(patientId, from, message, session) {
           zu: `🔢 Inombolo yakho yereferensi ithi: *${refCode}*\n\nKhombisa le nombolo e-reception uma ufika emtholampilo.`,
           xh: `🔢 Inombolo yakho yereferensi ithi: *${refCode}*\n\nBonisa le nombolo e-reception xa ufika ekliniki.`,
           af: `🔢 Jou verwysingsnommer is: *${refCode}*\n\nWys hierdie nommer by ontvangs wanneer jy by die kliniek aankom.`,
+          nso: `🔢 Nomoro ya gago ya referense ke: *${refCode}*\n\nBontšha nomoro ye kwa resepsheneng ge o fihla kliniki.`,
+          tn: `🔢 Nomoro ya gago ya referense ke: *${refCode}*\n\nBontsha nomoro e kwa resepsheneng fa o goroga kliniki.`,
+          st: `🔢 Nomoro ya hao ya referense ke: *${refCode}*\n\nBontsha nomoro ena resepsheneng ha o fihla kliniki.`,
+          ts: `🔢 Nomboro ya wena ya referense i le: *${refCode}*\n\nKomba nomboro leyi eka resepsheni loko u fika ekliniki.`,
+          ss: `🔢 Inombolo yakho yereferensi itsi: *${refCode}*\n\nKhombisa lenombolo ku-reception nawufika emtfolamphilo.`,
+          ve: `🔢 Nomboro yaṋu ya referense ndi: *${refCode}*\n\nSumbedzani nomboro iyi kha resepsheni musi ni tshi swika kiliniki.`,
+          nr: `🔢 Inomboro yakho yereferensi ithi: *${refCode}*\n\nKhombisa inomboro le ku-reception nawufika ekliniki.`,
         };
         await sendWhatsAppMessage(from, codeMsg[lang] || codeMsg['en']);
       }
@@ -4400,6 +4446,13 @@ async function orchestrate(patientId, from, message, session) {
         zu: `✅ *Siyakwemukela!* Usuzibhalisile.\n\nSicela uhlale phansi. Unesi uzokubiza uma kufika ithuba lakho.\n\nInombolo yakho: *${session.studyCode || 'N/A'}*`,
         xh: `✅ *Wamkelekile!* Ubhalise.\n\nNceda uhlale phantsi. Umongikazi uza kukubiza xa kufika ithuba lakho.\n\nInombolo yakho: *${session.studyCode || 'N/A'}*`,
         af: `✅ *Welkom!* Jy het ingeboek.\n\nNeem asseblief 'n sitplek. Die verpleegster sal jou roep wanneer jy aan die beurt is.\n\nJou verwysing: *${session.studyCode || 'N/A'}*`,
+        nso: `✅ *O amogetšwe!* O ngwadišitšwe.\n\nHle dula fase. Mooki o tla go bitša ge nako ya gago e fihlile.\n\nNomoro ya gago: *${session.studyCode || 'N/A'}*`,
+        tn: `✅ *O amogelwa!* O kwadisitswe.\n\nTsweetswee dula fa fatshe. Mooki o tla go bitsa fa nako ya gago e fitlhile.\n\nNomoro ya gago: *${session.studyCode || 'N/A'}*`,
+        st: `✅ *O amohelwa!* O ngodisitswe.\n\nKa kopo dula fatshe. Mooki o tla o bitsa ha nako ya hao e fihlile.\n\nNomoro ya hao: *${session.studyCode || 'N/A'}*`,
+        ts: `✅ *U amukeriwa!* U nghenisiwile.\n\nHi kombela u tshama ehansi. Muongi u ta ku vitana loko nkarhi wa wena wu fikile.\n\nNomboro ya wena: *${session.studyCode || 'N/A'}*`,
+        ss: `✅ *Wemukelekile!* Sewubhalisile.\n\nSicela uhlale phansi. Unesi utawukubita nasikhatsi sakho sesifikile.\n\nInombolo yakho: *${session.studyCode || 'N/A'}*`,
+        ve: `✅ *Ni a ṱanganedzwa!* No ṅwaliwa.\n\nRi humbela ni dzule fhasi. Muongi u ḓo ni vhidza musi tshifhinga tshaṋu tshi tshi swika.\n\nNomboro yaṋu: *${session.studyCode || 'N/A'}*`,
+        nr: `✅ *Wamukelekile!* Sewutlolisile.\n\nSibawa uhlale phasi. Unesi utakubiza nesikhathi sakho sesifikile.\n\nInomboro yakho: *${session.studyCode || 'N/A'}*`,
       };
       await sendWhatsAppMessage(from, arriveMsg[lang] || arriveMsg['en']);
       return;
@@ -4497,6 +4550,13 @@ async function orchestrate(patientId, from, message, session) {
         zu: `👤 Siyabonga ngomyalezo wakho. Isisebenzi sezempilo sizobheka udaba lwakho.\n\nUma kuphuthumile, sicela ushaye *10177* noma uye emtholampilo noma esibhedlela esiseduze MANJE — ungalindi.\n\nUngavakashela umtholampilo oseduze ngamahora okusebenza.`,
         xh: `👤 Enkosi ngomyalezo wakho. Umsebenzi wezempilo uza kuhlola udaba lwakho.\n\nUkuba yingxakeko, nceda utsalele *10177* okanye uye ekliniki okanye esibhedlele esikufutshane NGOKU — musa ukulinda.\n\nUngatyelela ikliniki yakho ekufutshane ngamaxesha okusebenza.`,
         af: `👤 Dankie vir jou boodskap. 'n Gesondheidswerker sal jou saak hersien.\n\nAs dit 'n noodgeval is, bel asseblief *10177* of gaan na jou naaste kliniek of hospitaal DADELIK — moenie wag nie.\n\nJy kan ook jou naaste kliniek besoek tydens werksure.`,
+        nso: `👤 Re a leboga ka molaetša wa gago. Mošomi wa tša maphelo o tla sekaseka bolwetši bja gago.\n\nGe e le tšhoganetšo, hle letšetša *10177* goba o ye kliniki goba bookelong ya kgauswi BJALE — o se ke wa ema.\n\nO ka etela kliniki ya gago ya kgauswi ka dinako tša go šoma.`,
+        tn: `👤 Re a leboga ka molaetsa wa gago. Mošomi wa tsa maphelo o tla sekaseka bolwetse jwa gago.\n\nFa e le tshoganyetso, tsweetswee leletsa *10177* kgotsa o ye kliniki kgotsa bookelong ya gaufi JAANONG — o se ka wa ema.\n\nO ka etela kliniki ya gago ya gaufi ka dinako tša go bereka.`,
+        st: `👤 Re a leboha ka molaetsa wa hao. Mošebetsi wa bophelo o tla sekaseka bolwetsi ba hao.\n\nHaeba e le tshohanyetso, ka kopo letsetsa *10177* kapa o ye kliniki kapa sepetlele se haufi HONA JOALE — o se ke wa ema.\n\nO ka etela kliniki ya hao e haufi ka dinako tsa mosebetsi.`,
+        ts: `👤 Hi khensa hi muvulavulo wa wena. Mušomi wa rihanyo u ta kambisisa vuvabyi bya wena.\n\nLoko ku ri xihatla, hi kombela u letela *10177* kumbe u ya ekliniki kumbe xibedlhele xa kusuhi SWESWI — u nga yimi.\n\nU nga endzela kliniki ya wena ya kusuhi hi tinkarhi ta ntirho.`,
+        ss: `👤 Siyabonga ngemyalezo yakho. Sisebenti setemphilo sitawubuketa indaba yakho.\n\nNangabe kuphutfuma, sicela ushayele *10177* noma uye emtfolamphilo noma esibhedlela lesisedvute NYALO — ungalindzi.\n\nUngavakashela umtfolamphilo losedvute ngetikhathi tekusebenta.`,
+        ve: `👤 Ri a livhuwa nga mulaedza waṋu. Mušumo wa mutakalo u ḓo sedzulusa mulwadze waṋu.\n\nArali hu tshoganetso, ri humbela ni fonele *10177* kana ni ye kha kiliniki kana sibadela tshi re tsini ZWINO — ni songo lindela.\n\nNi nga dalela kiliniki yaṋu ya tsini nga tshifhinga tsha mushumo.`,
+        nr: `👤 Siyathokoza ngomyalezo wakho. Isisebenzi setemphilo sitawubuketa indaba yakho.\n\nNangabe kuphuthumile, sibawa ushayele *10177* noma uye ekliniki noma esibhedlela esiseduze ANJE — ungalindi.\n\nUngavakatjhela ikliniki yakho eseduze ngeenkhathi zokusebenza.`,
       };
       await sendWhatsAppMessage(from, humanMsg[lang] || humanMsg['en']);
       await scheduleFollowUp(patientId, from, 'YELLOW');
@@ -4734,10 +4794,17 @@ async function orchestrate(patientId, from, message, session) {
       session.appointmentSlot = slotTime;
 
       const slotMsg = {
-        en: `\u23f0 Clinics are closed now.\n\n1. *If manageable* \u2014 rest at home, come to the clinic tomorrow at *${slotTime}*\n2. *If symptoms worsen tonight* \u2014 go to hospital or call *10177*\n\nWe will send you a reminder tomorrow morning.`,
-        zu: `\u23f0 Imitholampilo ivaliwe manje.\n\n1. *Uma kubekezeleka* \u2014 phumula ekhaya, woza emtholampilo kusasa ngo-*${slotTime}*\n2. *Uma izimpawu ziba zimbi ebusuku* \u2014 yana esibhedlela noma ushaye *10177*\n\nSizokuthumelela isikhumbuzo kusasa.`,
-        xh: `\u23f0 Iikliniki zivaliwe ngoku.\n\n1. *Ukuba zinokumelana nazo* \u2014 phumla ekhaya, yiza ekliniki ngomso nge-*${slotTime}*\n2. *Ukuba iimpawu ziba mbi ebusuku* \u2014 yiya esibhedlele okanye utsalele *10177*\n\nSiza kukuthumela isikhumbuzo ngomso.`,
-        af: `\u23f0 Klinieke is gesluit.\n\n1. *As hanteerbaar* \u2014 rus tuis, kom m\u00f4re na die kliniek om *${slotTime}*\n2. *As simptome vererger* \u2014 gaan hospitaal toe of bel *10177*\n\nOns stuur m\u00f4re 'n herinnering.`,
+        en: `⏰ Clinics are closed now.\n\n1. *If manageable* — rest at home, come to the clinic tomorrow at *${slotTime}*\n2. *If symptoms worsen tonight* — go to hospital or call *10177*\n\nWe will send you a reminder tomorrow morning.`,
+        zu: `⏰ Imitholampilo ivaliwe manje.\n\n1. *Uma kubekezeleka* — phumula ekhaya, woza emtholampilo kusasa ngo-*${slotTime}*\n2. *Uma izimpawu ziba zimbi ebusuku* — yana esibhedlela noma ushaye *10177*\n\nSizokuthumelela isikhumbuzo kusasa.`,
+        xh: `⏰ Iikliniki zivaliwe ngoku.\n\n1. *Ukuba zinokumelana nazo* — phumla ekhaya, yiza ekliniki ngomso nge-*${slotTime}*\n2. *Ukuba iimpawu ziba mbi ebusuku* — yiya esibhedlele okanye utsalele *10177*\n\nSiza kukuthumela isikhumbuzo ngomso.`,
+        af: `⏰ Klinieke is gesluit.\n\n1. *As hanteerbaar* — rus tuis, kom môre na die kliniek om *${slotTime}*\n2. *As simptome vererger* — gaan hospitaal toe of bel *10177*\n\nOns stuur môre 'n herinnering.`,
+        nso: `⏰ Dikliniki di tswaletšwe bjale.\n\n1. *Ge o kgona* — khutša gae, tla kliniki gosasa ka *${slotTime}*\n2. *Ge dika di mpefala bošego* — ya bookelong goba letšetša *10177*\n\nRe tla go romela sekgopotšo gosasa.`,
+        tn: `⏰ Dikliniki di tswaletswe jaanong.\n\n1. *Fa o kgona* — ikhutse gae, tla kliniki kamoso ka *${slotTime}*\n2. *Fa matshwao a fetoga bosigo* — ya bookelong kgotsa leletsa *10177*\n\nRe tla go romela sekgopotso kamoso.`,
+        st: `⏰ Dikliniki di tswaletswe joale.\n\n1. *Haeba o kgona* — phomola lapeng, tla kliniki hosane ka *${slotTime}*\n2. *Haeba matshwao a mpefala bosiu* — eya sepetleleng kapa letsetsa *10177*\n\nRe tla o romella sekgopotso hosane.`,
+        ts: `⏰ Tikliniki ti pfariwile sweswi.\n\n1. *Loko u kota* — wisa ekaya, ta ekliniki mundzuku hi *${slotTime}*\n2. *Loko swikombiso swi nyanya nivusiku* — ya exibedlhele kumbe letela *10177*\n\nHi ta ku rhumela xikhumbutso mundzuku.`,
+        ss: `⏰ Tinkliniki tivalwe nyalo.\n\n1. *Nangabe uyakhona* — phumula ekhaya, wota emtfolamphilo kusasa nge-*${slotTime}*\n2. *Nangabe timphawu tiba timbi ebusuku* — hamba esibhedlela noma shayela *10177*\n\nSitawukutfumelela sikhumbuto kusasa.`,
+        ve: `⏰ Dzi kiliniki dzo valwa zwino.\n\n1. *Arali ni kha ḓi kona* — awelani hayani, ḓani kha kiliniki matshelo nga *${slotTime}*\n2. *Arali zwiga zwi tshi ḓi vhifha vhusiku* — yani sibadela kana fonelani *10177*\n\nRi ḓo ni rumela tsivhudzo matshelo.`,
+        nr: `⏰ Amakliniki avalwe nje.\n\n1. *Nangabe uyakhona* — phumula ekhaya, woza ekliniki kusasa nge-*${slotTime}*\n2. *Nangabe iimphawu ziba zimbi ebusuku* — yiya esibhedlela noma ushayele *10177*\n\nSitakuthumelelela isikhumbuzo kusasa.`,
       };
       await sendWhatsAppMessage(from, slotMsg[lang] || slotMsg['en']);
 
@@ -4917,6 +4984,13 @@ async function orchestrateWithFallback(patientId, from, message, session) {
           zu: 'Angikuzwanga lokho. Nanti ongakwenza:\n\nKhetha inombolo kumenyu engezansi, noma bhala:\n*0* — ukuxoxa okusha\n*code* — inombolo yakho\n*ulimi* — shintsha ulimi\n*help* — khombisa imenyu',
           xh: 'Andikuqondanga oko. Nantsi into onokuyenza:\n\nKhetha inombolo kwimenyu engezantsi, okanye bhala:\n*0* — incoko entsha\n*code* — inombolo yakho\n*ulwimi* — tshintsha ulwimi\n*help* — bonisa imenyu',
           af: 'Ek het dit nie verstaan nie. Hier is wat jy kan doen:\n\nKies \'n nommer uit die spyskaart hieronder, of tik:\n*0* — nuwe konsultasie\n*code* — jou verwysingsnommer\n*taal* — verander taal\n*help* — wys spyskaart',
+          nso: 'Ga ke kwešiše seo. Se o ka se dirang:\n\nKgetha nomoro go tšwa go menyu ye e lego ka fase, goba ngwala:\n*0* — poledišano ye mpsha\n*code* — nomoro ya gago\n*puo* — fetola puo\n*help* — bontšha menyu',
+          tn: 'Ga ke a tlhaloganya seo. Se o ka se dirang:\n\nTlhopha nomoro go tswa mo menyu e e fa tlase, kgotsa kwala:\n*0* — puisano e ntšhwa\n*code* — nomoro ya gago\n*puo* — fetola puo\n*help* — bontsha menyu',
+          st: 'Ha ke utlwisise seo. Sena o ka se etsang:\n\nKgetha nomoro ho tswa ho menyu e ka tlase, kapa ngola:\n*0* — puisano e ntjha\n*code* — nomoro ya hao\n*puo* — fetola puo\n*help* — bontsha menyu',
+          ts: 'A ndzi twisisanga sweswo. Leswi u nga swi endlaka:\n\nHlawula nomboro eka menyu leyi nga ehansi, kumbe tsala:\n*0* — mbulavurisano leyintshwa\n*code* — nomboro ya wena\n*ririmi* — cinca ririmi\n*help* — komba menyu',
+          ss: 'Angikuvisanga loko. Naku longakwenta:\n\nKhetsa inombolo kumenyu lengentansi, noma bhala:\n*0* — ingcoco lensha\n*code* — inombolo yakho\n*lulwimi* — gucula lulwimi\n*help* — khombisa imenyu',
+          ve: 'A tho ngo pfesesa zwenezwo. Zwine na nga zwi ita:\n\nNangani nomboro kha menyu ye i re fhasi, kana ngwalani:\n*0* — nyambedzano ntswa\n*code* — nomboro yaṋu\n*luambo* — shanduka luambo\n*help* — sumbedza menyu',
+          nr: 'Angikuzwisisanga loko. Naku ongakwenza:\n\nKhetha inomboro kumenyu engenzasi, noma tlola:\n*0* — ikulumiswano etja\n*code* — inomboro yakho\n*ilimi* — tjhintjha ilimi\n*help* — khombisa imenyu',
         };
         await sendWhatsAppMessage(from, fallbackMsg[lang] || fallbackMsg['en']);
         await sendWhatsAppMessage(from, msg('category_menu', lang));
@@ -5145,6 +5219,13 @@ async function handleMessage(msgObj) {
       zu: 'Siyaxolisa, ngifunda imiyalezo yombhalo namavoice note kuphela. Sicela ubhale umyalezo noma uthumele ivoice note 🎤\n\nBhala *0* ukuqala kabusha noma *help* ukubona imenyu.',
       xh: 'Siyaxolisa, ndifunda imiyalezo yombhalo neevoice note kuphela. Nceda ubhale umyalezo okanye uthumele ivoice note 🎤\n\nBhala *0* ukuqala kwakhona okanye *help* ukubona imenyu.',
       af: 'Jammer, ek kan net teksboodskappe en stemnota\'s lees. Tik asseblief jou boodskap of stuur \'n stemnota 🎤\n\nTik *0* om oor te begin of *help* vir die spyskaart.',
+      nso: 'Tshwarelo, ke bala melaetša ya mongwalo le di-voice note fela. Hle ngwala molaetša goba romela voice note 🎤\n\nNgwala *0* go thoma lefsa goba *help* go bona menyu.',
+      tn: 'Tshwarelo, ke bala melaetsa ya mongwalo le di-voice note fela. Tsweetswee kwala molaetsa kgotsa romela voice note 🎤\n\nKwala *0* go simolola sešwa kgotsa *help* go bona menyu.',
+      st: 'Tshwarelo, ke bala melaetsa ya mongolo le di-voice note feela. Ka kopo ngola molaetsa kapa romela voice note 🎤\n\nNgola *0* ho qala bocha kapa *help* ho bona menyu.',
+      ts: 'Khomela, ndzi hlaya marungula ya matsalwa na ti-voice note ntsena. Hi kombela u tsala marungula kumbe u rhumela voice note 🎤\n\nTsala *0* ku sungula hi vuntshwa kumbe *help* ku vona menyu.',
+      ss: 'Siyacolisa, ngifundza imilayezo yembhalo ne-voice note kuphela. Sicela ubhale umlayezo noma utfumele voice note 🎤\n\nBhala *0* kucala kabusha noma *help* kubona imenyu.',
+      ve: 'Humbela u ntswalele, ndi vhala mulaedza wa maṅwalo na dzi-voice note fhedzi. Ri humbela ni ṅwale mulaedza kana ni rumele voice note 🎤\n\nṄwalani *0* u thoma hafhu kana *help* u vhona menyu.',
+      nr: 'Siyacolisa, ngifunda imilayezo yombhalo ne-voice note kwaphela. Sibawa utlole umlayezo noma uthumele voice note 🎤\n\nTlola *0* ukuthoma kabutjha noma *help* ukubona imenyu.',
     };
     await sendWhatsAppMessage(from, unsupportedMsg[lang] || unsupportedMsg['en']);
     return;
@@ -6337,6 +6418,139 @@ app.put('/api/clinic/queue/:id/escalate', requireDashboardAuth, async (req, res)
         (transport_method === 'ambulance'
           ? '🚑 \'n Ambulans is versoek. Wag vir die ambulans of vra die verpleegster.'
           : '🚗 Gaan nou na die hospitaal. Wys hierdie boodskap by die hospitaal ontvangs.'),
+
+      nso: `🏥 *PHETIŠETŠO YA BOOKELO*\n\n` +
+        `O romelwa go ${destination_hospital || 'bookelo ya kgauswi'}.\n\n` +
+        `📋 *Kakaretšo ya phetišetšo* (bontšha se bookelong):\n` +
+        `━━━━━━━━━━━━━━━━━━━━\n` +
+        `Referral ID: *${referralId}*\n` +
+        `Molwetši: *${patientName}*\n` +
+        `Letšatši la matswalo: ${dob} | Bong: ${sex}\n` +
+        `BZ Code: *${study_code || session.studyCode || 'N/A'}*\n` +
+        `Triage: *${patient.triage_level}*\n` +
+        `Dika: ${patient.symptoms_summary || 'Bona dinoutše tša mooki'}\n` +
+        `Malwetši a go dulela: ${chronic}\n` +
+        `O rometswe ke: ${nurse_name || 'Mooki'}\n` +
+        `Lebaka: ${nurse_notes || 'Phetišetšo ya kalafo'}\n` +
+        `Nako: ${new Date().toLocaleString('en-ZA', { timeZone: 'Africa/Johannesburg' })}\n` +
+        `━━━━━━━━━━━━━━━━━━━━\n\n` +
+        (transport_method === 'ambulance'
+          ? '🚑 Ambulense e kgopetšwe. Ema ambulense goba botšiša mooki.'
+          : '🚗 Ya bookelong bjale. Bontšha molaetša wo resepsheneng ya bookelo.'),
+
+      tn: `🏥 *PHETISO YA BOOKELONG*\n\n` +
+        `O romelwa go ${destination_hospital || 'bookelong ya gaufi'}.\n\n` +
+        `📋 *Kakaretso ya phetiso* (bontsha se kwa bookelong):\n` +
+        `━━━━━━━━━━━━━━━━━━━━\n` +
+        `Referral ID: *${referralId}*\n` +
+        `Molwetse: *${patientName}*\n` +
+        `Letsatsi la matsalo: ${dob} | Bong: ${sex}\n` +
+        `BZ Code: *${study_code || session.studyCode || 'N/A'}*\n` +
+        `Triage: *${patient.triage_level}*\n` +
+        `Matshwao: ${patient.symptoms_summary || 'Bona dinoute tsa mooki'}\n` +
+        `Malwetse a go nnela ruri: ${chronic}\n` +
+        `O rometswe ke: ${nurse_name || 'Mooki'}\n` +
+        `Lebaka: ${nurse_notes || 'Phetiso ya kalafi'}\n` +
+        `Nako: ${new Date().toLocaleString('en-ZA', { timeZone: 'Africa/Johannesburg' })}\n` +
+        `━━━━━━━━━━━━━━━━━━━━\n\n` +
+        (transport_method === 'ambulance'
+          ? '🚑 Ambulense e kopilwe. Ema ambulense kgotsa botsa mooki.'
+          : '🚗 Ya bookelong jaanong. Bontsha molaetsa o resepsheneng ya bookelong.'),
+
+      st: `🏥 *PHETISO HO SEPETLELE*\n\n` +
+        `O romelwa ho ${destination_hospital || 'sepetlele se haufi'}.\n\n` +
+        `📋 *Kakaretso ya phetiso* (bontsha sena sepetleleng):\n` +
+        `━━━━━━━━━━━━━━━━━━━━\n` +
+        `Referral ID: *${referralId}*\n` +
+        `Mokudi: *${patientName}*\n` +
+        `Letsatsi la tswalo: ${dob} | Botona/Botsehadi: ${sex}\n` +
+        `BZ Code: *${study_code || session.studyCode || 'N/A'}*\n` +
+        `Triage: *${patient.triage_level}*\n` +
+        `Matshwao: ${patient.symptoms_summary || 'Bona dinoutse tsa mooki'}\n` +
+        `Mahlale: ${chronic}\n` +
+        `O rometswe ke: ${nurse_name || 'Mooki'}\n` +
+        `Lebaka: ${nurse_notes || 'Phetiso ya kalafo'}\n` +
+        `Nako: ${new Date().toLocaleString('en-ZA', { timeZone: 'Africa/Johannesburg' })}\n` +
+        `━━━━━━━━━━━━━━━━━━━━\n\n` +
+        (transport_method === 'ambulance'
+          ? '🚑 Ambulense e kopilwe. Ema ambulense kapa botsa mooki.'
+          : '🚗 Eya sepetleleng hona joale. Bontsha molaetsa ona resepsheneng.'),
+
+      ts: `🏥 *KU HUNDZISERIWA XIBEDLHELE*\n\n` +
+        `U hundziseriwa eka ${destination_hospital || 'xibedlhele xa kusuhi'}.\n\n` +
+        `📋 *Nkoka wa ku hundziseriwa* (komba leswi exibedlhele):\n` +
+        `━━━━━━━━━━━━━━━━━━━━\n` +
+        `Referral ID: *${referralId}*\n` +
+        `Muvabyi: *${patientName}*\n` +
+        `Siku ra ku velekiwa: ${dob} | Rimbewu: ${sex}\n` +
+        `BZ Code: *${study_code || session.studyCode || 'N/A'}*\n` +
+        `Triage: *${patient.triage_level}*\n` +
+        `Swikombiso: ${patient.symptoms_summary || 'Vona tinoto ta muongi'}\n` +
+        `Vuvabyi bya vurhongo: ${chronic}\n` +
+        `U hundziseriwile hi: ${nurse_name || 'Muongi'}\n` +
+        `Xivangelo: ${nurse_notes || 'Ku hundziseriwa ka vuongori'}\n` +
+        `Nkarhi: ${new Date().toLocaleString('en-ZA', { timeZone: 'Africa/Johannesburg' })}\n` +
+        `━━━━━━━━━━━━━━━━━━━━\n\n` +
+        (transport_method === 'ambulance'
+          ? '🚑 Ambulense yi kombetiwile. Yima ambulense kumbe vutisa muongi.'
+          : '🚗 Ya exibedlhele sweswi. Komba muvulavulo lowu eka resepsheni.'),
+
+      ss: `🏥 *KUDLULISELA ESIBHEDLELA*\n\n` +
+        `Udluliswa ku ${destination_hospital || 'sibhedlela lesisedvute'}.\n\n` +
+        `📋 *Sifinyeto sekudlulisela* (khombisa loku esibhedlela):\n` +
+        `━━━━━━━━━━━━━━━━━━━━\n` +
+        `Referral ID: *${referralId}*\n` +
+        `Sigulane: *${patientName}*\n` +
+        `Lusuku lwekutalwa: ${dob} | Bulili: ${sex}\n` +
+        `BZ Code: *${study_code || session.studyCode || 'N/A'}*\n` +
+        `Triage: *${patient.triage_level}*\n` +
+        `Timphawu: ${patient.symptoms_summary || 'Buka emanothsi enesi'}\n` +
+        `Sifo lesikhashana: ${chronic}\n` +
+        `Udluliswe ngu: ${nurse_name || 'Unesi'}\n` +
+        `Sizatfu: ${nurse_notes || 'Kudlulisela kwekwelapha'}\n` +
+        `Sikhatsi: ${new Date().toLocaleString('en-ZA', { timeZone: 'Africa/Johannesburg' })}\n` +
+        `━━━━━━━━━━━━━━━━━━━━\n\n` +
+        (transport_method === 'ambulance'
+          ? '🚑 I-ambulensi icelwe. Lindza i-ambulensi noma buta unesi.'
+          : '🚗 Hamba esibhedlela nyalo. Khombisa lomlayezo ku-reception.'),
+
+      ve: `🏥 *U RUMELWA SIBADELA*\n\n` +
+        `Ni khou rumelwa kha ${destination_hospital || 'sibadela tshi re tsini'}.\n\n` +
+        `📋 *Manweledzo a u rumelwa* (sumbedzani izwi kha sibadela):\n` +
+        `━━━━━━━━━━━━━━━━━━━━\n` +
+        `Referral ID: *${referralId}*\n` +
+        `Mulwadze: *${patientName}*\n` +
+        `Ḓuvha la u bebwa: ${dob} | Mbeu: ${sex}\n` +
+        `BZ Code: *${study_code || session.studyCode || 'N/A'}*\n` +
+        `Triage: *${patient.triage_level}*\n` +
+        `Zwiga: ${patient.symptoms_summary || 'Vhonani maṅwalo a muongi'}\n` +
+        `Vhulwadze: ${chronic}\n` +
+        `No rumelwa nga: ${nurse_name || 'Muongi'}\n` +
+        `Tshiitisi: ${nurse_notes || 'U rumelwa ha mutakalo'}\n` +
+        `Tshifhinga: ${new Date().toLocaleString('en-ZA', { timeZone: 'Africa/Johannesburg' })}\n` +
+        `━━━━━━━━━━━━━━━━━━━━\n\n` +
+        (transport_method === 'ambulance'
+          ? '🚑 Ambulensi yo humbelwa. Lindelan ambulensi kana vhudzisani muongi.'
+          : '🚗 Yani kha sibadela zwino. Sumbedzani mulaedza uyu kha resepsheni.'),
+
+      nr: `🏥 *UKUDLULISELWA ESIBHEDLELA*\n\n` +
+        `Udluliselwa ku ${destination_hospital || 'isibhedlela esiseduze'}.\n\n` +
+        `📋 *Isifinyeto sokudlulisela* (khombisa loku esibhedlela):\n` +
+        `━━━━━━━━━━━━━━━━━━━━\n` +
+        `Referral ID: *${referralId}*\n` +
+        `Isigulani: *${patientName}*\n` +
+        `Ilanga lokubelethwa: ${dob} | Ubulili: ${sex}\n` +
+        `BZ Code: *${study_code || session.studyCode || 'N/A'}*\n` +
+        `Triage: *${patient.triage_level}*\n` +
+        `Iimphawu: ${patient.symptoms_summary || 'Bona amanothsi kanesi'}\n` +
+        `Isifo sesikhathi eside: ${chronic}\n` +
+        `Udluliswe ngu: ${nurse_name || 'Unesi'}\n` +
+        `Isizathu: ${nurse_notes || 'Ukudlulisela kwezokuphila'}\n` +
+        `Isikhathi: ${new Date().toLocaleString('en-ZA', { timeZone: 'Africa/Johannesburg' })}\n` +
+        `━━━━━━━━━━━━━━━━━━━━\n\n` +
+        (transport_method === 'ambulance'
+          ? '🚑 I-ambulensi icelwe. Linda i-ambulensi noma buza unesi.'
+          : '🚗 Yiya esibhedlela nje. Khombisa lomlayezo ku-reception.'),
     };
 
     // Send referral to patient on WhatsApp
@@ -6586,6 +6800,13 @@ app.put('/api/clinic/queue/:id/resume', requireDashboardAuth, async (req, res) =
           zu: '📢 *Uyabizwa futhi!* Sicela ubuyele egumbini lokubonana manje.',
           xh: '📢 *Uyabizwa kwakhona!* Nceda ubuyele kwigumbi lokubonana ngoku.',
           af: '📢 *Jy word weer geroep!* Keer asseblief nou terug na die spreekkamer.',
+          nso: '📢 *O bitšwa gape!* Hle boela ka phapošing ya go bonana bjale.',
+          tn: '📢 *O bidiwa gape!* Tsweetswee boela kwa phaposing ya go bonana jaanong.',
+          st: '📢 *O bitswa hape!* Ka kopo khutlela kamoreng ya ho bonana joale.',
+          ts: '📢 *U vitiwa nakambe!* Hi kombela u tlhelela ka kamareni ya mbulavurisano sweswi.',
+          ss: '📢 *Uyabitwa futsi!* Sicela ubuyele ekamelweni lekuhlangana nyalo.',
+          ve: '📢 *Ni khou vhidziwa hafhu!* Ri humbela ni humele kamurini ya u bonana zwino.',
+          nr: '📢 *Uyabitwa godu!* Sibawa ubuyele ekamelweni lokuhlangana nje.',
         };
         await sendWhatsAppMessage(entry.patient_phone, resumeMsg[lang] || resumeMsg['en']);
       } catch (e) {
