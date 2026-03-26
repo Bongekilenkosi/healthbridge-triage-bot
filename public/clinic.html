@@ -251,11 +251,16 @@ a{color:#60a5fa;text-decoration:none}
         </div>
         <div style="margin-bottom:12px">
           <div style="font-size:11px;color:#94a3b8;margin-bottom:6px">Assign to queue:</div>
-          <div style="display:flex;gap:8px">
-            <button class="btn btn-red" style="flex:1;padding:10px;font-size:12px" onclick="registerWalkIn('fast_track')">Fast-Track (urgent)</button>
-            <button class="btn btn-primary" style="flex:1;padding:10px;font-size:12px" onclick="registerWalkIn('routine')">Routine</button>
-            <button class="btn btn-walkin" style="flex:1;padding:10px;font-size:12px" onclick="registerWalkIn('walk_in')">Walk-In</button>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn btn-red" style="flex:1;padding:10px;font-size:12px" onclick="registerWalkIn('fast_track')">⚡ Fast-Track</button>
+            <button class="btn btn-primary" style="flex:1;padding:10px;font-size:12px" onclick="registerWalkIn('routine')">📋 Routine</button>
+            <button class="btn btn-walkin" style="flex:1;padding:10px;font-size:12px" onclick="registerWalkIn('walk_in')">🚶 Walk-In</button>
+            <button class="btn" style="flex:1;padding:10px;font-size:12px;color:#22c55e;border-color:rgba(34,197,94,.3);background:rgba(34,197,94,.08)" onclick="registerWalkIn('preventative')">🔬 Screening</button>
           </div>
+        </div>
+        <div style="margin:16px 0 12px;padding-top:12px;border-top:1px solid #1e293b">
+          <button class="btn" style="width:100%;padding:14px;font-size:14px;font-weight:700;color:#fff;background:#dc2626;border:2px solid #ef4444;border-radius:8px;cursor:pointer;letter-spacing:.5px" onclick="criticalWalkIn()">🚨 CRITICAL EMERGENCY — Skip All Queues</button>
+          <div style="font-size:10px;color:#64748b;margin-top:4px;text-align:center">Unconscious, not breathing, severe bleeding — front of emergency queue immediately</div>
         </div>
         <div id="wi-result" style="font-size:12px;margin-top:8px"></div>
       </div>
@@ -582,7 +587,7 @@ async function doLookup(){
   html+='<div class="assign-box">';
   if(d.already_in_queue){
     const aq=d.already_in_queue;
-    const qtLabels={fast_track:'Fast-Track',routine:'Routine',walk_in:'Walk-In'};
+    const qtLabels={fast_track:'Fast-Track',routine:'Routine',walk_in:'Walk-In',preventative:'Screening'};
     html+='<div style="color:#22c55e;font-size:12px;display:flex;align-items:center;gap:6px">✅ Already in queue: <b>'+(qtLabels[aq.queue_type]||aq.queue_type)+'</b><span style="color:#475569"> · Position '+(aq.position||'?')+' · Waiting '+waitMin(aq.checked_in_at)+' min</span></div>';
   }else{
     const recLevel=t?t.triage_level:'UNKNOWN';
@@ -761,7 +766,7 @@ async function registerWalkIn(queueType){
   })});
 
   if(res&&res.success){
-    const qtLabels={fast_track:'Fast-Track',routine:'Routine',walk_in:'Walk-In'};
+    const qtLabels={fast_track:'Fast-Track',routine:'Routine',walk_in:'Walk-In',preventative:'Screening'};
     el.innerHTML='<span style="color:#22c55e">Added *'+patientName+'* to '+qtLabels[queueType]+' queue.</span>';
     document.getElementById('wi-name').value='';
     document.getElementById('wi-surname').value='';
@@ -772,6 +777,34 @@ async function registerWalkIn(queueType){
     refresh();
   }else{
     el.innerHTML='<span style="color:#ef4444">Failed to register patient. Try again.</span>';
+  }
+}
+
+// CRITICAL WALK-IN — one-tap emergency, front of queue, no registration needed
+async function criticalWalkIn(){
+  const name=document.getElementById('wi-name').value.trim()||null;
+  const surname=document.getElementById('wi-surname').value.trim()||null;
+  const symptoms=document.getElementById('wi-symptoms').value.trim()||null;
+  const el=document.getElementById('wi-result');
+
+  const patientName=name?(name+(surname?' '+surname:'')):null;
+
+  if(!confirm('⚠️ CRITICAL EMERGENCY\n\nThis will add a RED patient at the FRONT of the emergency queue.\n\nPatient: '+(patientName||'Unknown')+'\n\nContinue?'))return;
+
+  const res=await api('/api/clinic/queue/critical',{method:'POST',body:JSON.stringify({
+    patient_name:patientName,
+    description:symptoms||'Critical walk-in — reception emergency button',
+    nurse_name:UNAME
+  })});
+
+  if(res&&res.success){
+    el.innerHTML='<span style="color:#ef4444;font-weight:700">🚨 CRITICAL patient added to front of emergency queue.</span>';
+    document.getElementById('wi-name').value='';
+    document.getElementById('wi-surname').value='';
+    document.getElementById('wi-symptoms').value='';
+    refresh();
+  }else{
+    el.innerHTML='<span style="color:#ef4444">Failed to register critical patient. Try again.</span>';
   }
 }
 
@@ -812,7 +845,7 @@ async function refreshSummary(){
   }else{
     cb.innerHTML=completed.sort((a,b)=>new Date(b.completed_at)-new Date(a.completed_at)).slice(0,50).map(p=>{
       const waitMs=p.called_at&&p.checked_in_at?Math.round((new Date(p.called_at)-new Date(p.checked_in_at))/60000):null;
-      const qtLabels={fast_track:'Fast-Track',routine:'Routine',walk_in:'Walk-In'};
+      const qtLabels={fast_track:'Fast-Track',routine:'Routine',walk_in:'Walk-In',preventative:'Screening'};
       return '<tr><td style="color:#e2e8f0">'+(p.patient_name||'Unknown')+'</td><td>'+triageBadge(p.triage_level)+'</td><td style="color:#94a3b8">'+(qtLabels[p.queue_type]||p.queue_type)+'</td><td style="color:#94a3b8">'+(waitMs!==null?waitMs+' min':'—')+'</td><td style="color:#94a3b8">'+(p.assigned_to||'—')+'</td><td style="color:#475569">'+fmtTime(p.completed_at)+'</td></tr>';
     }).join('');
   }
