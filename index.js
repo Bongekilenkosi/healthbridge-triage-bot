@@ -666,6 +666,27 @@ governance = new GovernanceOrchestrator(supabase, {
   queueEvent: queueEvent,
 });
 
+// Levenshtein distance for fuzzy text matching (typo correction)
+// Used in chronic clinic name search to handle patient spelling errors
+function levenshtein(a, b) {
+  if (a.length === 0) return b.length;
+  if (b.length === 0) return a.length;
+  const matrix = [];
+  for (let i = 0; i <= b.length; i++) matrix[i] = [i];
+  for (let j = 0; j <= a.length; j++) matrix[0][j] = j;
+  for (let i = 1; i <= b.length; i++) {
+    for (let j = 1; j <= a.length; j++) {
+      const cost = a[j - 1] === b[i - 1] ? 0 : 1;
+      matrix[i][j] = Math.min(
+        matrix[i - 1][j] + 1,      // deletion
+        matrix[i][j - 1] + 1,      // insertion
+        matrix[i - 1][j - 1] + cost // substitution
+      );
+    }
+  }
+  return matrix[b.length][a.length];
+}
+
 function hashPhone(phone) {
   return crypto.createHash('sha256').update(phone).digest('hex').slice(0, 16);
 }
@@ -1368,17 +1389,17 @@ Uyavuma?
   },
 
   triage_green: {
-    en: '🟢 *ROUTINE*\nMonitor your symptoms at home. Visit a pharmacy if needed. If symptoms worsen, contact us again.',
-    zu: '🟢 *OKUJWAYELEKILE*\nQaphelisisa izimpawu zakho ekhaya. Vakashela ikhemisi uma kudingeka. Uma izimpawu ziba zimbi, sithinte futhi.',
-    xh: '🟢 *OKUQHELEKILEYO*\nJonga iimpawu zakho ekhaya. Tyelela ikhemesti ukuba kuyafuneka. Ukuba iimpawu ziya zisiba mbi, qhagamshelana nathi kwakhona.',
-    af: '🟢 *ROETINE*\nMoniteer jou simptome by die huis. Besoek \'n apteek indien nodig. As simptome vererger, kontak ons weer.',
-    nso: '🟢 *TSA TLWAELO*\nŠetša dika tša gago ka gae. Etela khemisi ge go nyakega. Ge dika di mpefala, ikgokaganye le rena gape.',
-    tn: '🟢 *TSA TLWAELO*\nEla tlhoko matshwao a gago kwa gae. Etela khemisi fa go tlhokega. Fa matshwao a a maswe, ikgolaganye le rona gape.',
-    st: '🟢 *TSA KAMEHLA*\nSheba matshwao a hao ka lapeng. Etela khemisi haeba ho hlokahala. Haeba matshwao a mpefala, ikopanye le rona hape.',
-    ts: '🟢 *SWA NTOLOVELO*\nVona swikombiso swa wena ekaya. Endzela khemisi loko swi laveka. Loko swikombiso swi tika, hi tshikeleli nakambe.',
-    ss: '🟢 *KWEKUVAMILE*\nCaphelisisa timphawu takho ekhaya. Vakashela ikhemisti uma kudzingeka. Uma timphawu tiba timbi, sitsintsane futsi.',
-    ve: '🟢 *ZWA ḒUVHA ḼI ṄWE NA ḼI ṄWE*\nSedzani zwiga zwaṋu hayani. Dalani khemisi arali zwi tshi ṱoḓea. Arali zwiga zwi tshi ṱoḓa u ṱavhanya, ri kwameni hafhu.',
-    nr: '🟢 *OKUJAYELEKILEKO*\nQalela iimpawu zakho ekhaya. Vakatjhela ikhemisi uma kutlhogeka. Uma iimpawu ziba zimbi, sitjheje godu.'
+    en: '🟢 *ROUTINE — Non-urgent*\n\nYour symptoms are not an emergency. Here is some advice while you decide your next step:',
+    zu: '🟢 *OKUJWAYELEKILE — Akuphuthumi*\n\nIzimpawu zakho azizona isimo esiphuthumayo. Nalu usizo ngesikhathi unquma okuzayo:',
+    xh: '🟢 *OKUQHELEKILEYO — Akungxamisekanga*\n\nIimpawu zakho aziyongxaki engxamisekileyo. Nantsi ingcebiso ngelixa usenza isigqibo:',
+    af: '🟢 *ROETINE — Nie-dringend*\n\nJou simptome is nie \'n noodgeval nie. Hier is raad terwyl jy besluit:',
+    nso: '🟢 *TSA TLWAELO — Ga se tšhoganetšo*\n\nDika tša gago ga se tšhoganetšo. Maele a ge o nagana ka mohato wo o latelago:',
+    tn: '🟢 *TSA TLWAELO — Ga se tshoganyetso*\n\nMatshwao a gago ga se tshoganyetso. Dikeletso fa o akanya ka kgato e e latelang:',
+    st: '🟢 *TSA KAMEHLA — Ha se tshohanyetso*\n\nMatshwao a hao ha se tshohanyetso. Dikeletso ha o nahana ka mohato o latelang:',
+    ts: '🟢 *SWA NTOLOVELO — A hi xihatla*\n\nSwikombiso swa wena a hi xihatla. Maele loko u ehleketa hi goza leri landzelaka:',
+    ss: '🟢 *KWEKUVAMILE — Akuphutfumi*\n\nTimphawu takho akusiko simo lesiphutfumako. Emacebo nawucabanga ngesinyatselo lesilandzelako:',
+    ve: '🟢 *ZWA ḒUVHA ḼI ṄWE NA ḼI ṄWE — A si tshoganetso*\n\nZwiga zwaṋu a si tshoganetso. Nyeletshedzo musi ni tshi khou humbula nga kuitele kwi ḓaho:',
+    nr: '🟢 *OKUJAYELEKILEKO — Akuphuthumisi*\n\nIimpawu zakho akusiso isimo esiphuthumako. Amacebo nawucabanga ngesinyathelo esilandelako:'
   },
 
   // ==================== FACILITY ROUTING ====================
@@ -3966,7 +3987,6 @@ async function orchestrate(patientId, from, message, session) {
           ve: `🔢 Nomboro yaṋu ya referense ndi: *${session.studyCode}*\n\nSumbedzani nomboro iyi kha resepsheni musi ni tshi swika kiliniki.`,
           nr: `🔢 Inomboro yakho yereferensi ithi: *${session.studyCode}*\n\nKhombisa inomboro le ku-reception nawufika ekliniki.`,
         };
-        };
         await sendWhatsAppMessage(from, refMsg[lang] || refMsg['en']);
 
         await sendWhatsAppMessage(from, msg('chronic_screening', lang));
@@ -3986,7 +4006,6 @@ async function orchestrate(patientId, from, message, session) {
     if (message === '0') {
       session.chronicConditions = [];
       session.chronicScreeningDone = true;
-      // Auto-assign reference number for ALL patients
       session.isStudyParticipant = true;
       if (!session.studyCode) {
         const studyCode = await generateStudyCode(patientId);
@@ -3994,9 +4013,6 @@ async function orchestrate(patientId, from, message, session) {
       }
       await saveSession(patientId, session);
       await sendWhatsAppMessage(from, msg('chronic_screening_saved', lang));
-      // Show reference number then go straight to symptom categories
-      const refMsg = { en: `🔢 Your reference number is: *${session.studyCode}*\n\nShow this number at reception when you arrive.`, zu: `🔢 Inombolo yakho yereferensi: *${session.studyCode}*\n\nKhombisa le nombolo e-reception uma ufika.`, xh: `🔢 Inombolo yakho yereferensi: *${session.studyCode}*\n\nBonisa le nombolo e-reception xa ufika.`, af: `🔢 Jou verwysingsnommer is: *${session.studyCode}*\n\nWys by ontvangs wanneer jy aankom.`, nso: `🔢 Nomoro ya gago ya referense: *${session.studyCode}*\n\nBontšha nomoro ye resepsheneng ge o fihla.`, tn: `🔢 Nomoro ya gago ya referense: *${session.studyCode}*\n\nBontsha nomoro e resepsheneng fa o goroga.`, st: `🔢 Nomoro ya hao ya referense: *${session.studyCode}*\n\nBontsha nomoro ena resepsheneng ha o fihla.`, ts: `🔢 Nomboro ya wena ya referense: *${session.studyCode}*\n\nKomba nomboro leyi resepsheneng loko u fika.`, ss: `🔢 Inombolo yakho yereferensi: *${session.studyCode}*\n\nKhombisa lenombolo ku-reception nawufika.`, ve: `🔢 Nomboro yaṋu ya referense: *${session.studyCode}*\n\nSumbedzani nomboro iyi resepsheneng musi ni tshi swika.`, nr: `🔢 Inomboro yakho yereferensi: *${session.studyCode}*\n\nKhombisa inomboro le ku-reception nawufika.` };
-      await sendWhatsAppMessage(from, refMsg[lang] || refMsg['en']);
       await sendWhatsAppMessage(from, msg('category_menu', lang));
       return;
     }
@@ -4006,7 +4022,6 @@ async function orchestrate(patientId, from, message, session) {
       session.chronicConditions = choices.map(c => CONDITION_MAP[c.trim()]);
       session.ccmddConditions = session.chronicConditions;
       session.chronicScreeningDone = true;
-      // Auto-assign reference number for ALL patients
       session.isStudyParticipant = true;
       if (!session.studyCode) {
         const studyCode = await generateStudyCode(patientId);
@@ -4014,9 +4029,6 @@ async function orchestrate(patientId, from, message, session) {
       }
       await saveSession(patientId, session);
       await sendWhatsAppMessage(from, msg('chronic_screening_saved', lang));
-      // Show reference number then go straight to symptom categories
-      const refMsg = { en: `🔢 Your reference number is: *${session.studyCode}*\n\nShow this number at reception when you arrive.`, zu: `🔢 Inombolo yakho yereferensi: *${session.studyCode}*\n\nKhombisa le nombolo e-reception uma ufika.`, xh: `🔢 Inombolo yakho yereferensi: *${session.studyCode}*\n\nBonisa le nombolo e-reception xa ufika.`, af: `🔢 Jou verwysingsnommer is: *${session.studyCode}*\n\nWys by ontvangs wanneer jy aankom.`, nso: `🔢 Nomoro ya gago ya referense: *${session.studyCode}*\n\nBontšha nomoro ye resepsheneng ge o fihla.`, tn: `🔢 Nomoro ya gago ya referense: *${session.studyCode}*\n\nBontsha nomoro e resepsheneng fa o goroga.`, st: `🔢 Nomoro ya hao ya referense: *${session.studyCode}*\n\nBontsha nomoro ena resepsheneng ha o fihla.`, ts: `🔢 Nomboro ya wena ya referense: *${session.studyCode}*\n\nKomba nomboro leyi resepsheneng loko u fika.`, ss: `🔢 Inombolo yakho yereferensi: *${session.studyCode}*\n\nKhombisa lenombolo ku-reception nawufika.`, ve: `🔢 Nomboro yaṋu ya referense: *${session.studyCode}*\n\nSumbedzani nomboro iyi resepsheneng musi ni tshi swika.`, nr: `🔢 Inomboro yakho yereferensi: *${session.studyCode}*\n\nKhombisa inomboro le ku-reception nawufika.` };
-      await sendWhatsAppMessage(from, refMsg[lang] || refMsg['en']);
       await sendWhatsAppMessage(from, msg('category_menu', lang));
       return;
     }
@@ -4051,6 +4063,388 @@ async function orchestrate(patientId, from, message, session) {
     const handled = await handleVirtualConsult(patientId, from, message, session);
     if (handled) return;
     // If not handled (patient chose clinic), fall through to facility routing
+  }
+
+  // ==================== STEP: GREEN CLINIC CHOICE ====================
+  // GREEN patients get self-care advice then choose: visit clinic or manage at home
+  // DoH flow: GREEN patients still go through General Sick Consultation if they come in
+  if (session.awaitingGreenClinicChoice) {
+    session.awaitingGreenClinicChoice = false;
+    const lang = session.language || 'en';
+
+    if (message === '1') {
+      // YES — patient wants to visit a clinic → route through normal facility flow
+      session.lastPathway = 'green_clinic_visit';
+      await saveSession(patientId, session);
+
+      // Use the existing facility routing logic (Step 5)
+      if (!session.location) {
+        session.pendingTriage = true;
+        await saveSession(patientId, session);
+        await sendWhatsAppMessage(from, msg('request_location', lang));
+        return;
+      }
+
+      const nearestFacilities = await findNearestFacilities(session.location, 'clinic', 3);
+      if (nearestFacilities.length > 0) {
+        const nearest = nearestFacilities[0];
+        session.suggestedFacility = nearest;
+        session.alternativeFacilities = nearestFacilities.slice(1);
+        session.awaitingFacilityConfirm = true;
+        await saveSession(patientId, session);
+        await sendWhatsAppMessage(from, msg('facility_suggest', lang, nearest.name, nearest.distance));
+        return;
+      }
+
+      // No facilities found — give generic guidance
+      await logTriage({
+        patient_id: patientId,
+        triage_level: 'GREEN',
+        confidence: session.lastTriage?.confidence || 80,
+        escalation: false,
+        pathway: 'green_clinic_visit',
+        facility_name: null,
+        location: session.location || null,
+        symptoms: session.lastSymptoms
+      });
+      await scheduleFollowUp(patientId, from, 'GREEN');
+      await sendWhatsAppMessage(from, msg('tips', lang));
+      await saveSession(patientId, session);
+      return;
+
+    } else if (message === '2') {
+      // NO — patient will manage at home → self-care only + follow-up
+      await logTriage({
+        patient_id: patientId,
+        triage_level: 'GREEN',
+        confidence: session.lastTriage?.confidence || 80,
+        escalation: false,
+        pathway: 'self_care_home',
+        facility_name: null,
+        location: session.location || null,
+        symptoms: session.lastSymptoms
+      });
+      await scheduleFollowUp(patientId, from, 'GREEN');
+      await sendWhatsAppMessage(from, msg('tips', lang));
+      await saveSession(patientId, session);
+      return;
+
+    } else {
+      // Invalid — re-ask
+      session.awaitingGreenClinicChoice = true;
+      await saveSession(patientId, session);
+      const retryGreenMsg = { en: 'Please reply with:\n1 — Yes, help me find a clinic\n2 — No, I will manage at home', zu: 'Sicela uphendule ngo:\n1 — Yebo, ngisizeni\n2 — Cha, ngizozinakekela', xh: 'Nceda uphendule ngo:\n1 — Ewe, ndincedeni\n2 — Hayi, ndiza kuzinakekela', af: 'Antwoord asseblief met:\n1 — Ja, help my\n2 — Nee, ek sal regkom', nso: 'Hle araba ka:\n1 — Ee, nthušeng\n2 — Aowa, ke tla itlhokomela', tn: 'Tsweetswee araba ka:\n1 — Ee, nthuseng\n2 — Nnyaa, ke tla ipabalela', st: 'Ka kopo araba ka:\n1 — E, nthuseng\n2 — Tjhe, ke tla ipaballa', ts: 'Hi kombela u hlamula hi:\n1 — Ina, ndzi pfuneni\n2 — Ee-ee, ndzi ta titlhokomela', ss: 'Sicela uphendvule nge:\n1 — Yebo, ngisiteni\n2 — Cha, ngitawutinakekela', ve: 'Ri humbela ni fhindule nga:\n1 — Ee, nthuseni\n2 — Hai, ndi ḓo ḓilondola', nr: 'Sibawa uphendule nge:\n1 — Iye, ngisizeni\n2 — Awa, ngizozinakekela' };
+      await sendWhatsAppMessage(from, retryGreenMsg[lang] || retryGreenMsg['en']);
+      return;
+    }
+  }
+
+  // ==================== STEP: CHRONIC COLLECTION POINT TYPE ====================
+  // Patient chose Category 8 + Mild (stable) and we asked WHERE they collect
+  if (session.awaitingChronicCollectionType) {
+    session.awaitingChronicCollectionType = false;
+    const lang = session.language || 'en';
+
+    if (message === '1') {
+      // CLINIC COLLECTION → patient tells us which clinic they collect from
+      // Don't assume nearest — patients may collect far away (stigma, preference, work)
+      session.awaitingClinicName = true;
+      await saveSession(patientId, session);
+
+      const askClinicMsg = {
+        en: '🏥 Which clinic do you collect your medication from?\n\nType the *name* of your clinic.\n\nOr send your *location* 📍 (tap + → Location) and we will show clinics near you.',
+        zu: '🏥 Uwuthatha kuphi umuthi wakho?\n\nBhala *igama* lomtholampilo wakho.\n\nNoma uthumele *indawo yakho* 📍 (cindezela + → Indawo) sizokukhombisa imitholampilo eseduze.',
+        xh: '🏥 Uwathatha phi amayeza akho?\n\nBhala *igama* lekliniki yakho.\n\nOkanye thumela *indawo yakho* 📍 (cofa + → Indawo) siza kukubonisa iikliniki ezikufutshane.',
+        af: '🏥 Waar haal jy jou medikasie af?\n\nTik die *naam* van jou kliniek.\n\nOf stuur jou *ligging* 📍 (tik + → Ligging) en ons sal klinieke naby jou wys.',
+        nso: '🏥 O tšea dihlare tša gago kliniki efe?\n\nNgwala *leina* la kliniki ya gago.\n\nGoba romela *lefelo la gago* 📍 (thinta + → Lefelo) re tla go bontšha dikliniki tša kgauswi.',
+        tn: '🏥 O tsaya dimelemo kwa kliniki efe?\n\nKwala *leina* la kliniki ya gago.\n\nKgotsa romela *lefelo la gago* 📍 (tobetsa + → Lefelo) re tla go bontsha dikliniki tsa gaufi.',
+        st: '🏥 O nka meriana kliniki efe?\n\nNgola *lebitso* la kliniki ya hao.\n\nKapa romela *sebaka sa hao* 📍 (tobetsa + → Sebaka) re tla o bontsha dikliniki tse haufi.',
+        ts: '🏥 U teka mirhi ekliniki yihi?\n\nTsala *vito* ra kliniki ya wena.\n\nKumbe rhumela *ndhawu ya wena* 📍 (thinta + → Ndhawu) hi ta ku kombela tikliniki ta kusuhi.',
+        ss: '🏥 Uyitfola kuphi imitsi yakho?\n\nBhala *libito* lemtfolamphilo wakho.\n\nNoma tfumela *indzawo yakho* 📍 (cindzetsa + → Indzawo) sitakukhombisa imitfolamphilo yaseduze.',
+        ve: '🏥 Ni dzhia mushonga kha kiliniki ifhio?\n\nṄwalani *dzina* la kiliniki yaṋu.\n\nKana rumelani *fhethu haṋu* 📍 (thintani + → Fhethu) ri ḓo ni sumbedza dzi kiliniki dzi re tsini.',
+        nr: '🏥 Uyithatha kuphi imitjhoga yakho?\n\nTlola *ibizo* lekliniki yakho.\n\nNoma thumela *indawo yakho* 📍 (cindezela + → Indawo) sizakukhombisa amakliniki aseduze.',
+      };
+      await sendWhatsAppMessage(from, askClinicMsg[lang] || askClinicMsg['en']);
+      return;
+
+    } else if (message === '2' || message === '3') {
+      // PHARMACY or OTHER COLLECTION → no clinic queue needed
+      // Patient collects independently — just confirm and schedule follow-up
+      const pharmacyMsg = {
+        en: '✅ *No clinic visit needed.*\n\nWhen you collect, remember to bring your clinic card and ID.\n\nIf your symptoms change or you feel unwell, type *0* to start a new consultation.\n\nWe will check in with you in 48 hours.',
+        zu: '✅ *Akudingeki uye emtholampilo.*\n\nUma uthatha umuthi, khumbula ukuletha ikhadi lakho lasekliniki ne-ID.\n\nUma izimpawu zakho zishintsha noma ungaphili kahle, bhala *0* ukuqala kabusha.\n\nSizokubuza emva kwamahora angu-48.',
+        xh: '✅ *Akudingeki uye ekliniki.*\n\nXa uthatha amayeza, khumbula ukuzisa ikhadi lakho lasekliniki ne-ID.\n\nUkuba iimpawu zakho zitshintsha okanye uziva ungaphilanga, bhala *0* ukuqala ngokutsha.\n\nSiza kukubuza emva kweeyure ezingama-48.',
+        af: '✅ *Geen kliniekbesoek nodig nie.*\n\nWanneer jy jou medikasie afhaal, onthou om jou kliniekkaart en ID te bring.\n\nAs jou simptome verander of jy voel siek, tik *0* vir nuwe konsultasie.\n\nOns sal oor 48 uur by jou inskakel.',
+        nso: '✅ *Ga go nyakege go ya kliniki.*\n\nGe o tšea dihlare, gopola go tliša karata ya kliniki le ID.\n\nGe dika di fetoga goba o ikwa o lwala, ngwala *0* go thoma lefsa.\n\nRe tla go botšiša morago ga diiri tše 48.',
+        tn: '✅ *Ga go tlhokege go ya kliniki.*\n\nFa o tsaya dimelemo, gopola go tlisa karata ya kliniki le ID.\n\nFa matshwao a fetoga kgotsa o ikutlwa o lwala, kwala *0* go simolola sešwa.\n\nRe tla go botsa morago ga diura di le 48.',
+        st: '✅ *Ha ho hlokahale ho ya kliniki.*\n\nHa o nka meriana, hopola ho tlisa karete ya kliniki le ID.\n\nHaeba matshwao a fetola kapa o ikutlwa o kula, ngola *0* ho qala bocha.\n\nRe tla o botsa kamora hora tse 48.',
+        ts: '✅ *A swi laveki ku ya ekliniki.*\n\nLoko u teka mirhi, tsunduka ku tisa khadi ya kliniki na ID.\n\nLoko swikombiso swi cinca kumbe u titivala u vabya, tsala *0* ku sungula hi vuntshwa.\n\nHi ta ku vutisa endzhaku ka tiawara ta 48.',
+        ss: '✅ *Akudzingeki uye emtfolamphilo.*\n\nNawutfola imitsi, khumbula kuletsa likhadi lakho lasemtfolamphilo ne-ID.\n\nNangabe timphawu takho tiguculuka noma utiva ungaphili, bhala *0* kucala kabusha.\n\nSitakubutsa emvakwema-awa langu-48.',
+        ve: '✅ *A hu ṱoḓei u ya kha kiliniki.*\n\nMusi ni tshi dzhia mushonga, humbudzani u ḓisa khadi ya kiliniki na ID.\n\nArali zwiga zwi shanduka kana ni tshi ḓipfa ni tshi lwala, ṅwalani *0* u thoma hafhu.\n\nRi ḓo ni vhudzisa nga murahu ha awara dza 48.',
+        nr: '✅ *Akutlhogeki uye ekliniki.*\n\nNawuthatha imitjhoga, khumbula ukuletha ikhadi lakho lasekliniki ne-ID.\n\nNangabe iimphawu zakho ziguquka noma uzizwa ungaphili, tlola *0* ukuthoma kabutjha.\n\nSizakubuza ngemva kwama-iri angu-48.',
+      };
+      await sendWhatsAppMessage(from, pharmacyMsg[lang] || pharmacyMsg['en']);
+
+      // Log triage but no facility (pharmacy collection is outside clinic system)
+      await logTriage({
+        patient_id: patientId,
+        triage_level: 'GREEN',
+        confidence: 95,
+        escalation: false,
+        pathway: message === '2' ? 'chronic_bypass_pharmacy' : 'chronic_bypass_external',
+        symptoms: 'Stable chronic patient — ' + (message === '2' ? 'pharmacy' : 'external') + ' medication collection',
+      });
+      await scheduleFollowUp(patientId, from, 'GREEN');
+      await sendWhatsAppMessage(from, msg('tips', lang));
+      await saveSession(patientId, session);
+      return;
+
+    } else {
+      // Invalid input — re-ask
+      session.awaitingChronicCollectionType = true;
+      await saveSession(patientId, session);
+      const retryMsg = { en: 'Please reply with:\n1 — Clinic\n2 — Pharmacy\n3 — Other', zu: 'Sicela uphendule ngo:\n1 — Umtholampilo\n2 — Ikhemisi\n3 — Kwenye indawo', xh: 'Nceda uphendule ngo:\n1 — Ikliniki\n2 — Ikemisti\n3 — Kwenye indawo', af: 'Antwoord asseblief met:\n1 — Kliniek\n2 — Apteek\n3 — Ander', nso: 'Hle araba ka:\n1 — Kliniki\n2 — Khemisi\n3 — Lefelo le lengwe', tn: 'Tsweetswee araba ka:\n1 — Kliniki\n2 — Khemisi\n3 — Lefelo le sele', st: 'Ka kopo araba ka:\n1 — Kliniki\n2 — Khemisi\n3 — Sebaka se seng', ts: 'Hi kombela u hlamula hi:\n1 — Kliniki\n2 — Khemisi\n3 — Ndhawu yin\'wana', ss: 'Sicela uphendvule nge:\n1 — Umtfolamphilo\n2 — Ikhemisi\n3 — Endzaweni lenye', ve: 'Ri humbela ni fhindule nga:\n1 — Kiliniki\n2 — Khemisi\n3 — Huṅwe', nr: 'Sibawa uphendule nge:\n1 — Ikliniki\n2 — Ikhemisi\n3 — Kwenye indawo' };
+      await sendWhatsAppMessage(from, retryMsg[lang] || retryMsg['en']);
+      return;
+    }
+  }
+
+  // ==================== STEP: CHRONIC CLINIC NAME INPUT ====================
+  // Patient chose "1 — At a clinic" and we asked which clinic they collect from
+  // They can type a name or send a location pin
+  if (session.awaitingClinicName) {
+    session.awaitingClinicName = false;
+    const lang = session.language || 'en';
+
+    // If they sent a location pin, find nearby clinics and let them pick
+    if (msgObj.type === 'location') {
+      session.location = msgObj.location;
+      const nearestFacilities = await findNearestFacilities(session.location, 'clinic', 5);
+      if (nearestFacilities.length > 0) {
+        const listStr = nearestFacilities.map((f, i) =>
+          `${i + 1}. *${f.name}* (${f.distance} km)`
+        ).join('\n');
+        session.chronicClinicOptions = nearestFacilities;
+        session.awaitingChronicClinicChoice = true;
+        await saveSession(patientId, session);
+
+        const pickMsg = {
+          en: `📍 Clinics near you:\n\n${listStr}\n\nReply with the *number* of your clinic.`,
+          zu: `📍 Imitholampilo eseduze nawe:\n\n${listStr}\n\nPhendula nge-*nombolo* yomtholampilo wakho.`,
+          xh: `📍 Iikliniki ezikufutshane nawe:\n\n${listStr}\n\nPhendula nge-*nombolo* yekliniki yakho.`,
+          af: `📍 Klinieke naby jou:\n\n${listStr}\n\nAntwoord met die *nommer* van jou kliniek.`,
+          nso: `📍 Dikliniki tša kgauswi le wena:\n\n${listStr}\n\nAraba ka *nomoro* ya kliniki ya gago.`,
+          tn: `📍 Dikliniki tsa gaufi le wena:\n\n${listStr}\n\nAraba ka *nomoro* ya kliniki ya gago.`,
+          st: `📍 Dikliniki tse haufi le wena:\n\n${listStr}\n\nAraba ka *nomoro* ya kliniki ya hao.`,
+          ts: `📍 Tikliniki ta kusuhi na wena:\n\n${listStr}\n\nHlamula hi *nomboro* ya kliniki ya wena.`,
+          ss: `📍 Tinkliniki letiseduze nawe:\n\n${listStr}\n\nPhendvula nge-*nombolo* yemtfolamphilo wakho.`,
+          ve: `📍 Dzi kiliniki dzi re tsini na inwi:\n\n${listStr}\n\nFhindulani nga *nomboro* ya kiliniki yaṋu.`,
+          nr: `📍 Amakliniki aseduze nawe:\n\n${listStr}\n\nPhendula nge-*nomboro* yekliniki yakho.`,
+        };
+        await sendWhatsAppMessage(from, pickMsg[lang] || pickMsg['en']);
+        return;
+      }
+    }
+
+    // They typed a clinic name — search for it in facilities using fuzzy matching
+    if (msgObj.type === 'text') {
+      const typedName = msgObj.text.body.trim();
+      const facilities = await getFacilities();
+      
+      // Multi-layer matching: exact → contains → fuzzy (handles typos)
+      // Layer 1: Exact substring match (case-insensitive)
+      let matches = facilities.filter(f => 
+        f.name && f.name.toLowerCase().includes(typedName.toLowerCase())
+      );
+
+      // Layer 2: Reverse contains (facility name contains in typed text, e.g. typed "Eersterust Clinic CHC" matches "Eersterust CHC")
+      if (matches.length === 0) {
+        matches = facilities.filter(f => {
+          if (!f.name) return false;
+          const words = f.name.toLowerCase().split(/\s+/);
+          return words.some(w => w.length > 2 && typedName.toLowerCase().includes(w));
+        });
+      }
+
+      // Layer 3: Fuzzy match using Levenshtein distance (handles typos like "Eerstrust" → "Eersterust")
+      if (matches.length === 0 && typedName.length >= 3) {
+        const scored = facilities.filter(f => f.name).map(f => {
+          const fName = f.name.toLowerCase();
+          const tName = typedName.toLowerCase();
+          
+          // Score each word in the facility name against the typed text
+          const fWords = fName.split(/\s+/);
+          const tWords = tName.split(/\s+/);
+          
+          let bestScore = Infinity;
+          for (const fw of fWords) {
+            if (fw.length < 3) continue; // Skip short words like "the", "of", "chc"
+            for (const tw of tWords) {
+              if (tw.length < 3) continue;
+              const dist = levenshtein(fw, tw);
+              const maxLen = Math.max(fw.length, tw.length);
+              const similarity = 1 - (dist / maxLen);
+              if (similarity > 0.6) { // 60%+ similarity threshold
+                bestScore = Math.min(bestScore, dist);
+              }
+            }
+            // Also check full typed name against each facility word
+            const distFull = levenshtein(fw, tName);
+            const maxLenFull = Math.max(fw.length, tName.length);
+            if ((1 - distFull / maxLenFull) > 0.6) {
+              bestScore = Math.min(bestScore, distFull);
+            }
+          }
+          return { facility: f, score: bestScore };
+        }).filter(s => s.score < Infinity)
+          .sort((a, b) => a.score - b.score);
+
+        matches = scored.slice(0, 5).map(s => s.facility);
+      }
+
+      // Layer 4: If still nothing, try matching just the first word (patients often type just "Mamelodi" for "Mamelodi Day Hospital")
+      if (matches.length === 0 && typedName.length >= 3) {
+        const firstWord = typedName.toLowerCase().split(/\s+/)[0];
+        if (firstWord.length >= 3) {
+          matches = facilities.filter(f => 
+            f.name && f.name.toLowerCase().split(/\s+/).some(w => 
+              w.startsWith(firstWord.slice(0, 3)) || firstWord.startsWith(w.slice(0, 3))
+            )
+          );
+        }
+      }
+
+      if (matches.length === 1) {
+        // Exact single match — confirm directly
+        const facility = matches[0];
+        session.suggestedFacility = facility;
+        session.alternativeFacilities = [];
+        session.awaitingFacilityConfirm = true;
+        await saveSession(patientId, session);
+
+        const confirmMsg = {
+          en: `🏥 Did you mean: *${facility.name}*?\n\n1 — Yes, that's my clinic\n2 — No, let me try again`,
+          zu: `🏥 Ubusho: *${facility.name}*?\n\n1 — Yebo, ngilo umtholampilo wami\n2 — Cha, ngizama futhi`,
+          xh: `🏥 Ubuthetha: *${facility.name}*?\n\n1 — Ewe, yiyo ikliniki yam\n2 — Hayi, mandizame kwakhona`,
+          af: `🏥 Bedoel jy: *${facility.name}*?\n\n1 — Ja, dis my kliniek\n2 — Nee, laat ek weer probeer`,
+          nso: `🏥 O be o ra: *${facility.name}*?\n\n1 — Ee, ke kliniki ya ka\n2 — Aowa, ke leka gape`,
+          tn: `🏥 A o ne o raya: *${facility.name}*?\n\n1 — Ee, ke kliniki ya me\n2 — Nnyaa, ke leka gape`,
+          st: `🏥 Na o ne o bolela: *${facility.name}*?\n\n1 — E, ke kliniki ya ka\n2 — Tjhe, ke leka hape`,
+          ts: `🏥 Xana u vula: *${facility.name}*?\n\n1 — Ina, i kliniki ya mina\n2 — Ee-ee, ndzi ringeta nakambe`,
+          ss: `🏥 Bewusho: *${facility.name}*?\n\n1 — Yebo, yinkliniki yami\n2 — Cha, ngitama futsi`,
+          ve: `🏥 No vha ni tshi amba: *${facility.name}*?\n\n1 — Ee, ndi kiliniki yanga\n2 — Hai, ndi linga hafhu`,
+          nr: `🏥 Bewutjho: *${facility.name}*?\n\n1 — Iye, yikliniki yami\n2 — Awa, ngilinga godu`,
+        };
+        await sendWhatsAppMessage(from, confirmMsg[lang] || confirmMsg['en']);
+
+        await logTriage({
+          patient_id: patientId,
+          triage_level: 'GREEN',
+          confidence: 95,
+          escalation: false,
+          pathway: 'chronic_bypass_clinic',
+          facility_name: facility.name,
+          symptoms: 'Stable chronic patient — clinic medication collection',
+        });
+        return;
+
+      } else if (matches.length > 1) {
+        // Multiple matches — let patient pick
+        const listStr = matches.slice(0, 5).map((f, i) =>
+          `${i + 1}. *${f.name}*`
+        ).join('\n');
+        session.chronicClinicOptions = matches.slice(0, 5);
+        session.awaitingChronicClinicChoice = true;
+        await saveSession(patientId, session);
+
+        const multiMsg = {
+          en: `We found several clinics matching "${typedName}":\n\n${listStr}\n\nReply with the *number* of your clinic.`,
+          zu: `Sithole imitholampilo eminingi efana no-"${typedName}":\n\n${listStr}\n\nPhendula nge-*nombolo* yomtholampilo wakho.`,
+          xh: `Sifumene iikliniki ezininzi ezifana no-"${typedName}":\n\n${listStr}\n\nPhendula nge-*nombolo* yekliniki yakho.`,
+          af: `Ons het verskeie klinieke gevind wat pas by "${typedName}":\n\n${listStr}\n\nAntwoord met die *nommer* van jou kliniek.`,
+          nso: `Re hweditše dikliniki tše mmalwa tšeo di swanago le "${typedName}":\n\n${listStr}\n\nAraba ka *nomoro* ya kliniki ya gago.`,
+          tn: `Re bone dikliniki di le mmalwa tse di tshwanang le "${typedName}":\n\n${listStr}\n\nAraba ka *nomoro* ya kliniki ya gago.`,
+          st: `Re fumane dikliniki tse ngata tse tshwanang le "${typedName}":\n\n${listStr}\n\nAraba ka *nomoro* ya kliniki ya hao.`,
+          ts: `Hi kumile tikliniki to tala leti fanaka na "${typedName}":\n\n${listStr}\n\nHlamula hi *nomboro* ya kliniki ya wena.`,
+          ss: `Sitfole tinkliniki letinyenti letifana ne-"${typedName}":\n\n${listStr}\n\nPhendvula nge-*nombolo* yemtfolamphilo wakho.`,
+          ve: `Ro wana dzi kiliniki nnzhi dzine dza fana na "${typedName}":\n\n${listStr}\n\nFhindulani nga *nomboro* ya kiliniki yaṋu.`,
+          nr: `Sifumene amakliniki amanengi afana ne-"${typedName}":\n\n${listStr}\n\nPhendula nge-*nomboro* yekliniki yakho.`,
+        };
+        await sendWhatsAppMessage(from, multiMsg[lang] || multiMsg['en']);
+        return;
+
+      } else {
+        // No match — ask them to try again or send location
+        session.awaitingClinicName = true;
+        await saveSession(patientId, session);
+
+        const noMatchMsg = {
+          en: `We couldn't find a clinic called "${typedName}".\n\nPlease try again — type the clinic name, or send your *location* 📍 so we can show clinics near you.`,
+          zu: `Asiwutholanga umtholampilo obizwa ngokuthi "${typedName}".\n\nSicela uzame futhi — bhala igama lomtholampilo, noma uthumele *indawo yakho* 📍.`,
+          xh: `Asiyifumananga ikliniki ebizwa ngokuba "${typedName}".\n\nNceda uzame kwakhona — bhala igama lekliniki, okanye thumela *indawo yakho* 📍.`,
+          af: `Ons kon nie \'n kliniek genaamd "${typedName}" vind nie.\n\nProbeer asseblief weer — tik die klinieks naam, of stuur jou *ligging* 📍.`,
+          nso: `Ga re a hwetša kliniki ye e bitšwago "${typedName}".\n\nHle leka gape — ngwala leina la kliniki, goba romela *lefelo la gago* 📍.`,
+          tn: `Ga re a bona kliniki e e bidiwang "${typedName}".\n\nTsweetswee leka gape — kwala leina la kliniki, kgotsa romela *lefelo la gago* 📍.`,
+          st: `Ha re a fumana kliniki e bitswang "${typedName}".\n\nKa kopo leka hape — ngola lebitso la kliniki, kapa romela *sebaka sa hao* 📍.`,
+          ts: `A hi kumanga kliniki leyi vuriwaka "${typedName}".\n\nHi kombela u ringeta nakambe — tsala vito ra kliniki, kumbe rhumela *ndhawu ya wena* 📍.`,
+          ss: `Asiyitfolanga inkliniki lebitwa ngekutsi "${typedName}".\n\nSicela utame futsi — bhala libito lenkliniki, noma tfumela *indzawo yakho* 📍.`,
+          ve: `A ro ngo wana kiliniki ine ya vhidzwa "${typedName}".\n\nRi humbela ni linge hafhu — ṅwalani dzina la kiliniki, kana rumelani *fhethu haṋu* 📍.`,
+          nr: `Asiyifumananga ikliniki ebizwa ngokuthi "${typedName}".\n\nSibawa ulinge godu — tlola ibizo lekliniki, noma thumela *indawo yakho* 📍.`,
+        };
+        await sendWhatsAppMessage(from, noMatchMsg[lang] || noMatchMsg['en']);
+        return;
+      }
+    }
+
+    // Other message types — re-ask
+    session.awaitingClinicName = true;
+    await saveSession(patientId, session);
+    await sendWhatsAppMessage(from, msg('request_location', lang));
+    return;
+  }
+
+  // ==================== STEP: CHRONIC CLINIC CHOICE (from list) ====================
+  // Patient sent location or name matched multiple — they're picking from a numbered list
+  if (session.awaitingChronicClinicChoice) {
+    session.awaitingChronicClinicChoice = false;
+    const lang = session.language || 'en';
+    const options = session.chronicClinicOptions || [];
+    const choice = parseInt(message);
+
+    if (choice >= 1 && choice <= options.length) {
+      const facility = options[choice - 1];
+      session.suggestedFacility = facility;
+      session.alternativeFacilities = options.filter((_, i) => i !== choice - 1);
+      session.confirmedFacility = facility;
+      session.chronicClinicOptions = null;
+      await saveSession(patientId, session);
+
+      // Confirm and add to queue
+      await sendWhatsAppMessage(from, msg('facility_confirmed', lang, facility.name));
+
+      await logTriage({
+        patient_id: patientId,
+        triage_level: 'GREEN',
+        confidence: 95,
+        escalation: false,
+        pathway: 'chronic_bypass_clinic',
+        facility_name: facility.name,
+        location: session.location || null,
+        symptoms: 'Stable chronic patient — clinic medication collection',
+      });
+
+      await autoAddToQueue(patientId, from, session);
+      await scheduleFollowUp(patientId, from, 'GREEN');
+      await sendWhatsAppMessage(from, msg('tips', lang));
+      return;
+    }
+
+    // Invalid choice — re-show list
+    session.awaitingChronicClinicChoice = true;
+    await saveSession(patientId, session);
+    const retryListMsg = { en: `Please reply with a number from the list (1-${options.length}).`, zu: `Sicela uphendule ngenombolo kuhlelo (1-${options.length}).`, xh: `Nceda uphendule ngenombolo kuluhlu (1-${options.length}).`, af: `Antwoord asseblief met 'n nommer van die lys (1-${options.length}).`, nso: `Hle araba ka nomoro go tšwa lenaneong (1-${options.length}).`, tn: `Tsweetswee araba ka nomoro go tswa lenaneong (1-${options.length}).`, st: `Ka kopo araba ka nomoro ho tswa lenaneong (1-${options.length}).`, ts: `Hi kombela u hlamula hi nomboro eka nxaxamelo (1-${options.length}).`, ss: `Sicela uphendvule ngenombolo kuloluhla (1-${options.length}).`, ve: `Ri humbela ni fhindule nga nomboro kha luṅwalo (1-${options.length}).`, nr: `Sibawa uphendule ngenomboro kuloluhlelo (1-${options.length}).` };
+    await sendWhatsAppMessage(from, retryListMsg[lang] || retryListMsg['en']);
+    return;
   }
 
   // ==================== STEP: FACILITY CONFIRMATION ====================
@@ -4095,9 +4489,24 @@ async function orchestrate(patientId, from, message, session) {
       // Patient wants alternatives
       const alternatives = session.alternativeFacilities || [];
       if (alternatives.length === 0) {
-        await sendWhatsAppMessage(from, msg('facility_confirmed', lang, session.suggestedFacility.name));
+        // For chronic bypass patients: "No, let me try again" — go back to clinic name input
+        if (session.lastPathway === 'chronic_bypass_stable' || session.lastPathway === 'chronic_bypass_clinic') {
+          session.awaitingFacilityConfirm = false;
+          session.awaitingClinicName = true;
+          await saveSession(patientId, session);
+          const retryClinicMsg = { en: 'No problem. Type the *name* of your clinic, or send your *location* 📍.', zu: 'Kulungile. Bhala *igama* lomtholampilo, noma uthumele *indawo yakho* 📍.', xh: 'Kulungile. Bhala *igama* lekliniki, okanye thumela *indawo yakho* 📍.', af: 'Geen probleem. Tik die *naam* van jou kliniek, of stuur jou *ligging* 📍.', nso: 'Go lokile. Ngwala *leina* la kliniki, goba romela *lefelo la gago* 📍.', tn: 'Go siame. Kwala *leina* la kliniki, kgotsa romela *lefelo la gago* 📍.', st: 'Ho lokile. Ngola *lebitso* la kliniki, kapa romela *sebaka sa hao* 📍.', ts: 'Ku lunghile. Tsala *vito* ra kliniki, kumbe rhumela *ndhawu ya wena* 📍.', ss: 'Kulungile. Bhala *libito* lenkliniki, noma tfumela *indzawo yakho* 📍.', ve: 'Zwi a luga. Ṅwalani *dzina* la kiliniki, kana rumelani *fhethu haṋu* 📍.', nr: 'Kulungile. Tlola *ibizo* lekliniki, noma thumela *indawo yakho* 📍.' };
+          await sendWhatsAppMessage(from, retryClinicMsg[lang] || retryClinicMsg['en']);
+          return;
+        }
+        // Non-chronic: no alternatives — confirm original facility and complete flow
+        const facility = session.suggestedFacility;
         session.awaitingFacilityConfirm = false;
+        session.confirmedFacility = facility;
         await saveSession(patientId, session);
+        await sendWhatsAppMessage(from, msg('facility_confirmed', lang, facility.name));
+        await autoAddToQueue(patientId, from, session);
+        await scheduleFollowUp(patientId, from, session.lastTriage?.triage_level);
+        await sendWhatsAppMessage(from, msg('tips', lang));
         return;
       }
 
@@ -4576,39 +4985,33 @@ async function orchestrate(patientId, from, message, session) {
     let enrichedMessage;
 
     // DoH CHRONIC BYPASS: Stable chronic patients (category 8 + mild) bypass full AI triage
-    // They go straight to the chronic stream for medication collection
+    // Sick chronic patients (moderate/severe) fall through to normal AI triage below
+    //
+    // COLLECTION POINT LOGIC:
+    // - Clinic collectors → facility routing → chronic queue → dashboard visibility
+    // - Pharmacy/external collectors → confirmation + follow-up, no clinic queue needed
+    // - Sick patients (mod/severe) → normal triage → nearest clinic/hospital
     if (session.selectedCategory === '8' && message.trim() === '1') {
       session.lastTriage = { triage_level: 'GREEN', confidence: 95, source: 'chronic_bypass' };
       session.lastSymptoms = 'Stable chronic patient — medication collection (DoH fast-track bypass)';
-      await saveSession(patientId, session);
+      session.lastPathway = 'chronic_bypass_stable';
 
       const chronicBypassMsg = {
-        en: '💊 *Chronic Medication Collection*\n\nYou are stable — you have been added to the *chronic care stream* for fast-track medication collection.\n\nBring your clinic card and ID. If your symptoms change, tell the nurse on arrival.',
-        zu: '💊 *Ukuthatha Umuthi Wamahlalakhona*\n\nUzinzile — usufakwe *emgqeni wezempilo zamahlalakhona* ukuze uthathe umuthi ngokushesha.\n\nLetha ikhadi lakho lasekliniki ne-ID. Uma izimpawu zakho zishintsha, tshela unesi uma ufika.',
-        xh: '💊 *Ukuthatha Amayeza Aqhelekileyo*\n\nUzinzile — ufakwe *kwimigca yezempilo eqhelekileyo* ukuze ufumane amayeza ngokukhawuleza.\n\nZisa ikhadi lakho lasekliniki ne-ID. Ukuba iimpawu zakho zitshintsha, xelela umongikazi xa ufika.',
-        af: '💊 *Chroniese Medikasie Afhaal*\n\nJy is stabiel — jy is by die *chroniese sorg stroom* gevoeg vir vinnige medikasie afhaal.\n\nBring jou kliniekkaart en ID. As jou simptome verander, sê vir die verpleegster by aankoms.',
-        nso: '💊 *Go Tšea Dihlare tša go Dulela*\n\nO tsepame — o okeditšwe go *lenaneo la go dulela* la go tšea dihlare ka pela.\n\nTliša karata ya kliniki le ID. Ge dika di fetoga, botša mooki ge o fihla.',
-        tn: '💊 *Go Tsaya Dimelemo tsa go Nnela ruri*\n\nO tsepame — o okeditšwe mo *molelwaneng wa chronic* wa go tsaya dimelemo ka bonako.\n\nTlisa karata ya kliniki le ID. Fa matshwao a fetoga, bolelela mooki fa o goroga.',
-        st: '💊 *Ho Nka Meriana ya Mahlale*\n\nO tsitsitse — o kentswe *moleleng wa bophelo bo botle* bakeng sa ho nka meriana ka potlako.\n\nTlisa karete ya kliniki le ID. Haeba matshwao a hao a fetola, bolella mooki ha o fihla.',
-        ts: '💊 *Ku Teka Mirhi ya Vurhongo*\n\nU tiyile — u engeteleriwe eka *mulayini wa vurhongo* wa ku teka mirhi hi ku hatlisa.\n\nTisa khadi ya kliniki na ID. Loko swikombiso swi cinca, byela muongi loko u fika.',
-        ss: '💊 *Kutfola Imitsi Yesikhashana*\n\nUsimeme — sewufakiwe *emugceni wekwelapha kwesikhashana* wekutfola imitsi ngekushesha.\n\nLetsa likhadi lakho lasemtfolamphilo ne-ID. Nangabe timphawu takho tiguculuka, tjela unesi nawufika.',
-        ve: '💊 *U Dzhia Mushonga wa Vhulwadze*\n\nNo dzikama — no engedzelwa kha *mulayini wa vhulwadze* wa u dzhia mushonga nga u ṱavhanya.\n\nḒisani khadi ya kiliniki na ID. Arali zwiga zwi shanduka, vhudzani muongi musi ni tshi swika.',
-        nr: '💊 *Ukuthatha Imitjhoga Yesikhathi Eside*\n\nUzinzile — usufakiwe *emugceni wokuphila kwesikhathi eside* wokuthatha imitjhoga ngokurhabha.\n\nLetha ikhadi lakho lasekliniki ne-ID. Nangabe iimphawu zakho ziguquka, tjela unesi nawufikako.',
+        en: '💊 *Chronic Medication Collection*\n\nYou are stable.\n\nWhere do you collect your medication?\n1 — At a clinic\n2 — At a pharmacy\n3 — Other (community point, delivery)',
+        zu: '💊 *Ukuthatha Umuthi Wamahlalakhona*\n\nUzinzile.\n\nUwuthatha kuphi umuthi wakho?\n1 — Emtholampilo\n2 — Ekhemisi\n3 — Kwenye indawo (umphakathi, ukulethwa)',
+        xh: '💊 *Ukuthatha Amayeza Aqhelekileyo*\n\nUzinzile.\n\nUwathatha phi amayeza akho?\n1 — Ekliniki\n2 — Ekemisti\n3 — Kwenye indawo (umphakathi, ukunikezelwa)',
+        af: '💊 *Chroniese Medikasie Afhaal*\n\nJy is stabiel.\n\nWaar haal jy jou medikasie af?\n1 — By \'n kliniek\n2 — By \'n apteek\n3 — Ander (gemeenskapspunt, aflewering)',
+        nso: '💊 *Go Tšea Dihlare tša go Dulela*\n\nO tsepame.\n\nO tšea dihlare tša gago kae?\n1 — Kliniki\n2 — Khemisi\n3 — Lefelo le lengwe (setšhaba, go romela)',
+        tn: '💊 *Go Tsaya Dimelemo tsa go Nnela ruri*\n\nO tsepame.\n\nO tsaya dimelemo tsa gago kae?\n1 — Kwa kliniki\n2 — Kwa khemisi\n3 — Lefelo le sele (setšhaba, go romela)',
+        st: '💊 *Ho Nka Meriana ya Mahlale*\n\nO tsitsitse.\n\nO nka meriana ya hao hokae?\n1 — Kliniki\n2 — Khemisi\n3 — Sebaka se seng (setjhaba, ho romela)',
+        ts: '💊 *Ku Teka Mirhi ya Vurhongo*\n\nU tiyile.\n\nU teka mirhi ya wena kwihi?\n1 — Ekliniki\n2 — Ekhemisi\n3 — Ndhawu yin\'wana (muganga, ku rhumela)',
+        ss: '💊 *Kutfola Imitsi Yesikhashana*\n\nUsimeme.\n\nUyitfola kuphi imitsi yakho?\n1 — Emtfolamphilo\n2 — Ekhemisi\n3 — Endzaweni lenye (umphakadzi, kulethwa)',
+        ve: '💊 *U Dzhia Mushonga wa Vhulwadze*\n\nNo dzikama.\n\nNi dzhia mushonga waṋu ngafhi?\n1 — Kha kiliniki\n2 — Kha khemisi\n3 — Huṅwe (tshitshavha, u rumela)',
+        nr: '💊 *Ukuthatha Imitjhoga Yesikhathi Eside*\n\nUzinzile.\n\nUyithatha kuphi imitjhoga yakho?\n1 — Ekliniki\n2 — Ekhemisi\n3 — Kwenye indawo (umphakathi, ukulethwa)',
       };
+      session.awaitingChronicCollectionType = true;
+      await saveSession(patientId, session);
       await sendWhatsAppMessage(from, chronicBypassMsg[lang] || chronicBypassMsg['en']);
-
-      // Auto-add to chronic queue
-      await autoAddToQueue(patientId, from, session);
-      await sendWhatsAppMessage(from, msg('tips', lang));
-
-      await logTriage({
-        patient_id: patientId,
-        triage_level: 'GREEN',
-        confidence: 95,
-        escalation: false,
-        pathway: 'chronic_bypass_stable',
-        symptoms: 'Stable chronic patient — medication collection (DoH fast-track)',
-      });
       return;
     }
 
@@ -4834,7 +5237,7 @@ async function orchestrate(patientId, from, message, session) {
         confidence: triage.confidence,
         escalation: false,
         pathway: 'clinic_visit_tomorrow',
-        facility_name: null,
+        facility_name: session.location ? (await findNearestFacilities(session.location, 'clinic', 1).catch(() => []))[0]?.name || null : null,
         location: session.location || null,
         symptoms: message
       });
@@ -4853,23 +5256,29 @@ async function orchestrate(patientId, from, message, session) {
       }
     } catch (e) {
       console.error('[SELF-CARE] Advice generation failed:', e.message);
-      // Non-critical — patient already has the GREEN triage message
     }
 
-    // GREEN = self-care, no facility routing needed
-    await logTriage({
-      patient_id: patientId,
-      triage_level: 'GREEN',
-      confidence: triage.confidence,
-      escalation: false,
-      pathway: 'self_care',
-      facility_name: null,
-      location: session.location || null,
-      symptoms: message
-    });
-    await scheduleFollowUp(patientId, from, 'GREEN');
-    await sendWhatsAppMessage(from, msg('tips', lang));
+    // DoH alignment: GREEN patients should still be offered a clinic visit
+    // They're non-urgent but the DoH flow routes them through General Sick Consultation
+    // Give them the choice — self-care at home OR visit clinic
+    const greenClinicOfferMsg = {
+      en: 'Would you still like to visit a clinic?\n\n1 — Yes, help me find a clinic\n2 — No, I will manage at home',
+      zu: 'Usafuna ukuya emtholampilo?\n\n1 — Yebo, ngisizeni ngithole umtholampilo\n2 — Cha, ngizozinakekela ekhaya',
+      xh: 'Usafuna ukuya ekliniki?\n\n1 — Ewe, ndincedeni ndifumane ikliniki\n2 — Hayi, ndiza kuzinakekela ekhaya',
+      af: 'Wil jy nog steeds \'n kliniek besoek?\n\n1 — Ja, help my om \'n kliniek te vind\n2 — Nee, ek sal by die huis regkom',
+      nso: 'O sa nyaka go ya kliniki?\n\n1 — Ee, nthušeng ke hwetše kliniki\n2 — Aowa, ke tla itlhokomela ka gae',
+      tn: 'A o sa batla go ya kliniki?\n\n1 — Ee, nthuseng ke bone kliniki\n2 — Nnyaa, ke tla ipabalela kwa gae',
+      st: 'O sa batla ho ya kliniki?\n\n1 — E, nthuseng ke fumane kliniki\n2 — Tjhe, ke tla ipaballa ka lapeng',
+      ts: 'U ha lava ku ya ekliniki?\n\n1 — Ina, ndzi pfuneni ndzi kuma kliniki\n2 — Ee-ee, ndzi ta titlhokomela ekaya',
+      ss: 'Usafuna kuya emtfolamphilo?\n\n1 — Yebo, ngisiteni ngitfole umtfolamphilo\n2 — Cha, ngitawutinakekela ekhaya',
+      ve: 'Ni tshi kha ḓi ṱoḓa u ya kha kiliniki?\n\n1 — Ee, nthuseni ndi wane kiliniki\n2 — Hai, ndi ḓo ḓilondola hayani',
+      nr: 'Usafuna ukuya ekliniki?\n\n1 — Iye, ngisizeni ngifumane ikliniki\n2 — Awa, ngizozinakekela ekhaya',
+    };
+    session.awaitingGreenClinicChoice = true;
+    session.lastTriage = triage;
+    session.lastSymptoms = message;
     await saveSession(patientId, session);
+    await sendWhatsAppMessage(from, greenClinicOfferMsg[lang] || greenClinicOfferMsg['en']);
     return;
   }
 
@@ -6295,7 +6704,12 @@ app.put('/api/clinic/queue/:id/call', requireDashboardAuth, async (req, res) => 
 
     res.json({ success: true, whatsapp_sent: whatsappSent });
     await logAudit(req, 'CALL', req.params.id, { assigned_to, room });
-  } catch (e) { — Escalate patient to hospital (referral)
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// PUT /api/clinic/queue/:id/escalate — Escalate patient to hospital (referral)
 // Creates a referral record, updates queue, sends referral to patient on WhatsApp
 // If the hospital uses BIZUSIZO, they can look up the patient by referral_id or study_code
 app.put('/api/clinic/queue/:id/escalate', requireDashboardAuth, async (req, res) => {
@@ -6631,7 +7045,12 @@ app.put('/api/clinic/queue/:id/feedback', requireDashboardAuth, async (req, res)
     res.json({ success: true });
     const auditAction = verdict === 'agree' ? 'AGREE' : 'DISAGREE';
     await logAudit(req, auditAction, req.params.id, { ai_level: entry.triage_level, nurse_level: nurse_triage_level || entry.triage_level, nurse_name });
-  } catch (e) { — Lookup a referral by ID (for hospitals using BIZUSIZO)
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /api/referral/:id — Lookup a referral by ID (for hospitals using BIZUSIZO)
 // Hospital reception types the referral ID → gets full patient summary
 app.get('/api/referral/:id', requireDashboardAuth, async (req, res) => {
   try {
@@ -6948,7 +7367,7 @@ app.get('/kiosk', (req, res) => {
 // Takes patient details + symptoms, runs triage, creates queue entry
 app.post('/api/kiosk/triage', async (req, res) => {
   try {
-    const { firstName, surname, dob, sex, category, categoryName, severity, symptoms, language } = req.body;
+    const { firstName, surname, dob, sex, category, categoryName, severity, symptoms, language, facility_name } = req.body;
 
     if (!firstName) return res.status(400).json({ error: 'Name required' });
 
@@ -7007,7 +7426,7 @@ app.post('/api/kiosk/triage', async (req, res) => {
       confidence,
       escalation: false,
       pathway: 'kiosk',
-      facility_name: null,
+      facility_name: facility_name || null,
       symptoms: symptomText,
     });
 
