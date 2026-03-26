@@ -26,6 +26,38 @@ const app = express();
 app.use(express.json());
 
 // ================================================================
+// CORS — Secure cross-origin configuration
+// Allows dashboard access from any origin (needed for Netlify-hosted
+// website, future mobile app, and cross-domain API access).
+// Credentials enabled for session-based auth.
+// ================================================================
+app.use((req, res, next) => {
+  const allowedOrigins = [
+    'https://bizusizo.co.za',
+    'https://www.bizusizo.co.za',
+    process.env.CORS_ORIGIN, // Custom origin from env
+  ].filter(Boolean);
+
+  const origin = req.headers.origin;
+  if (allowedOrigins.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+  } else if (!origin || req.headers.host === origin?.replace(/^https?:\/\//, '')) {
+    // Same-origin requests (dashboard served from same server)
+    res.setHeader('Access-Control-Allow-Origin', '*');
+  }
+
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-dashboard-password, x-dashboard-user, x-session-token');
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  res.setHeader('Access-Control-Max-Age', '86400'); // Cache preflight for 24hrs
+
+  if (req.method === 'OPTIONS') {
+    return res.status(204).end();
+  }
+  next();
+});
+
+// ================================================================
 // COOKIE PARSER (lightweight — no dependency needed)
 // ================================================================
 function parseCookies(req) {
