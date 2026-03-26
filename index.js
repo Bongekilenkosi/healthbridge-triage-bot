@@ -1102,7 +1102,9 @@ Uyavuma?
 10. 🧠 Mental health
 11. 🤧 Allergy / Rash
 12. ✏️ Other — type your symptoms
-13. 👤 Speak to a human`,
+13. 👤 Speak to a human
+14. 🩺 Women's health (family planning)
+15. 🔬 Health screening (HIV, BP, diabetes)`,
 
     zu: `Yini inkinga yakho enkulu namuhla?
 
@@ -1118,7 +1120,9 @@ Uyavuma?
 10. 🧠 Impilo yengqondo
 11. 🤧 I-allergy / Ukuvuvukala kwesikhumba
 12. ✏️ Okunye — bhala izimpawu zakho
-13. 👤 Khuluma nomuntu`,
+13. 👤 Khuluma nomuntu
+14. 🩺 Impilo yabesifazane (ukuhlela umndeni)
+15. 🔬 Ukuhlolwa kwempilo (HIV, BP, ushukela)`,
 
     xh: `Yintoni ingxaki yakho enkulu namhlanje?
 
@@ -1134,7 +1138,9 @@ Uyavuma?
 10. 🧠 Impilo yengqondo
 11. 🤧 I-aloji / Ukuvuvukala kwesikhumba
 12. ✏️ Okunye — bhala iimpawu zakho
-13. 👤 Thetha nomntu`,
+13. 👤 Thetha nomntu
+14. 🩺 Impilo yabafazi (ukucwangcisa usapho)
+15. 🔬 Ukuhlolwa kwempilo (HIV, BP, iswekile)`,
 
     af: `Wat is jou hoofprobleem vandag?
 
@@ -1150,7 +1156,9 @@ Uyavuma?
 10. 🧠 Geestesgesondheid
 11. 🤧 Allergie / Uitslag
 12. ✏️ Ander — tik jou simptome
-13. 👤 Praat met 'n mens`,
+13. 👤 Praat met 'n mens
+14. 🩺 Vrouegesondheid (gesinsbeplanning)
+15. 🔬 Gesondheidstoetse (MIV, BP, suiker)`,
 
     nso: `Bothata bja gago bjo bogolo ke eng lehono?
 
@@ -1166,7 +1174,9 @@ Uyavuma?
 10. 🧠 Maphelo a monagano
 11. 🤧 Aletshe / Dišo
 12. ✏️ Tše dingwe — ngwala dika tša gago
-13. 👤 Bolela le motho`,
+13. 👤 Bolela le motho
+14. 🩺 Maphelo a basadi (peakanyo ya lapa)
+15. 🔬 Diteko tša maphelo (HIV, BP, swikiri)`,
 
     tn: `Bothata jwa gago jo bogolo ke eng gompieno?
 
@@ -1182,7 +1192,9 @@ Uyavuma?
 10. 🧠 Boitekanelo jwa tlhaloganyo
 11. 🤧 Aletshe / Diso
 12. ✏️ Tse dingwe — kwala matshwao a gago
-13. 👤 Bua le motho`,
+13. 👤 Bua le motho
+14. 🩺 Boitekanelo jwa basadi (peakanyo ya lelapa)
+15. 🔬 Diteko tsa boitekanelo (HIV, BP, sukiri)`,
 
     st: `Bothata ba hao bo boholo ke eng kajeno?
 
@@ -1198,7 +1210,9 @@ Uyavuma?
 10. 🧠 Bophelo ba kelello
 11. 🤧 Alereji / Ho ruruha ha letlalo
 12. ✏️ Tse ding — ngola matshwao a hao
-13. 👤 Bua le motho`,
+13. 👤 Bua le motho
+14. 🩺 Bophelo ba basadi (ho rala lelapa)
+15. 🔬 Diteko tsa bophelo (HIV, BP, tsoekere)`,
 
     ts: `Xiphiqo xa wena lexikulu i yini namuntlha?
 
@@ -1214,7 +1228,9 @@ Uyavuma?
 10. 🧠 Rihanyo ra mianakanyo
 11. 🤧 Aletshe / Ku pfimba ka dzovo
 12. ✏️ Swin'wana — tsala swikombiso swa wena
-13. 👤 Vulavula na munhu`,
+13. 👤 Vulavula na munhu
+14. 🩺 Rihanyo ra vavasati (ku pulana ndyangu)
+15. 🔬 Mavonelo ya rihanyo (HIV, BP, swikiri)`,
 
     ss: `Yini inkinga yakho lenkhulu lamuhla?
 
@@ -1230,7 +1246,9 @@ Uyavuma?
 10. 🧠 Imphilo yengcondvo
 11. 🤧 I-aletshe / Kudumba kwesikhunba
 12. ✏️ Lokunye — bhala timphawu takho
-13. 👤 Khuluma nemuntfu`,
+13. 👤 Khuluma nemuntfu
+14. 🩺 Imphilo yebafati (kuhlela umndeni)
+15. 🔬 Kuhlolwa kwemphilo (HIV, BP, shukela)`,
 
     ve: `Thaidzo yaṋu khulwane ndi ifhio ṋamusi?
 
@@ -1246,7 +1264,9 @@ Uyavuma?
 10. 🧠 Mutakalo wa muhumbulo
 11. 🤧 Aletshe / U zwimba ha lukanda
 12. ✏️ Zwiṅwe — ṅwalani zwiga zwaṋu
-13. 👤 Ambelani na muthu`,
+13. 👤 Ambelani na muthu
+14. 🩺 Mutakalo wa vhafumakadzi (u dzudzanya muṱa)
+15. 🔬 Ndingo dza mutakalo (HIV, BP, swigiri)`,
 
     nr: `Yini ikinga yakho ekulu namhlanje?
 
@@ -1262,7 +1282,9 @@ Uyavuma?
 10. 🧠 Ipilo yomkhumbulo
 11. 🤧 I-aletshe / Ukuvuvukala kwesikhumba
 12. ✏️ Okhunye — tlola iimpawu zakho
-13. 👤 Khuluma nomuntu`
+13. 👤 Khuluma nomuntu
+14. 🩺 Ipilo yabafazi (ukuhlela umndeni)
+15. 🔬 Ukuhlolwa kwepilo (HIV, BP, iswigiri)`
   },
 
   // ==================== TRIAGE RESULTS ====================
@@ -2013,6 +2035,8 @@ const CATEGORY_DESCRIPTIONS = {
   '11': 'Allergy / Rash / Skin problem',
   '12': 'Other',
   '13': 'Speak to a human / send voice note',
+  '14': "Women's health (family planning, Pap smear, breast screening, contraception)",
+  '15': 'Health screening (HIV test, BP check, diabetes / glucose test)',
 };
 
 // ================================================================
@@ -2324,9 +2348,11 @@ function triageToQueueType(triageLevel, category) {
   if (triageLevel === 'RED') return 'emergency';
 
   // Category-based streaming (DoH PHC clinic flow)
-  if (category === '3') return 'maternal';    // Pregnancy related
-  if (category === '7') return 'child';       // Child illness
-  if (category === '8') return 'chronic';     // Medication / Chronic
+  if (category === '3') return 'maternal';        // Pregnancy related
+  if (category === '7') return 'child';           // Child illness
+  if (category === '8') return 'chronic';         // Medication / Chronic
+  if (category === '14') return 'maternal';       // Women's health → maternal/women's stream
+  if (category === '15') return 'preventative';   // Health screening → fast-track preventative
 
   // Urgency-based for remaining categories
   if (triageLevel === 'ORANGE') return 'acute';
@@ -5015,6 +5041,72 @@ async function orchestrate(patientId, from, message, session) {
       return;
     }
 
+    // DoH SCREENING BYPASS: Preventative care patients (category 15) skip full AI triage
+    // They're healthy people coming for screening (HIV test, BP check, glucose test)
+    // Route directly to preventative/fast-track desk — no severity question needed
+    if (session.selectedCategory === '15') {
+      session.lastTriage = { triage_level: 'GREEN', confidence: 95, source: 'screening_bypass' };
+      session.lastSymptoms = 'Preventative screening — ' + (message.trim() || 'general health check');
+      session.lastPathway = 'screening_fast_track';
+      session.awaitingSymptomDetail = false;
+      session.selectedCategory = '15';
+
+      const screeningMsg = {
+        en: '🔬 *Health Screening*\n\nYou will be directed to the *fast-track screening desk* — no need to wait in the general queue.\n\nBring your ID. If you are fasting for a glucose test, please let the nurse know when you arrive.',
+        zu: '🔬 *Ukuhlolwa Kwempilo*\n\nUzodluliselwa *edeskini lokuhlola okusheshayo* — akudingeki ulinde emugqeni ojwayelekile.\n\nLetha i-ID yakho. Uma uzilile ukuhlolwa kukashukela, tshela unesi uma ufika.',
+        xh: '🔬 *Ukuhlolwa Kwempilo*\n\nUza kuthunyelwa *kwideski yokuhlola ngokukhawuleza* — akukho mfuneko yokulinda kumgca oqhelekileyo.\n\nZisa i-ID yakho. Ukuba uzilile ukuhlolwa kweswekile, xelela umongikazi xa ufika.',
+        af: '🔬 *Gesondheidstoetsing*\n\nJy sal na die *vinnige toetstafel* verwys word — nie nodig om in die algemene tou te wag nie.\n\nBring jou ID. As jy vas vir \'n glukosetoets, laat die verpleegster weet wanneer jy aankom.',
+        nso: '🔬 *Diteko tša Maphelo*\n\nO tla romelwa go *deseke ya diteko tša ka pela* — ga go nyakege go ema moleleng wa kakaretšo.\n\nTliša ID ya gago. Ge o ikamile bakeng sa teko ya swikiri, botša mooki ge o fihla.',
+        tn: '🔬 *Diteko tsa Boitekanelo*\n\nO tla romelwa kwa *desekeng ya diteko tsa ka bonako* — ga go tlhokege go ema molelwaneng wa kakaretso.\n\nTlisa ID ya gago. Fa o ikileng bakeng sa teko ya sukiri, bolelela mooki fa o goroga.',
+        st: '🔬 *Diteko tsa Bophelo*\n\nO tla romelwa ho *deseke ya diteko tsa ka potlako* — ha ho hlokahale ho ema moleleng wa kakaretso.\n\nTlisa ID ya hao. Haeba o itimile bakeng sa teko ya tsoekere, bolella mooki ha o fihla.',
+        ts: '🔬 *Mavonelo ya Rihanyo*\n\nU ta rhumeriwa eka *deseke ya mavonelo ya ku hatlisa* — a swi lavi ku yima emulayinini wa hinkwaswo.\n\nTisa ID ya wena. Loko u tikhomile ku ringanyeta swikiri, byela muongi loko u fika.',
+        ss: '🔬 *Kuhlolwa Kwemphilo*\n\nUtawudluliselwa ku-*desiki yekuhlola ngekushesha* — akudzingeki ulindze emugceni lovamile.\n\nLetsa i-ID yakho. Nawuzilile kuhlolwa kweshukela, tjela unesi nawufika.',
+        ve: '🔬 *Ndingo dza Mutakalo*\n\nNi ḓo rumelwa kha *deseke ya ndingo dza nga u ṱavhanya* — a hu ṱoḓei u lindela mulayinini wa zwoṱhe.\n\nḒisani ID yaṋu. Arali no ḓiḓima u lingwa ha swigiri, vhudzani muongi musi ni tshi swika.',
+        nr: '🔬 *Ukuhlolwa Kwepilo*\n\nUtawudluliselwa ku-*desiki yokuhlola ngokurhabha* — akutlhogeki ulinde emugceni ojayelekileko.\n\nLetha i-ID yakho. Nawuzilile ukuhlolwa kwesiswigiri, tjela unesi nawufika.',
+      };
+      await sendWhatsAppMessage(from, screeningMsg[lang] || screeningMsg['en']);
+
+      // Route to nearest clinic for screening
+      if (session.location) {
+        const nearestFacilities = await findNearestFacilities(session.location, 'clinic', 3);
+        if (nearestFacilities.length > 0) {
+          const nearest = nearestFacilities[0];
+          session.suggestedFacility = nearest;
+          session.alternativeFacilities = nearestFacilities.slice(1);
+          session.awaitingFacilityConfirm = true;
+          await saveSession(patientId, session);
+          await sendWhatsAppMessage(from, msg('facility_suggest', lang, nearest.name, nearest.distance));
+
+          await logTriage({
+            patient_id: patientId,
+            triage_level: 'GREEN',
+            confidence: 95,
+            escalation: false,
+            pathway: 'screening_fast_track',
+            facility_name: nearest.name,
+            location: session.location,
+            symptoms: 'Preventative screening — fast-track',
+          });
+          return;
+        }
+      }
+
+      // No location — ask for it
+      session.pendingTriage = true;
+      await saveSession(patientId, session);
+      await sendWhatsAppMessage(from, msg('request_location', lang));
+
+      await logTriage({
+        patient_id: patientId,
+        triage_level: 'GREEN',
+        confidence: 95,
+        escalation: false,
+        pathway: 'screening_fast_track',
+        symptoms: 'Preventative screening — fast-track',
+      });
+      return;
+    }
+
     if (severityText) {
       enrichedMessage = `Category: ${categoryContext}. ${severityText}`;
       // If they just picked a severity number, ask for a brief description too
@@ -6658,6 +6750,58 @@ app.post('/api/clinic/queue', requireDashboardAuth, async (req, res) => {
     if (error) throw error;
     await logAudit(req, 'REGISTER_WALKIN', data?.id, { patient_name, queue_type, triage_level });
     res.json({ success: true, queue_entry: data });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// POST /api/clinic/queue/critical — ONE-TAP EMERGENCY (DoH Entry Screening)
+// When someone walks in unconscious, bleeding, or in respiratory distress,
+// reception taps this button. Creates an immediate RED queue entry at position 0
+// (front of ALL queues) with no registration required.
+// DoH: "If critical → skip queue → go directly to triage nurse"
+app.post('/api/clinic/queue/critical', requireDashboardAuth, async (req, res) => {
+  try {
+    const { patient_name, description, nurse_name } = req.body;
+
+    // Position 0 = front of queue (before everyone)
+    const entry = {
+      patient_id: 'critical_' + Date.now(),
+      patient_name: patient_name || 'CRITICAL WALK-IN',
+      triage_level: 'RED',
+      triage_confidence: 100,
+      symptoms_summary: description || 'CRITICAL — entered via emergency button at reception',
+      queue_type: 'emergency',
+      status: 'waiting',
+      checked_in_at: new Date(),
+      position: 0,
+      notes: 'CRITICAL WALK-IN — bypass all queues. ' + (nurse_name ? 'Flagged by: ' + nurse_name : ''),
+      facility_name: req.user ? req.user.facility_name : null,
+      created_at: new Date(),
+    };
+
+    const { data, error } = await supabase
+      .from('clinic_queue')
+      .insert(entry)
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    await logAudit(req, 'CRITICAL_WALKIN', data?.id, { patient_name, description });
+
+    // Also log to triage_logs for expected patients tracking
+    await supabase.from('triage_logs').insert({
+      patient_id: entry.patient_id,
+      triage_level: 'RED',
+      confidence: 100,
+      escalation: true,
+      pathway: 'critical_walkin',
+      facility_name: entry.facility_name,
+      symptoms: entry.symptoms_summary,
+    });
+
+    res.json({ success: true, queue_entry: data, message: 'CRITICAL patient added at front of emergency queue' });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
