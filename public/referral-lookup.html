@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BIZUSIZO — Referral Lookup</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --teal: #0C6E6B;
+  --teal-light: #E6F5F4;
+  --teal-dark: #064544;
+  --amber: #D4873E;
+  --red: #C0392B;
+  --red-light: #FCEAE8;
+  --orange: #E67E22;
+  --orange-light: #FEF3E8;
+  --yellow: #D4AC0D;
+  --yellow-light: #FEF9E7;
+  --sand: #FAF6F1;
+  --earth: #3D3229;
+  --warm-gray: #6B5E54;
+  --warm-bg: #FDFBF8;
+  --border: rgba(60,50,41,0.08);
+  --white: #FFFFFF;
+  --font: 'DM Sans', system-ui, sans-serif;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:var(--font); background:var(--warm-bg); color:var(--earth); min-height:100vh; }
+
+.header {
+  background: var(--teal-dark);
+  padding: 16px 32px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.header svg { width: 32px; height: 32px; }
+.header-text { font-weight: 700; font-size: 18px; color: white; letter-spacing: 0.03em; }
+.header-sub { font-size: 12px; color: rgba(255,255,255,0.6); margin-left: 12px; }
+
+.main { max-width: 640px; margin: 40px auto; padding: 0 24px; }
+
+.search-card {
+  background: white;
+  border-radius: 16px;
+  padding: 36px;
+  box-shadow: 0 4px 20px rgba(60,50,41,0.06);
+  border: 1px solid var(--border);
+  margin-bottom: 24px;
+}
+
+.search-card h1 {
+  font-size: 22px;
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+
+.search-card p {
+  font-size: 14px;
+  color: var(--warm-gray);
+  margin-bottom: 24px;
+  line-height: 1.6;
+}
+
+.search-row {
+  display: flex;
+  gap: 10px;
+}
+
+.search-row input {
+  flex: 1;
+  padding: 14px 16px;
+  border: 1.5px solid var(--border);
+  border-radius: 10px;
+  font-family: var(--font);
+  font-size: 16px;
+  color: var(--earth);
+  background: var(--sand);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 600;
+}
+
+.search-row input:focus {
+  outline: none;
+  border-color: var(--teal);
+  box-shadow: 0 0 0 3px rgba(12,110,107,0.1);
+  background: white;
+}
+
+.search-row input::placeholder {
+  text-transform: none;
+  font-weight: 400;
+  letter-spacing: 0;
+  color: #B0A89F;
+}
+
+.search-btn {
+  padding: 14px 24px;
+  background: var(--teal);
+  color: white;
+  border: none;
+  border-radius: 10px;
+  font-family: var(--font);
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.search-btn:hover { background: #0A5F5C; }
+.search-btn:disabled { background: #9A8E84; cursor: not-allowed; }
+
+.error-msg, .not-found {
+  display: none;
+  padding: 14px 18px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 500;
+  margin-top: 16px;
+}
+.error-msg { background: var(--red-light); color: var(--red); border-left: 3px solid var(--red); }
+.not-found { background: var(--sand); color: var(--warm-gray); border-left: 3px solid var(--warm-gray); }
+.error-msg.show, .not-found.show { display: block; }
+
+/* Referral result */
+.result { display: none; }
+.result.show { display: block; animation: fadeUp 0.4s ease; }
+
+@keyframes fadeUp { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:translateY(0); } }
+
+.result-card {
+  background: white;
+  border-radius: 16px;
+  padding: 32px;
+  box-shadow: 0 4px 20px rgba(60,50,41,0.06);
+  border: 1px solid var(--border);
+  margin-bottom: 16px;
+}
+
+.triage-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 18px;
+  border-radius: 24px;
+  font-weight: 700;
+  font-size: 14px;
+  margin-bottom: 20px;
+}
+.triage-RED { background: var(--red-light); color: var(--red); border: 2px solid var(--red); }
+.triage-ORANGE { background: var(--orange-light); color: var(--orange); border: 2px solid var(--orange); }
+.triage-YELLOW { background: var(--yellow-light); color: #B7950B; border: 2px solid var(--yellow); }
+.triage-GREEN { background: var(--teal-light); color: var(--teal); border: 2px solid var(--teal); }
+
+.ref-number {
+  font-family: monospace;
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--teal);
+  margin-bottom: 20px;
+}
+
+.info-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.info-item label {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--warm-gray);
+  margin-bottom: 3px;
+}
+
+.info-item span {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--earth);
+}
+
+.section-divider {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 20px 0;
+}
+
+.reason-box {
+  background: var(--sand);
+  border-radius: 10px;
+  padding: 16px;
+  border-left: 3px solid var(--amber);
+}
+
+.reason-box label {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--amber);
+  margin-bottom: 6px;
+}
+
+.reason-box p {
+  font-size: 14px;
+  color: var(--earth);
+  line-height: 1.6;
+}
+
+.from-facility {
+  background: var(--teal-light);
+  border-radius: 10px;
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.from-facility .icon {
+  width: 36px;
+  height: 36px;
+  background: var(--teal);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.from-facility label {
+  font-size: 11px;
+  color: var(--teal-dark);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.from-facility span {
+  font-size: 14px;
+  color: var(--earth);
+  font-weight: 500;
+}
+
+.timestamp {
+  font-size: 12px;
+  color: var(--warm-gray);
+  text-align: right;
+  margin-top: 16px;
+}
+
+.privacy-note {
+  font-size: 11px;
+  color: var(--warm-gray);
+  text-align: center;
+  margin-top: 20px;
+  line-height: 1.6;
+}
+
+@media (max-width: 600px) {
+  .info-grid { grid-template-columns: 1fr; }
+  .search-row { flex-direction: column; }
+  .main { padding: 0 16px; margin: 24px auto; }
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <svg viewBox="0 0 36 36" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="18" cy="18" r="17" fill="none" stroke="white" stroke-width="2"/>
+    <path d="M18 8 L18 28 M11 18 L25 18 M13 12 L23 12 M13 24 L23 24" stroke="white" stroke-width="2" stroke-linecap="round"/>
+    <circle cx="18" cy="18" r="4" fill="#D4873E" opacity="0.9"/>
+  </svg>
+  <span class="header-text">BIZUSIZO</span>
+  <span class="header-sub">Referral Lookup</span>
+</div>
+
+<div class="main">
+  <div class="search-card">
+    <h1>Look up a patient referral</h1>
+    <p>Enter the REF number from the patient's referral letter to view their triage summary and clinical information.</p>
+    <div class="search-row">
+      <input type="text" id="refInput" placeholder="e.g. REF-1234" maxlength="20" autocomplete="off" spellcheck="false">
+      <button class="search-btn" id="searchBtn" onclick="lookupReferral()">Look up</button>
+    </div>
+    <div class="error-msg" id="errorMsg"></div>
+    <div class="not-found" id="notFound">No referral found with that number. Please check and try again.</div>
+  </div>
+
+  <div class="result" id="result">
+    <div class="result-card">
+      <div class="triage-badge" id="triageBadge"></div>
+      <div class="ref-number" id="refNumber"></div>
+
+      <div class="info-grid">
+        <div class="info-item"><label>Patient name</label><span id="patientName"></span></div>
+        <div class="info-item"><label>Age</label><span id="patientAge"></span></div>
+        <div class="info-item"><label>Sex</label><span id="patientSex"></span></div>
+        <div class="info-item"><label>Transport</label><span id="transport"></span></div>
+      </div>
+
+      <hr class="section-divider">
+
+      <div class="info-grid">
+        <div class="info-item"><label>Triage category</label><span id="triageCategory"></span></div>
+        <div class="info-item"><label>Risk factors</label><span id="riskFactors"></span></div>
+      </div>
+
+      <div class="info-item" style="margin-bottom:16px"><label>Symptom summary</label><span id="symptoms"></span></div>
+
+      <div class="reason-box">
+        <label>Referral reason (nurse notes)</label>
+        <p id="referralReason"></p>
+      </div>
+
+      <div class="from-facility">
+        <div class="icon">🏥</div>
+        <div>
+          <label>Referred from</label><br>
+          <span id="fromFacility"></span>
+        </div>
+      </div>
+
+      <div class="timestamp" id="timestamp"></div>
+    </div>
+
+    <p class="privacy-note">This information is shared under POPIA-compliant referral protocols.<br>Patient phone number is not displayed for privacy protection.</p>
+  </div>
+</div>
+
+<script>
+document.getElementById('refInput').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') lookupReferral();
+});
+
+async function lookupReferral() {
+  const input = document.getElementById('refInput').value.trim();
+  const btn = document.getElementById('searchBtn');
+  const errorMsg = document.getElementById('errorMsg');
+  const notFound = document.getElementById('notFound');
+  const result = document.getElementById('result');
+
+  errorMsg.classList.remove('show');
+  notFound.classList.remove('show');
+  result.classList.remove('show');
+
+  if (!input) {
+    errorMsg.textContent = 'Please enter a REF number.';
+    errorMsg.classList.add('show');
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'Looking up...';
+
+  try {
+    const res = await fetch('/api/referral/lookup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ref_number: input })
+    });
+
+    if (res.status === 404) {
+      notFound.classList.add('show');
+      btn.disabled = false;
+      btn.textContent = 'Look up';
+      return;
+    }
+
+    if (!res.ok) {
+      const err = await res.json();
+      errorMsg.textContent = err.error || 'Something went wrong. Please try again.';
+      errorMsg.classList.add('show');
+      btn.disabled = false;
+      btn.textContent = 'Look up';
+      return;
+    }
+
+    const data = await res.json();
+    displayReferral(data);
+
+  } catch (err) {
+    errorMsg.textContent = 'Connection error. Please check your internet.';
+    errorMsg.classList.add('show');
+  }
+
+  btn.disabled = false;
+  btn.textContent = 'Look up';
+}
+
+function displayReferral(data) {
+  const colour = (data.triage_colour || '').toUpperCase();
+  const colourLabels = {
+    RED: '🔴 RED — Emergency',
+    ORANGE: '🟠 ORANGE — Very Urgent',
+    YELLOW: '🟡 YELLOW — Urgent',
+    GREEN: '🟢 GREEN — Routine'
+  };
+
+  const badge = document.getElementById('triageBadge');
+  badge.className = 'triage-badge triage-' + colour;
+  badge.textContent = colourLabels[colour] || colour;
+
+  document.getElementById('refNumber').textContent = data.ref_number;
+  document.getElementById('patientName').textContent = (data.patient_name || '') + ' ' + (data.patient_surname || '');
+  document.getElementById('patientAge').textContent = data.patient_age || 'Not recorded';
+  document.getElementById('patientSex').textContent = data.patient_sex || 'Not recorded';
+  document.getElementById('transport').textContent = data.transport_method || 'Not specified';
+  document.getElementById('triageCategory').textContent = data.triage_category || 'General';
+  document.getElementById('riskFactors').textContent = data.risk_factors || 'None reported';
+  document.getElementById('symptoms').textContent = data.symptom_summary || 'No summary available';
+  document.getElementById('referralReason').textContent = data.referral_reason || 'No reason recorded';
+  document.getElementById('fromFacility').textContent = data.originating_facility_name || 'Unknown facility';
+
+  const date = new Date(data.created_at);
+  document.getElementById('timestamp').textContent = 'Referred: ' + date.toLocaleDateString('en-ZA', {
+    day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit'
+  });
+
+  document.getElementById('result').classList.add('show');
+}
+</script>
+</body>
+</html>
