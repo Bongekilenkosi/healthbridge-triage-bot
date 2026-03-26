@@ -4254,6 +4254,127 @@ async function orchestrate(patientId, from, message, session) {
     // If not handled (patient chose clinic), fall through to facility routing
   }
 
+  // ==================== STEP: APPOINTMENT SLOT BOOKING (SARS-inspired) ====================
+  // Patient received a next-visit reminder and is choosing a time slot
+  if (session.awaitingSlotChoice) {
+    session.awaitingSlotChoice = false;
+    const lang = session.language || 'en';
+    const slotMap = { '1': 'morning', '2': 'mid_morning', '3': 'afternoon' };
+    const slotLabels = { morning: '08:00–10:00', mid_morning: '10:00–12:00', afternoon: '12:00–14:00' };
+    const slotLabelsTrans = {
+      en: { morning: 'Morning (08:00–10:00)', mid_morning: 'Mid-morning (10:00–12:00)', afternoon: 'Afternoon (12:00–14:00)' },
+      zu: { morning: 'Ekuseni (08:00–10:00)', mid_morning: 'Phakathi nosuku (10:00–12:00)', afternoon: 'Ntambama (12:00–14:00)' },
+      xh: { morning: 'Kusasa (08:00–10:00)', mid_morning: 'Emini (10:00–12:00)', afternoon: 'Emva kwemini (12:00–14:00)' },
+      af: { morning: 'Oggend (08:00–10:00)', mid_morning: 'Middag (10:00–12:00)', afternoon: 'Namiddag (12:00–14:00)' },
+      nso: { morning: 'Mosong (08:00–10:00)', mid_morning: 'Gare ga letšatši (10:00–12:00)', afternoon: 'Mathapama (12:00–14:00)' },
+      tn: { morning: 'Moso (08:00–10:00)', mid_morning: 'Motshegare (10:00–12:00)', afternoon: 'Motshegare wa boraro (12:00–14:00)' },
+      st: { morning: 'Hoseng (08:00–10:00)', mid_morning: 'Motsheare (10:00–12:00)', afternoon: 'Motsheare oa boraro (12:00–14:00)' },
+      ts: { morning: 'Mixo (08:00–10:00)', mid_morning: 'Nhlekanhi (10:00–12:00)', afternoon: 'Madyambu (12:00–14:00)' },
+      ss: { morning: 'Ekuseni (08:00–10:00)', mid_morning: 'Emini (10:00–12:00)', afternoon: 'Ntambama (12:00–14:00)' },
+      ve: { morning: 'Matsheloni (08:00–10:00)', mid_morning: 'Masiari (10:00–12:00)', afternoon: 'Madekwana (12:00–14:00)' },
+      nr: { morning: 'Ekuseni (08:00–10:00)', mid_morning: 'Emini (10:00–12:00)', afternoon: 'Ntambama (12:00–14:00)' },
+    };
+
+    const slot = slotMap[message.trim()];
+
+    if (slot) {
+      // Store the booked slot
+      session.bookedSlot = slot;
+      session.bookedSlotLabel = slotLabels[slot];
+
+      // Calculate actual appointment time for the visit date
+      const visitDate = new Date(session.appointmentDate);
+      visitDate.setDate(visitDate.getDate() + 1); // Reminder was day before
+      const slotHours = { morning: 8, mid_morning: 10, afternoon: 12 };
+      visitDate.setHours(slotHours[slot], 0, 0, 0);
+
+      session.appointmentTime = visitDate.toISOString();
+      await saveSession(patientId, session);
+
+      // Store appointment in appointments table (or triage_logs for Expected Patients)
+      try {
+        await supabase.from('triage_logs').insert({
+          patient_id: patientId,
+          triage_level: session.lastTriage?.triage_level || 'GREEN',
+          confidence: 90,
+          escalation: false,
+          pathway: 'booked_appointment',
+          facility_name: session.appointmentFacility || session.confirmedFacility?.name || null,
+          symptoms: 'Booked appointment — ' + slot + ' slot',
+          slot_time: slot,
+          appointment_date: visitDate.toISOString().split('T')[0],
+        });
+      } catch (e) {
+        console.error('[SLOT] Failed to log appointment:', e.message);
+      }
+
+      const facilityName = session.appointmentFacility || 'your clinic';
+      const dateStr = visitDate.toLocaleDateString('en-ZA', { weekday: 'long', day: 'numeric', month: 'long' });
+      const slotLabel = (slotLabelsTrans[lang] || slotLabelsTrans['en'])[slot];
+
+      const confirmSlotMsg = {
+        en: `✅ *Appointment Booked*\n\n📍 ${facilityName}\n📅 ${dateStr}\n🕐 ${slotLabel}\n📋 Ref: ${session.studyCode || 'BZ-' + patientId.slice(0,4).toUpperCase()}\n\nPlease arrive on time. If you can't make it, type *cancel* to free your slot for someone else.`,
+        zu: `✅ *Isithuba Sibhukiwe*\n\n📍 ${facilityName}\n📅 ${dateStr}\n🕐 ${slotLabel}\n📋 Ref: ${session.studyCode || 'BZ-' + patientId.slice(0,4).toUpperCase()}\n\nSicela ufike ngesikhathi. Uma ungakwazi, bhala *cancel* ukukhulula isithuba sakho.`,
+        xh: `✅ *Idinga Libhukiwe*\n\n📍 ${facilityName}\n📅 ${dateStr}\n🕐 ${slotLabel}\n📋 Ref: ${session.studyCode || 'BZ-' + patientId.slice(0,4).toUpperCase()}\n\nNceda ufike ngexesha. Ukuba awukwazi, bhala *cancel* ukukhulula ixesha lakho.`,
+        af: `✅ *Afspraak Geboek*\n\n📍 ${facilityName}\n📅 ${dateStr}\n🕐 ${slotLabel}\n📋 Ref: ${session.studyCode || 'BZ-' + patientId.slice(0,4).toUpperCase()}\n\nKom asseblief op tyd. As jy nie kan nie, tik *cancel* om jou gleuf vry te stel.`,
+        nso: `✅ *Nako e Beilwe*\n\n📍 ${facilityName}\n📅 ${dateStr}\n🕐 ${slotLabel}\n📋 Ref: ${session.studyCode || 'BZ-' + patientId.slice(0,4).toUpperCase()}\n\nHle tla ka nako. Ge o sa kgone, ngwala *cancel* go lokolla nako ya gago.`,
+        tn: `✅ *Nako e Beilwe*\n\n📍 ${facilityName}\n📅 ${dateStr}\n🕐 ${slotLabel}\n📋 Ref: ${session.studyCode || 'BZ-' + patientId.slice(0,4).toUpperCase()}\n\nTsweetswee tla ka nako. Fa o sa kgone, kwala *cancel* go golola nako ya gago.`,
+        st: `✅ *Nako e Beilwe*\n\n📍 ${facilityName}\n📅 ${dateStr}\n🕐 ${slotLabel}\n📋 Ref: ${session.studyCode || 'BZ-' + patientId.slice(0,4).toUpperCase()}\n\nKa kopo tla ka nako. Haeba o sa kgone, ngola *cancel* ho lokolla nako ya hao.`,
+        ts: `✅ *Nkarhi wu Buhikiwe*\n\n📍 ${facilityName}\n📅 ${dateStr}\n🕐 ${slotLabel}\n📋 Ref: ${session.studyCode || 'BZ-' + patientId.slice(0,4).toUpperCase()}\n\nHi kombela u ta hi nkarhi. Loko u sa koti, tsala *cancel* ku ntshunxa nkarhi wa wena.`,
+        ss: `✅ *Sikhatsi Sibhukiwe*\n\n📍 ${facilityName}\n📅 ${dateStr}\n🕐 ${slotLabel}\n📋 Ref: ${session.studyCode || 'BZ-' + patientId.slice(0,4).toUpperCase()}\n\nSicela ufike ngesikhatsi. Uma ungakhoni, bhala *cancel* kukhulula sikhatsi sakho.`,
+        ve: `✅ *Tshifhinga tsho Bukiwa*\n\n📍 ${facilityName}\n📅 ${dateStr}\n🕐 ${slotLabel}\n📋 Ref: ${session.studyCode || 'BZ-' + patientId.slice(0,4).toUpperCase()}\n\nRi humbela ni ḓe nga tshifhinga. Arali ni sa koni, ṅwalani *cancel* u bvisa tshifhinga tshaṋu.`,
+        nr: `✅ *Isikhathi Sibhukiwe*\n\n📍 ${facilityName}\n📅 ${dateStr}\n🕐 ${slotLabel}\n📋 Ref: ${session.studyCode || 'BZ-' + patientId.slice(0,4).toUpperCase()}\n\nSibawa ufike ngesikhathi. Uma ungakhoni, tlola *cancel* ukukhulula isikhathi sakho.`,
+      };
+      await sendWhatsAppMessage(from, confirmSlotMsg[lang] || confirmSlotMsg['en']);
+      return;
+
+    } else {
+      // Invalid — re-ask
+      session.awaitingSlotChoice = true;
+      await saveSession(patientId, session);
+      const retrySlotMsg = {
+        en: 'Please reply with:\n1 — Morning (08:00–10:00)\n2 — Mid-morning (10:00–12:00)\n3 — Afternoon (12:00–14:00)',
+        zu: 'Sicela uphendule ngo:\n1 — Ekuseni\n2 — Phakathi nosuku\n3 — Ntambama',
+        xh: 'Nceda uphendule ngo:\n1 — Kusasa\n2 — Emini\n3 — Emva kwemini',
+        af: 'Antwoord asseblief met:\n1 — Oggend\n2 — Middag\n3 — Namiddag',
+        nso: 'Hle araba ka:\n1 — Mosong\n2 — Gare ga letšatši\n3 — Mathapama',
+        tn: 'Tsweetswee araba ka:\n1 — Moso\n2 — Motshegare\n3 — Motshegare wa boraro',
+        st: 'Ka kopo araba ka:\n1 — Hoseng\n2 — Motsheare\n3 — Motsheare oa boraro',
+        ts: 'Hi kombela u hlamula hi:\n1 — Mixo\n2 — Nhlekanhi\n3 — Madyambu',
+        ss: 'Sicela uphendvule nge:\n1 — Ekuseni\n2 — Emini\n3 — Ntambama',
+        ve: 'Ri humbela ni fhindule nga:\n1 — Matsheloni\n2 — Masiari\n3 — Madekwana',
+        nr: 'Sibawa uphendule nge:\n1 — Ekuseni\n2 — Emini\n3 — Ntambama',
+      };
+      await sendWhatsAppMessage(from, retrySlotMsg[lang] || retrySlotMsg['en']);
+      return;
+    }
+  }
+
+  // ==================== STEP: CANCEL APPOINTMENT ====================
+  if (message.trim().toLowerCase() === 'cancel' && session.bookedSlot) {
+    session.bookedSlot = null;
+    session.bookedSlotLabel = null;
+    session.appointmentTime = null;
+    const lang = session.language || 'en';
+    await saveSession(patientId, session);
+
+    const cancelMsg = {
+      en: '❌ Your appointment has been cancelled. Your slot is now available for someone else.\n\nIf you still need to visit the clinic, type *0* to start again.',
+      zu: '❌ Isithuba sakho sikhanselelwe. Sesitholakala komunye umuntu.\n\nUma usadinga ukuya emtholampilo, bhala *0* ukuqala kabusha.',
+      xh: '❌ Idinga lakho licinyiwe. Ixesha lakho lisele likhululekile.\n\nUkuba usafuna ukuya ekliniki, bhala *0* ukuqala kwakhona.',
+      af: '❌ Jou afspraak is gekanselleer. Jou gleuf is nou vry.\n\nAs jy nog die kliniek wil besoek, tik *0* om weer te begin.',
+      nso: '❌ Nako ya gago e khanseletswe. Nako ya gago e lokolotšwe.\n\nGe o sa nyaka go ya kliniki, ngwala *0* go thoma lefsa.',
+      tn: '❌ Nako ya gago e khanseletswe. E golotšwe go motho yo mongwe.\n\nFa o sa batla go ya kliniki, kwala *0* go simolola sešwa.',
+      st: '❌ Nako ya hao e khanseletswe. E lokolotswe bakeng sa e mong.\n\nHaeba o sa batla ho ya kliniki, ngola *0* ho qala bocha.',
+      ts: '❌ Nkarhi wa wena wu khanseleriwile. Wu ntshunxiwile.\n\nLoko u ha lava ku ya ekliniki, tsala *0* ku sungula hi vuntshwa.',
+      ss: '❌ Sikhatsi sakho sikhanselelwe. Sikhululekile.\n\nNawusadzinga kuya emtfolamphilo, bhala *0* kucala kabusha.',
+      ve: '❌ Tshifhinga tshaṋu tsho khansela. Tsho bviswa.\n\nArali ni tshi kha ḓi ṱoḓa u ya kiliniki, ṅwalani *0* u thoma hafhu.',
+      nr: '❌ Isikhathi sakho sikhanselelwe. Sikhululekile.\n\nNawusadzinga ukuya ekliniki, tlola *0* ukuthoma kabutjha.',
+    };
+    await sendWhatsAppMessage(from, cancelMsg[lang] || cancelMsg['en']);
+    return;
+  }
+
   // ==================== STEP: GREEN CLINIC CHOICE ====================
   // GREEN patients get self-care advice then choose: visit clinic or manage at home
   // DoH flow: GREEN patients still go through General Sick Consultation if they come in
@@ -5980,18 +6101,51 @@ async function runFollowUpAgent() {
   const due = await getDueFollowUps();
 
   for (const item of due) {
-    // Get patient language
     const patientId = item.patient_id;
     const session = await getSession(patientId);
     const lang = session.language || 'en';
 
-    await sendWhatsAppMessage(item.phone, msg('follow_up', lang));
+    // Different handling for next-visit reminders vs 48hr follow-ups
+    if (item.type === 'next_visit_reminder') {
+      // SARS-inspired: day-before reminder with "what to bring" + slot offer
+      const facilityName = session.confirmedFacility?.name || session.suggestedFacility?.name || 'your clinic';
 
-    // Mark as sent (not completed — wait for response)
-    await supabase
-      .from('follow_ups')
-      .update({ status: 'sent' })
-      .eq('id', item.id);
+      // Determine what to bring based on patient's queue type / category
+      const category = session.selectedCategory;
+      let bringList = 'ID document, clinic card';
+      if (category === '8') bringList = 'ID document, clinic card, chronic medication card';
+      else if (category === '3') bringList = 'ID document, maternity case record (antenatal card)';
+      else if (category === '14') bringList = 'ID document, clinic card';
+      else if (category === '15') bringList = 'ID document (fasting from 10pm if glucose test)';
+
+      const reminderMsg = {
+        en: `📅 *Appointment Reminder*\n\nYou have a clinic visit tomorrow at *${facilityName}*.\n\n📋 Please bring: ${bringList}\n\nWhen would you like to come?\n1 — 🌅 Morning (08:00–10:00)\n2 — ☀️ Mid-morning (10:00–12:00)\n3 — 🌤️ Afternoon (12:00–14:00)`,
+        zu: `📅 *Isikhumbuzo Sokuvakatjhela*\n\nUnokuvakatjhela emtholampilo kusasa e-*${facilityName}*.\n\n📋 Letha: ${bringList}\n\nUfuna ukufika nini?\n1 — 🌅 Ekuseni (08:00–10:00)\n2 — ☀️ Phakathi nosuku (10:00–12:00)\n3 — 🌤️ Ntambama (12:00–14:00)`,
+        xh: `📅 *Isikhumbuzo Sotyelelo*\n\nUnokuya ekliniki ngomso e-*${facilityName}*.\n\n📋 Zisa: ${bringList}\n\nUfuna ukufika nini?\n1 — 🌅 Kusasa (08:00–10:00)\n2 — ☀️ Emini (10:00–12:00)\n3 — 🌤️ Emva kwemini (12:00–14:00)`,
+        af: `📅 *Afspraak Herinnering*\n\nJy het \'n kliniekbesoek môre by *${facilityName}*.\n\n📋 Bring saam: ${bringList}\n\nWanneer wil jy kom?\n1 — 🌅 Oggend (08:00–10:00)\n2 — ☀️ Middag (10:00–12:00)\n3 — 🌤️ Namiddag (12:00–14:00)`,
+        nso: `📅 *Kgopotšo ya Ketelo*\n\nO na le ketelo ya kliniki gosasa go *${facilityName}*.\n\n📋 Tliša: ${bringList}\n\nO nyaka go tla neng?\n1 — 🌅 Mosong (08:00–10:00)\n2 — ☀️ Gare ga letšatši (10:00–12:00)\n3 — 🌤️ Mathapama (12:00–14:00)`,
+        tn: `📅 *Kgopotso ya Ketelo*\n\nO na le ketelo ya kliniki kamoso kwa *${facilityName}*.\n\n📋 Tlisa: ${bringList}\n\nO batla go tla leng?\n1 — 🌅 Moso (08:00–10:00)\n2 — ☀️ Motshegare (10:00–12:00)\n3 — 🌤️ Motshegare wa boraro (12:00–14:00)`,
+        st: `📅 *Kgopotso ya Ketelo*\n\nO na le ketelo ya kliniki hosane ho *${facilityName}*.\n\n📋 Tlisa: ${bringList}\n\nO batla ho tla neng?\n1 — 🌅 Hoseng (08:00–10:00)\n2 — ☀️ Motsheare (10:00–12:00)\n3 — 🌤️ Motsheare oa boraro (12:00–14:00)`,
+        ts: `📅 *Xikombiso xa Ku Endzela*\n\nU na ni ku endzela ka kliniki mundzuku eka *${facilityName}*.\n\n📋 Tisa: ${bringList}\n\nU lava ku ta rini?\n1 — 🌅 Mixo (08:00–10:00)\n2 — ☀️ Nhlekanhi (10:00–12:00)\n3 — 🌤️ Madyambu (12:00–14:00)`,
+        ss: `📅 *Sikhumbuto Sekuvakashela*\n\nUnekuvakashela kwakho emtfolamphilo kusasa ku-*${facilityName}*.\n\n📋 Letsa: ${bringList}\n\nUfuna kufika nini?\n1 — 🌅 Ekuseni (08:00–10:00)\n2 — ☀️ Emini (10:00–12:00)\n3 — 🌤️ Ntambama (12:00–14:00)`,
+        ve: `📅 *Tshikombiso tsha Ndaela*\n\nNi na ndaela ya kiliniki matshelo kha *${facilityName}*.\n\n📋 Ḓisani: ${bringList}\n\nNi ṱoḓa u ḓa lini?\n1 — 🌅 Matsheloni (08:00–10:00)\n2 — ☀️ Masiari (10:00–12:00)\n3 — 🌤️ Madekwana (12:00–14:00)`,
+        nr: `📅 *Isikhumbuto Sokuvakatjhela*\n\nUnokuvakatjhela ekliniki kusasa ku-*${facilityName}*.\n\n📋 Letha: ${bringList}\n\nUfuna ukufika nini?\n1 — 🌅 Ekuseni (08:00–10:00)\n2 — ☀️ Emini (10:00–12:00)\n3 — 🌤️ Ntambama (12:00–14:00)`,
+      };
+      await sendWhatsAppMessage(item.phone, reminderMsg[lang] || reminderMsg['en']);
+
+      // Set session flag to capture slot choice
+      session.awaitingSlotChoice = true;
+      session.appointmentDate = item.scheduled_at; // The actual visit date (day after reminder)
+      session.appointmentFacility = facilityName;
+      await saveSession(patientId, session);
+
+      await supabase.from('follow_ups').update({ status: 'sent' }).eq('id', item.id);
+
+    } else {
+      // Standard 48hr follow-up
+      await sendWhatsAppMessage(item.phone, msg('follow_up', lang));
+      await supabase.from('follow_ups').update({ status: 'sent' }).eq('id', item.id);
+    }
   }
 }
 
