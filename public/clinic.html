@@ -182,6 +182,7 @@ a{color:#60a5fa;text-decoration:none}
       <span id="signed-in"></span>
       <span id="last-refresh"></span>
       <span class="hdr-dot"></span>
+      <button onclick="logout()" style="padding:4px 12px;border-radius:6px;border:1px solid #1e293b;background:#111827;color:#94a3b8;font-size:11px;cursor:pointer;margin-left:8px">Logout</button>
     </div>
   </div>
 
@@ -296,25 +297,55 @@ let PWD='',UNAME='',API='';
 
 async function api(path,opts){
   try{
-    const o={headers:{'x-dashboard-password':PWD,'x-dashboard-user':UNAME,'Content-Type':'application/json'},...opts};
+    const match=document.cookie.match(/bz_session=([a-f0-9]+)/);
+    const token=match?match[1]:'';
+    const o={headers:{'Authorization':'Bearer '+token,'x-dashboard-password':PWD,'x-dashboard-user':UNAME,'Content-Type':'application/json'},...opts};
     const r=await fetch(API+path,o);
+    if(r.status===401){window.location.href='/clinical/login';return null;}
     if(!r.ok)throw new Error(r.status);
     return await r.json();
   }catch(e){console.error(path,e);return null;}
 }
 
-function doLogin(){
+async function doLogin(){
   UNAME=document.getElementById('uname').value.trim();
   PWD=document.getElementById('pwd').value;
   if(!UNAME){document.getElementById('login-err').textContent='Please enter your name';return;}
+
+  // Try new session-based auth first
+  try{
+    const res=await fetch('/api/auth/login',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({username:UNAME.toLowerCase().replace(/[^a-z0-9_]/g,''),password:PWD})
+    });
+    if(res.ok){
+      const data=await res.json();
+      document.cookie='bz_session='+data.token+';path=/;max-age='+(8*60*60)+';SameSite=Strict';
+      UNAME=data.user.display_name;
+      document.getElementById('login').style.display='none';
+      document.getElementById('app').style.display='block';
+      document.getElementById('signed-in').textContent='Signed in: '+data.user.display_name+(data.user.facility_name?' · '+data.user.facility_name:'');
+      refresh();
+      return;
+    }
+  }catch(e){console.log('Session auth failed, trying password auth');}
+
+  // Fallback: password auth (backward compat)
   api('/api/clinic/queue/stats').then(d=>{
     if(d){
       document.getElementById('login').style.display='none';
       document.getElementById('app').style.display='block';
       document.getElementById('signed-in').textContent='Signed in: '+UNAME;
       refresh();
-    }else{document.getElementById('login-err').textContent='Invalid password or server error';}
+    }else{document.getElementById('login-err').textContent='Invalid credentials';}
   });
+}
+
+async function logout(){
+  await fetch('/api/auth/logout',{method:'POST',headers:{'Authorization':'Bearer '+(document.cookie.match(/bz_session=([a-f0-9]+)/)||[])[1]}});
+  document.cookie='bz_session=;path=/;max-age=0';
+  window.location.href='/clinical/login';
 }
 
 function showTab(name,el){
