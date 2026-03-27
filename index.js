@@ -241,6 +241,8 @@ app.get('/referral', (req, res) => {
 // POST /api/referral/lookup — Public referral lookup by REF number
 app.post('/api/referral/lookup', async (req, res) => {
   try {
+    const valid = await validateSession(req);
+      if (!valid) return res.status(401).json({ error: 'Not authenticated' });
     const { ref_number } = req.body;
     if (!ref_number) return res.status(400).json({ error: 'Referral number required' });
     const cleanRef = ref_number.trim().toUpperCase();
