@@ -239,7 +239,7 @@ app.get('/referral', (req, res) => {
 });
 
 // POST /api/referral/lookup — Public referral lookup by REF number
-app.post('/api/referral/lookup', requireAuth, async (req, res) => {
+app.post('/api/referral/lookup', async (req, res) => {
   try {
     const { ref_number } = req.body;
     if (!ref_number) return res.status(400).json({ error: 'Referral number required' });
